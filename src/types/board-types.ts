@@ -95,7 +95,7 @@ export interface ChecklistTemplate {
 
 // ── Notifications ──
 
-export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted';
+export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention';
 
 export interface Notification {
   id: string;

@@ -600,25 +600,32 @@ export function useProjectBoard() {
       const { data, error: err } = await supabase
         .from('card_comments')
         .insert([{ card_id: cardId, user_id: user.id, content }])
-        .select('*, user_profiles(name)')
+        .select('*')
         .single();
       if (err) throw err;
+
+      // Attach user profile name from local state instead of relying on PostgREST join
+      const profile = userProfiles.find(p => p.id === user.id);
+      const commentWithProfile = {
+        ...data,
+        user_profiles: profile ? { name: profile.name } : { name: user.email || 'Unknown' },
+      };
 
       setBoard(prev => {
         if (!prev) return prev;
         return {
           ...prev,
           cards: prev.cards.map(c =>
-            c.id === cardId ? { ...c, comments: [...(c.comments || []), data] } : c
+            c.id === cardId ? { ...c, comments: [...(c.comments || []), commentWithProfile] } : c
           ),
         };
       });
-      return data as CardComment;
+      return commentWithProfile as CardComment;
     } catch (err: any) {
       setError(err.message);
       return null;
     }
-  }, []);
+  }, [userProfiles]);
 
   const deleteComment = useCallback(async (boardId: string, cardId: string, commentId: string) => {
     setError(null);

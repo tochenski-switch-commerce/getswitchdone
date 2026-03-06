@@ -335,6 +335,11 @@ function CardDetailModal({
 
   const handleSave = async () => {
     setSaving(true);
+    // Save any pending comment before closing
+    if (commentText.trim()) {
+      await onAddComment(commentText.trim());
+      setCommentText('');
+    }
     await onUpdate({
       title: editTitle,
       description: editDesc,
