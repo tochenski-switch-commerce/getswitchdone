@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>GSD Boards — Offline</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: #0f1117;
+      color: #e5e7eb;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      padding: 24px;
+      text-align: center;
+    }
+    h1 { font-size: 24px; font-weight: 700; color: #f9fafb; }
+    p { font-size: 15px; color: #9ca3af; max-width: 320px; line-height: 1.5; }
+    button {
+      margin-top: 8px;
+      padding: 10px 24px;
+      border-radius: 10px;
+      border: none;
+      background: #818cf8;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>You're offline</h1>
+  <p>GSD Boards needs an internet connection. Please check your connection and try again.</p>
+  <button onclick="location.reload()">Retry</button>
+</body>
+</html>

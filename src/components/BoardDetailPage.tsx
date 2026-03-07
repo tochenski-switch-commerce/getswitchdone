@@ -2699,11 +2699,11 @@ function BoardPage() {
                           />
                           {hoveredCardId === card.id && !dragCardId && (
                             <div className="kb-shortcut-hints">
-                              <span title="Open card"><kbd>↵</kbd></span>
-                              <span title="Duplicate"><kbd>C</kbd></span>
-                              <span title="Due date"><kbd>D</kbd></span>
-                              <span title="Assign to me"><kbd>M</kbd></span>
-                              <span title="Delete"><kbd>⌫</kbd></span>
+                              <span className="kb-shortcut-badge"><kbd>↵</kbd> Open</span>
+                              <span className="kb-shortcut-badge"><kbd>C</kbd> Copy</span>
+                              <span className="kb-shortcut-badge"><kbd>D</kbd> Dates</span>
+                              <span className="kb-shortcut-badge"><kbd>M</kbd> Assign&nbsp;me</span>
+                              <span className="kb-shortcut-badge"><kbd>⌫</kbd> Delete</span>
                             </div>
                           )}
                         </div>
@@ -3756,32 +3756,49 @@ const kanbanStyles = `
   /* ── Card hover shortcut hints ── */
   .kb-shortcut-hints {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    bottom: 100%;
+    left: 0;
+    right: 0;
     display: flex;
-    gap: 3px;
-    z-index: 5;
+    justify-content: center;
+    gap: 2px;
+    z-index: 15;
     pointer-events: none;
-    animation: kb-hints-in 0.15s ease;
+    animation: kb-hints-in 0.12s ease;
+    padding-bottom: 4px;
   }
-  .kb-shortcut-hints kbd {
+  .kb-shortcut-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #c9cdd5;
+    background: rgba(20,22,34,0.95);
+    border: 1px solid #3b3f52;
+    border-radius: 5px;
+    white-space: nowrap;
+    backdrop-filter: blur(6px);
+  }
+  .kb-shortcut-badge kbd {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
     font-size: 9px;
     font-family: inherit;
-    font-weight: 600;
-    color: #9ca3af;
-    background: rgba(30,33,48,0.92);
-    border: 1px solid #3b3f52;
-    border-radius: 4px;
+    font-weight: 700;
+    color: #e5e7eb;
+    background: #2a2d3a;
+    border: 1px solid #4b5066;
+    border-radius: 3px;
     line-height: 1;
   }
   @keyframes kb-hints-in {
-    from { opacity: 0; transform: translateY(-4px); }
+    from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
