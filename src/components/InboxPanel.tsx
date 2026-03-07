@@ -3,6 +3,7 @@
 import React from 'react';
 import type { Notification } from '@/types/board-types';
 import { Bell, X, MessageSquare, User, Clock, AlertCircle, Check, Trash2, Mail, AtSign } from '@/components/BoardIcons';
+import { hapticLight, hapticHeavy, hapticSuccess } from '@/lib/haptics';
 
 const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
   comment:        { icon: <MessageSquare size={14} />, color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
@@ -63,12 +64,12 @@ export default function InboxPanel({
           </div>
           <div className="kb-inbox-header-actions">
             {unreadCount > 0 && (
-              <button className="kb-inbox-action-btn" onClick={onMarkAllRead} title="Mark all as read">
+              <button className="kb-inbox-action-btn" onClick={() => { hapticSuccess(); onMarkAllRead(); }} title="Mark all as read">
                 <Check size={14} /> Mark all read
               </button>
             )}
             {notifications.length > 0 && (
-              <button className="kb-inbox-action-btn kb-inbox-action-danger" onClick={onClearAll} title="Clear all">
+              <button className="kb-inbox-action-btn kb-inbox-action-danger" onClick={() => { hapticHeavy(); onClearAll(); }} title="Clear all">
                 <Trash2 size={14} /> Clear all
               </button>
             )}
@@ -107,7 +108,7 @@ export default function InboxPanel({
                     {!n.is_read && (
                       <button
                         className="kb-inbox-item-btn"
-                        onClick={e => { e.stopPropagation(); onMarkRead(n.id); }}
+                      onClick={e => { e.stopPropagation(); hapticLight(); onMarkRead(n.id); }}
                         title="Mark as read"
                       >
                         <Check size={12} />
@@ -115,7 +116,7 @@ export default function InboxPanel({
                     )}
                     <button
                       className="kb-inbox-item-btn kb-inbox-item-btn-danger"
-                      onClick={e => { e.stopPropagation(); onDelete(n.id); }}
+                      onClick={e => { e.stopPropagation(); hapticHeavy(); onDelete(n.id); }}
                       title="Dismiss"
                     >
                       <X size={12} />
@@ -139,11 +140,11 @@ const inboxStyles = `
   }
   .kb-inbox-panel {
     position: fixed;
-    top: 8px;
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
     right: 8px;
     width: 400px;
     max-width: calc(100vw - 16px);
-    max-height: calc(100vh - 16px);
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - 16px);
     background: #141620;
     border: 1px solid #2a2d3a;
     border-radius: 14px;

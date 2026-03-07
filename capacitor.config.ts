@@ -10,7 +10,7 @@ const config: CapacitorConfig = {
     allowNavigation: ['*.supabase.co'],
   },
   ios: {
-    contentInset: 'always',
+    contentInset: 'never',
     backgroundColor: '#0f1117',
     preferredContentMode: 'mobile',
   },

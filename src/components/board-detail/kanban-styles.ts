@@ -547,6 +547,23 @@ export const kanbanStyles = `
     color: #6b7280;
   }
   .kb-card-count.done { color: #22c55e; }
+  .kb-card-repeat-badge { color: #818cf8; }
+  .kb-card-repeat-front {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #818cf8;
+    background: rgba(99,102,241,0.1);
+    padding: 2px 8px;
+    border-radius: 6px;
+    max-width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .kb-card-assignee {
     display: flex;
     align-items: center;
@@ -1389,117 +1406,6 @@ export const kanbanStyles = `
   }
   .kb-comment-add { display: flex; flex-direction: column; }
 
-  /* ── Rich Text Editor (card detail) ── */
-  .kb-rt-editor {
-    border: 1px solid #2a2d3a;
-    border-radius: 10px;
-    overflow: hidden;
-    background: #14161e;
-    transition: border-color 0.15s ease;
-  }
-  .kb-rt-editor:focus-within {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
-  }
-  .kb-rt-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 1px;
-    padding: 4px 8px;
-    border-bottom: 1px solid #2a2d3a;
-    background: rgba(15, 17, 23, 0.5);
-    flex-wrap: wrap;
-  }
-  .kb-rt-tool-btn {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 26px !important;
-    height: 26px !important;
-    border-radius: 5px !important;
-    border: none !important;
-    background: transparent !important;
-    color: #94a3b8 !important;
-    cursor: pointer !important;
-    transition: all 0.12s ease !important;
-    padding: 0 !important;
-  }
-  .kb-rt-tool-btn:hover {
-    background: rgba(99, 102, 241, 0.15) !important;
-    color: #a5b4fc !important;
-  }
-  .kb-rt-tool-btn:active {
-    background: rgba(99, 102, 241, 0.25) !important;
-    color: #c7d2fe !important;
-  }
-  .kb-rt-tool-sep {
-    width: 1px;
-    height: 16px;
-    background: #2a2d3a;
-    margin: 0 3px;
-    flex-shrink: 0;
-  }
-  .kb-rt-editable {
-    min-height: 80px;
-    outline: none;
-    color: #e2e8f0;
-    font-size: 13px;
-    line-height: 1.6;
-    word-break: break-word;
-    caret-color: #818cf8;
-    padding: 10px 12px;
-  }
-  .kb-rt-editable-sm {
-    min-height: 48px;
-  }
-  .kb-rt-editable:empty::before {
-    content: attr(data-placeholder);
-    color: #4b5068;
-    font-style: italic;
-    pointer-events: none;
-  }
-  .kb-rt-editable h3 {
-    font-size: 15px;
-    font-weight: 700;
-    color: #f1f5f9;
-    margin: 12px 0 6px 0;
-    line-height: 1.3;
-  }
-  .kb-rt-editable h3:first-child { margin-top: 0; }
-  .kb-rt-editable a {
-    color: #818cf8;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    cursor: text;
-  }
-  .kb-rt-editable a:hover { color: #a5b4fc; cursor: pointer; }
-  .kb-rt-editable ul { padding-left: 20px; margin: 6px 0; list-style-type: disc !important; }
-  .kb-rt-editable ol { padding-left: 20px; margin: 6px 0; list-style-type: decimal !important; }
-  .kb-rt-editable li { margin: 1px 0; display: list-item !important; }
-  .kb-rt-editable s { color: #64748b; }
-
-  /* ── Rich Text Display (desc + comments) ── */
-  .kb-rt-display h3 {
-    font-size: 15px;
-    font-weight: 700;
-    color: #f1f5f9;
-    margin: 12px 0 6px 0;
-    line-height: 1.3;
-  }
-  .kb-rt-display h3:first-child { margin-top: 0; }
-  .kb-rt-display a {
-    color: #818cf8 !important;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    cursor: pointer;
-    transition: color 0.12s ease;
-  }
-  .kb-rt-display a:hover { color: #a5b4fc !important; }
-  .kb-rt-display ul { padding-left: 20px; margin: 6px 0; list-style-type: disc !important; }
-  .kb-rt-display ol { padding-left: 20px; margin: 6px 0; list-style-type: decimal !important; }
-  .kb-rt-display li { margin: 1px 0; display: list-item !important; }
-  .kb-rt-display s { color: #64748b; }
-
   /* ── Label Manager ── */
   .kb-lm-modal {
     background: #1a1d27 !important;
@@ -1940,6 +1846,16 @@ export const kanbanStyles = `
   }
   .kb-cf-multi-chip:hover { border-color: #6366f1; color: #c7d2fe; }
 
+  /* ── Repeat Picker ── */
+  .kb-repeat-picker { display: flex; gap: 6px; }
+  .kb-repeat-option {
+    flex: 1; padding: 6px 0; border-radius: 6px; font-size: 12px; font-weight: 500;
+    text-align: center; cursor: pointer; border: 1px solid #3b3f54;
+    background: #1a1d2e; color: #9ca3af; transition: all 0.15s;
+  }
+  .kb-repeat-option:hover { border-color: #6366f1; color: #c7d2fe; }
+  .kb-repeat-option.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .kb-repeat-hint { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.4; }
   .kb-cf-multi-chip.active { background: rgba(99,102,241,0.18); color: #a5b4fc; border-color: #6366f1; }
   .kb-cf-type-badge {
     display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 8px; margin-left: 8px;
@@ -2226,6 +2142,7 @@ export const kanbanStyles = `
 
     /* Card mobile fixes */
     .kb-card-label { max-width: 100px; }
+    .kb-card-repeat-front { font-size: 9px; }
     .kb-card-meta { gap: 3px 5px; }
     .kb-card-priority-select { max-width: 74px; font-size: 9px; }
 
@@ -2238,6 +2155,7 @@ export const kanbanStyles = `
     .kb-input, .kb-textarea { font-size: 16px !important; }
     .kb-cf-field { overflow: hidden; }
     .kb-cf-section { overflow: hidden; }
+    .kb-repeat-picker { overflow: hidden; }
     .kb-form-group { overflow: hidden; max-width: 100%; }
 
     /* Custom fields mobile */

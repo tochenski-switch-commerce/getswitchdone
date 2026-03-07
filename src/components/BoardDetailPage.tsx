@@ -25,6 +25,7 @@ import LabelManagerModal from './board-detail/LabelManagerModal';
 import ListActionsModal from './board-detail/ListActionsModal';
 import CustomFieldManagerModal from './board-detail/CustomFieldManagerModal';
 import { kanbanStyles } from './board-detail/kanban-styles';
+import { hapticLight, hapticMedium, hapticHeavy, hapticSelection } from '@/lib/haptics';
 
 function BoardPage() {
   const params = useParams();
@@ -283,6 +284,7 @@ function BoardPage() {
 
   // ── Drag & Drop (native HTML5) ──
   const handleDragStart = (cardId: string) => {
+    hapticLight();
     setDragCardId(cardId);
   };
 
@@ -290,6 +292,7 @@ function BoardPage() {
     e.preventDefault();
     const col = columns.find(c => c.id === colId);
     if (dragCardId && col?.column_type === 'board_links') return;
+    if (colId !== dragOverCol) hapticSelection();
     setDragOverCol(colId);
   };
 
@@ -336,6 +339,7 @@ function BoardPage() {
     destCards.splice(targetIndex, 0, draggedCard);
 
     await reorderCardsInColumn(boardId, colId, destCards.map(c => c.id));
+    hapticMedium();
 
     if (!isSameColumn) {
       const sourceCards = getColumnCards(oldColId).filter(c => c.id !== dragCardId);
@@ -357,6 +361,7 @@ function BoardPage() {
   const handleQuickAddCard = async (colId: string) => {
     if (!newCardTitle.trim()) return;
     await addCard(boardId, { column_id: colId, title: newCardTitle });
+    hapticMedium();
     setNewCardTitle('');
     setAddingCardCol(null);
   };
@@ -372,6 +377,7 @@ function BoardPage() {
 
   // When opening card detail, find the latest version from board state
   const openCardDetail = useCallback((card: BoardCard) => {
+    hapticLight();
     closedCardRef.current = null;
     setSelectedCard(card);
     const url = new URL(window.location.href);
@@ -934,6 +940,7 @@ function BoardPage() {
                         if (count > 0) {
                           if (!confirm(`Delete "${col.title}" column and its ${count} ${itemWord}?`)) return;
                         }
+                        hapticHeavy();
                         deleteColumn(boardId, col.id);
                       }}
                       title="Delete column"
@@ -1255,8 +1262,7 @@ function BoardPage() {
           onUpdate={async (updates) => {
             const oldAssignee = activeCard.assignee;
             const newAssignee = updates.assignee;
-            const result = await updateCard(boardId, activeCard.id, updates);
-            if (!result) throw new Error('Save failed — check your connection and try again.');
+            await updateCard(boardId, activeCard.id, updates);
             if (newAssignee && newAssignee !== oldAssignee) {
               const target = userProfiles.find(p => p.name.toLowerCase() === newAssignee.toLowerCase());
               if (target && target.id !== user?.id) {

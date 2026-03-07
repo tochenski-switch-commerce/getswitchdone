@@ -98,6 +98,15 @@ export interface ChecklistTemplate {
 
 export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention';
 
+export interface DeviceToken {
+  id: string;
+  user_id: string;
+  token: string;
+  platform: 'ios' | 'android' | 'web';
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Notification {
   id: string;
   user_id: string;

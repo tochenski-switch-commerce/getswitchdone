@@ -1,5 +1,10 @@
+import { Suspense } from 'react';
 import BoardsListPage from '@/components/BoardsListPage';
 
 export default function BoardsPage() {
-  return <BoardsListPage />;
+  return (
+    <Suspense>
+      <BoardsListPage />
+    </Suspense>
+  );
 }

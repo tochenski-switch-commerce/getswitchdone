@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '@/contexts/AuthContext';
 
+import QuickActionHandler from '@/components/QuickActionHandler';
+
 export const metadata: Metadata = {
   title: 'GSD Boards',
   description: 'Kanban project boards — Get Stuff Done',
@@ -82,6 +84,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }
         `}</style>
         <AuthProvider>
+          <QuickActionHandler />
           {children}
         </AuthProvider>
         <ServiceWorkerRegistration />

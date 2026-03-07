@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 /* AUTH: Replace with your auth hook */
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
 import InboxPanel from '@/components/InboxPanel';
+import { hapticLight } from '@/lib/haptics';
 import {
   Plus,
   LayoutDashboard,
@@ -32,6 +33,7 @@ import type { BoardIconKey } from '@/components/BoardIcons';
 function BoardsListPage() {
   const { user, loading: authLoading, profile, signOut, updateProfileName } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { boards, fetchBoards, createBoard, deleteBoard, duplicateBoard, loading, error,
     notifications, fetchNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, clearAllNotifications,
   } = useProjectBoard();
@@ -69,7 +71,15 @@ function BoardsListPage() {
       fetchBoards();
       fetchNotifications();
     }
-  }, [user, fetchBoards, fetchNotifications]);
+  }, [user]);
+
+  // Auto-open inbox from quick action deep link
+  useEffect(() => {
+    if (searchParams.get('inbox') === '1') {
+      setShowInbox(true);
+      router.replace('/boards');
+    }
+  }, [searchParams, router]);
 
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
@@ -310,7 +320,7 @@ function BoardsListPage() {
               <div
                 key={board.id}
                 className="kb-board-card"
-                onClick={() => router.push(`/boards/${board.id}`)}
+                onClick={() => { hapticLight(); router.push(`/boards/${board.id}`); }}
               >
                 <div className="kb-board-card-header">
                   {React.createElement(getBoardIcon(board.icon), { size: 20, style: { color: board.icon_color || DEFAULT_ICON_COLOR } })}

@@ -13,6 +13,7 @@ import {
 import DatePickerInput from '@/components/DatePickerInput';
 import CustomFieldInput from './CustomFieldInput';
 import { PRIORITY_CONFIG, linkifyText, renderCommentText, sanitizeRichText } from './helpers';
+import { hapticLight, hapticHeavy, hapticSuccess } from '@/lib/haptics';
 
 export default function CardDetailModal({
   card,
@@ -367,14 +368,17 @@ export default function CardDetailModal({
                   <div key={item.id} className="kb-checklist-item">
                     <button
                       className={`kb-checkbox ${item.is_completed ? 'checked' : ''}`}
-                      onClick={() => onToggleChecklistItem(item.id, !item.is_completed)}
+                      onClick={() => {
+                        if (!item.is_completed) hapticSuccess(); else hapticLight();
+                        onToggleChecklistItem(item.id, !item.is_completed);
+                      }}
                     >
                       {item.is_completed && <Check size={11} />}
                     </button>
                     <span className={`kb-checklist-text ${item.is_completed ? 'completed' : ''}`}>
                       {item.title}
                     </span>
-                    <button className="kb-btn-icon-sm" onClick={() => onDeleteChecklistItem(item.id)}>
+                    <button className="kb-btn-icon-sm" onClick={() => { hapticHeavy(); onDeleteChecklistItem(item.id); }}>
                       <X size={11} />
                     </button>
                   </div>
@@ -572,7 +576,7 @@ export default function CardDetailModal({
                         <button className="kb-btn-icon-sm" onClick={() => { setEditingCommentId(comment.id); setEditingCommentText(comment.content); }}>
                           <Pencil size={11} />
                         </button>
-                        <button className="kb-btn-icon-sm" onClick={() => onDeleteComment(comment.id)}>
+                        <button className="kb-btn-icon-sm" onClick={() => { hapticHeavy(); onDeleteComment(comment.id); }}>
                           <Trash2 size={11} />
                         </button>
                       </div>
@@ -776,6 +780,7 @@ export default function CardDetailModal({
                 className="kb-btn kb-btn-danger"
                 onClick={async () => {
                   if (confirm('Delete this card?')) {
+                    hapticHeavy();
                     await onDelete();
                     onClose();
                   }
