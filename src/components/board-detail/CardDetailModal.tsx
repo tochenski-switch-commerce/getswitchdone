@@ -1,18 +1,18 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { BoardCard, CardPriority, RepeatSchedule, ChecklistTemplate, UserProfile } from '@/types/board-types';
+import type { BoardCard, CardPriority, ChecklistTemplate, UserProfile } from '@/types/board-types';
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   Plus, Trash2, Edit3,
   MessageSquare, CheckSquare, CalendarDays, Tag,
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, Pencil,
-  Check, Copy, LinkIcon, SlidersHorizontal, Repeat,
+  Check, Copy, LinkIcon, SlidersHorizontal,
   Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import CustomFieldInput from './CustomFieldInput';
-import { PRIORITY_CONFIG, linkifyText, renderCommentText, getNextRepeatDate, formatRepeatDate, sanitizeRichText } from './helpers';
+import { PRIORITY_CONFIG, linkifyText, renderCommentText, sanitizeRichText } from './helpers';
 
 export default function CardDetailModal({
   card,
@@ -77,12 +77,12 @@ export default function CardDetailModal({
   const [editingCommentText, setEditingCommentText] = useState('');
   const [checklistText, setChecklistText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
-  const [editRepeatSchedule, setEditRepeatSchedule] = useState<RepeatSchedule | ''>(card.repeat_schedule || '');
   const [cardLinkSearch, setCardLinkSearch] = useState('');
   const [cardLinkResults, setCardLinkResults] = useState<{ id: string; title: string; board_id: string; column_id: string; is_archived: boolean }[]>([]);
   const [cardLinkSearching, setCardLinkSearching] = useState(false);
@@ -138,26 +138,31 @@ export default function CardDetailModal({
 
   const handleSave = async () => {
     setSaving(true);
-    const pendingComment = commentAddRef.current?.innerHTML || '';
-    if (pendingComment && pendingComment !== '<br>') {
-      await onAddComment(pendingComment);
-      setCommentText('');
-      if (commentAddRef.current) commentAddRef.current.innerHTML = '';
+    setSaveError(null);
+    try {
+      const pendingComment = commentAddRef.current?.innerHTML || '';
+      if (pendingComment && pendingComment !== '<br>') {
+        await onAddComment(pendingComment);
+        setCommentText('');
+        if (commentAddRef.current) commentAddRef.current.innerHTML = '';
+      }
+      const descHtml = descRef.current?.innerHTML || editDesc;
+      await onUpdate({
+        title: editTitle,
+        description: editingDesc ? descHtml : editDesc,
+        priority: editPriority || null,
+        start_date: editStartDate || null,
+        due_date: editDueDate || null,
+        assignee: editAssignee || null,
+        label_ids: editLabels,
+      });
+      setSaving(false);
+      onClose();
+    } catch (err: any) {
+      console.error('[handleSave] failed:', err);
+      setSaving(false);
+      setSaveError(err.message || 'Failed to save card. Please try again.');
     }
-    const descHtml = descRef.current?.innerHTML || editDesc;
-    await onUpdate({
-      title: editTitle,
-      description: editingDesc ? descHtml : editDesc,
-      priority: editPriority || null,
-      start_date: editStartDate || null,
-      due_date: editDueDate || null,
-      assignee: editAssignee || null,
-      label_ids: editLabels,
-      repeat_schedule: editRepeatSchedule || null,
-      repeat_series_id: editRepeatSchedule ? (card.repeat_series_id || card.id) : null,
-    });
-    setSaving(false);
-    onClose();
   };
 
   const handleAddComment = async () => {
@@ -734,30 +739,13 @@ export default function CardDetailModal({
               </div>
             )}
 
-            {/* Repeat Schedule */}
-            <div className="kb-form-group">
-              <div className="kb-detail-section-label"><Repeat size={13} /> Repeat Card</div>
-              <div className="kb-repeat-picker">
-                {(['daily', 'weekly', 'monthly'] as RepeatSchedule[]).map(opt => (
-                  <button
-                    key={opt}
-                    className={`kb-repeat-option ${editRepeatSchedule === opt ? 'active' : ''}`}
-                    onClick={() => setEditRepeatSchedule(editRepeatSchedule === opt ? '' : opt)}
-                  >
-                    {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                  </button>
-                ))}
-              </div>
-              {editRepeatSchedule && (
-                <div className="kb-repeat-hint">
-                  Next repeat: <strong>{formatRepeatDate(getNextRepeatDate(card.created_at, editRepeatSchedule))}</strong>
-                  <span style={{ margin: '0 4px' }}>·</span>Disable on any copy to stop the series.
-                </div>
-              )}
-            </div>
-
             {/* Actions */}
             <div style={{ borderTop: '1px solid #2a2d3a', paddingTop: 16, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {saveError && (
+                <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#f87171', lineHeight: 1.4 }}>
+                  {saveError}
+                </div>
+              )}
               <button className="kb-btn kb-btn-primary" onMouseDown={e => e.preventDefault()} onClick={handleSave} disabled={saving || !editTitle.trim()} style={{ width: '100%', justifyContent: 'center' }}>
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>

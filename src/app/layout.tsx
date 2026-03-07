@@ -95,7 +95,7 @@ function ServiceWorkerRegistration() {
     <script
       dangerouslySetInnerHTML={{
         __html: `
-          if ('serviceWorker' in navigator) {
+          if ('serviceWorker' in navigator && !window.Capacitor) {
             window.addEventListener('load', function() {
               navigator.serviceWorker.register('/sw.js');
             });

@@ -39,7 +39,9 @@ export default function DatePickerInput({ value, onChange, className = '', style
   const [viewYear, setViewYear] = useState(parsed?.year ?? today.getFullYear());
   const [viewMonth, setViewMonth] = useState(parsed?.month ?? today.getMonth());
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [dropUp, setDropUp] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
 
   // Reset view when value changes externally
   useEffect(() => {
@@ -54,7 +56,10 @@ export default function DatePickerInput({ value, onChange, className = '', style
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current && !containerRef.current.contains(e.target as Node) &&
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     };
@@ -62,12 +67,24 @@ export default function DatePickerInput({ value, onChange, className = '', style
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  // Calculate if calendar should open upward
+  // Calculate dropdown position (fixed positioning to escape overflow:hidden parents)
   useEffect(() => {
     if (!open || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
-    setDropUp(spaceBelow < 320);
+    const up = spaceBelow < 320;
+    setDropUp(up);
+    const dropdownWidth = 260;
+    let left = rect.left;
+    // Keep dropdown within viewport
+    if (left + dropdownWidth > window.innerWidth - 8) {
+      left = window.innerWidth - dropdownWidth - 8;
+    }
+    if (left < 8) left = 8;
+    setDropdownPos({
+      top: up ? rect.top : rect.bottom + 4,
+      left,
+    });
   }, [open]);
 
   const prevMonth = useCallback(() => {
@@ -133,8 +150,12 @@ export default function DatePickerInput({ value, onChange, className = '', style
         </div>
       </div>
 
-      {open && (
-        <div className={`dp-dropdown ${dropUp ? 'dp-dropdown-up' : ''}`}>
+      {open && dropdownPos && (
+        <div
+          ref={dropdownRef}
+          className={`dp-dropdown ${dropUp ? 'dp-dropdown-up' : ''}`}
+          style={{ top: dropUp ? undefined : dropdownPos.top, bottom: dropUp ? window.innerHeight - dropdownPos.top + 4 : undefined, left: dropdownPos.left }}
+        >
           {/* Navigation header */}
           <div className="dp-header">
             <button className="dp-nav-btn" onClick={prevMonth}><ChevronLeft size={14} /></button>
@@ -221,23 +242,16 @@ const datePickerStyles = `
 
   /* Dropdown */
   .dp-dropdown {
-    position: absolute;
-    left: 0;
-    top: calc(100% + 4px);
-    z-index: 9999;
+    position: fixed;
+    z-index: 99999;
     background: #1a1d2e;
     border: 1px solid #374151;
     border-radius: 12px;
     padding: 12px;
-    min-width: min(260px, calc(100vw - 32px));
-    max-width: calc(100vw - 24px);
+    width: 260px;
     box-sizing: border-box;
     box-shadow: 0 12px 40px rgba(0,0,0,0.5);
     animation: dp-fade-in 0.12s ease;
-  }
-  .dp-dropdown-up {
-    top: auto;
-    bottom: calc(100% + 4px);
   }
   @keyframes dp-fade-in {
     from { opacity: 0; transform: translateY(4px); }

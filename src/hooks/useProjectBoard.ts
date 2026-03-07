@@ -546,6 +546,7 @@ export function useProjectBoard() {
       });
       return cardData;
     } catch (err: any) {
+      console.error('[updateCard] failed:', err.message, { boardId, cardId, updates });
       setError(err.message);
       return null;
     }

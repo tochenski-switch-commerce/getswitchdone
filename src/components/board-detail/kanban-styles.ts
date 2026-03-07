@@ -547,31 +547,6 @@ export const kanbanStyles = `
     color: #6b7280;
   }
   .kb-card-count.done { color: #22c55e; }
-  .kb-card-repeat-badge { color: #818cf8; }
-  .kb-card-repeat-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #818cf8;
-    flex-shrink: 0;
-    margin-top: 2px;
-  }
-  .kb-card-repeat-front {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 10px;
-    font-weight: 600;
-    color: #818cf8;
-    background: rgba(99,102,241,0.1);
-    padding: 2px 8px;
-    border-radius: 6px;
-    max-width: 100%;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
   .kb-card-assignee {
     display: flex;
     align-items: center;
@@ -1965,16 +1940,6 @@ export const kanbanStyles = `
   }
   .kb-cf-multi-chip:hover { border-color: #6366f1; color: #c7d2fe; }
 
-  /* ── Repeat Picker ── */
-  .kb-repeat-picker { display: flex; gap: 6px; }
-  .kb-repeat-option {
-    flex: 1; padding: 6px 0; border-radius: 6px; font-size: 12px; font-weight: 500;
-    text-align: center; cursor: pointer; border: 1px solid #3b3f54;
-    background: #1a1d2e; color: #9ca3af; transition: all 0.15s;
-  }
-  .kb-repeat-option:hover { border-color: #6366f1; color: #c7d2fe; }
-  .kb-repeat-option.active { background: #2563eb; border-color: #2563eb; color: #fff; }
-  .kb-repeat-hint { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.4; }
   .kb-cf-multi-chip.active { background: rgba(99,102,241,0.18); color: #a5b4fc; border-color: #6366f1; }
   .kb-cf-type-badge {
     display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 8px; margin-left: 8px;
@@ -2261,7 +2226,6 @@ export const kanbanStyles = `
 
     /* Card mobile fixes */
     .kb-card-label { max-width: 100px; }
-    .kb-card-repeat-front { font-size: 9px; }
     .kb-card-meta { gap: 3px 5px; }
     .kb-card-priority-select { max-width: 74px; font-size: 9px; }
 
@@ -2274,7 +2238,6 @@ export const kanbanStyles = `
     .kb-input, .kb-textarea { font-size: 16px !important; }
     .kb-cf-field { overflow: hidden; }
     .kb-cf-section { overflow: hidden; }
-    .kb-repeat-picker { overflow: hidden; }
     .kb-form-group { overflow: hidden; max-width: 100%; }
 
     /* Custom fields mobile */

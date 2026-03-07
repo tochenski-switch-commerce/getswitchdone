@@ -3,9 +3,9 @@
 import type { BoardCard, CardPriority } from '@/types/board-types';
 import {
   MessageSquare, CheckSquare, CalendarDays,
-  User, Bell, Repeat, Check,
+  User, Bell, Check,
 } from '@/components/BoardIcons';
-import { PRIORITY_CONFIG, getNextRepeatDate, formatRepeatDate } from './helpers';
+import { PRIORITY_CONFIG } from './helpers';
 
 export default function KanbanCard({
   card,
@@ -71,11 +71,6 @@ export default function KanbanCard({
       {/* Title */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
         <p className="kb-card-title" style={{ flex: 1 }}>{card.title}</p>
-        {card.repeat_schedule && (
-          <span className="kb-card-repeat-icon" title={`Repeats ${card.repeat_schedule}`}>
-            <Repeat size={13} />
-          </span>
-        )}
         {hasAlert && (
           <span className="kb-card-alert" title="You have unread notifications for this card">
             <Bell size={12} />
@@ -96,13 +91,6 @@ export default function KanbanCard({
             {card.due_date && (
               <span>{isOverdue ? 'Overdue' : isDueSoon ? (daysUntilDue === 0 ? 'Today' : daysUntilDue === 1 ? 'Tomorrow' : 'In 2 days') : new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
             )}
-          </span>
-        )}
-
-        {/* Repeat date */}
-        {card.repeat_schedule && (
-          <span className="kb-card-repeat-front">
-            <Repeat size={10} /> Repeats {card.repeat_schedule} · Next: {formatRepeatDate(getNextRepeatDate(card.created_at, card.repeat_schedule))}
           </span>
         )}
 

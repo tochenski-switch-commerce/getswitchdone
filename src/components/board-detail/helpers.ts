@@ -8,28 +8,6 @@ export const URL_REGEX = /(https?:\/\/[^\s<>"']+)/gi;
 export const MENTION_REGEX = /@"([^"]+)"|@(\S+)/g;
 
 /* ═══════════════════════════════════════════════════════════
-   Date helpers
-   ═══════════════════════════════════════════════════════════ */
-export function getNextRepeatDate(createdAt: string, schedule: string): Date {
-  const d = new Date(createdAt);
-  if (schedule === 'daily') d.setDate(d.getDate() + 1);
-  else if (schedule === 'weekly') d.setDate(d.getDate() + 7);
-  else if (schedule === 'monthly') d.setDate(d.getDate() + 28);
-  return d;
-}
-
-export function formatRepeatDate(date: Date): string {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-  const diff = Math.ceil((target.getTime() - now.getTime()) / 86400000);
-  if (diff <= 0) return 'Today';
-  if (diff === 1) return 'Tomorrow';
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-/* ═══════════════════════════════════════════════════════════
    Text rendering helpers
    ═══════════════════════════════════════════════════════════ */
 export function linkifyText(text: string): React.ReactNode[] {

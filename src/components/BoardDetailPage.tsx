@@ -1255,7 +1255,8 @@ function BoardPage() {
           onUpdate={async (updates) => {
             const oldAssignee = activeCard.assignee;
             const newAssignee = updates.assignee;
-            await updateCard(boardId, activeCard.id, updates);
+            const result = await updateCard(boardId, activeCard.id, updates);
+            if (!result) throw new Error('Save failed — check your connection and try again.');
             if (newAssignee && newAssignee !== oldAssignee) {
               const target = userProfiles.find(p => p.name.toLowerCase() === newAssignee.toLowerCase());
               if (target && target.id !== user?.id) {
