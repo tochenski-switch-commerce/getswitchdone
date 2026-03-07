@@ -4094,6 +4094,7 @@ const kanbanStyles = `
     transition: border-color 0.15s ease;
     box-sizing: border-box;
     font-family: inherit;
+    max-width: 100%;
   }
   select.kb-input {
     appearance: none !important;
@@ -4148,11 +4149,13 @@ const kanbanStyles = `
     background: #1a1d27 !important;
     border: 1px solid #2a2d3a;
     border-radius: 18px;
-    max-width: 900px;
+    max-width: min(900px, 100%);
     width: 100%;
     box-shadow: 0 32px 80px rgba(0,0,0,0.6);
     position: relative;
     animation: kb-modal-in 0.2s ease;
+    overflow: hidden;
+    box-sizing: border-box;
   }
   @keyframes kb-modal-in {
     from { opacity: 0; transform: translateY(20px) scale(0.97); }
@@ -4174,17 +4177,23 @@ const kanbanStyles = `
   .kb-detail-body {
     display: flex;
     gap: 0;
+    min-width: 0;
+    overflow: hidden;
   }
   .kb-detail-main {
     flex: 1;
     padding: 28px 24px;
     min-width: 0;
     border-right: 1px solid #2a2d3a;
+    overflow: hidden;
   }
   .kb-detail-sidebar {
     width: 260px;
     flex-shrink: 0;
     padding: 28px 20px;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
   }
   .kb-detail-title-input {
     width: 100%;
@@ -5008,12 +5017,12 @@ const kanbanStyles = `
   .kb-mobile-filter-clear:hover { color: #818cf8 !important; }
 
   /* ── Custom Fields ── */
-  .kb-cf-section { border-top: 1px solid #2a2d3a; padding-top: 12px; margin-top: 4px; display: flex; flex-direction: column; gap: 10px; }
-  .kb-cf-field { display: flex; flex-direction: column; gap: 4px; }
+  .kb-cf-section { border-top: 1px solid #2a2d3a; padding-top: 12px; margin-top: 4px; display: flex; flex-direction: column; gap: 10px; max-width: 100%; overflow: hidden; }
+  .kb-cf-field { display: flex; flex-direction: column; gap: 4px; max-width: 100%; overflow: hidden; }
   .kb-cf-label { font-size: 12px; color: #94a3b8; font-weight: 500; }
   .kb-cf-checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e2e8f0; cursor: pointer; }
   .kb-cf-checkbox-row input[type="checkbox"] { accent-color: #6366f1; width: 16px; height: 16px; }
-  .kb-cf-multi-options { display: flex; flex-wrap: wrap; gap: 4px; }
+  .kb-cf-multi-options { display: flex; flex-wrap: wrap; gap: 4px; max-width: 100%; }
   .kb-cf-multi-chip {
     padding: 3px 10px; border-radius: 12px; font-size: 12px; cursor: pointer;
     background: #23263a; color: #9ca3af; border: 1px solid #3b3f54; transition: all 0.15s;
@@ -5308,9 +5317,9 @@ const kanbanStyles = `
     .kb-search-input { width: 100% !important; }
     .kb-column { width: 280px; min-width: 280px; }
     .kb-add-column { width: 280px; min-width: 280px; }
-    .kb-detail-body { flex-direction: column; }
-    .kb-detail-sidebar { width: 100%; border-top: 1px solid #2a2d3a; }
-    .kb-detail-main { border-right: none; padding: 20px 16px; }
+    .kb-detail-body { flex-direction: column; overflow-x: hidden; }
+    .kb-detail-sidebar { width: 100%; border-top: 1px solid #2a2d3a; overflow: hidden; }
+    .kb-detail-main { border-right: none; padding: 20px 16px; overflow: hidden; }
     .kb-note-panel { width: 100%; }
     .kb-email-panel { width: 100%; }
 
@@ -5322,10 +5331,15 @@ const kanbanStyles = `
 
     /* Detail modal mobile */
     .kb-modal-overlay { padding: 16px 8px 80px; }
-    .kb-detail-modal { border-radius: 14px; }
+    .kb-detail-modal { border-radius: 14px; max-width: calc(100vw - 16px); }
     .kb-detail-title-input { font-size: 17px !important; }
     .kb-detail-sidebar { padding: 20px 16px; }
     .kb-textarea { font-size: 14px !important; }
+    .kb-input, .kb-textarea { font-size: 16px !important; }
+    .kb-cf-field { overflow: hidden; }
+    .kb-cf-section { overflow: hidden; }
+    .kb-repeat-picker { overflow: hidden; }
+    .kb-form-group { overflow: hidden; max-width: 100%; }
 
     /* Custom fields mobile */
     .kb-cf-multi-options { gap: 3px; }
