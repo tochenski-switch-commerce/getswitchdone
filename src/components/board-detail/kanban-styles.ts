@@ -1404,6 +1404,105 @@ export const kanbanStyles = `
     color: #4b5563;
     font-style: italic;
   }
+
+  /* ── Rich Text Editor ── */
+  .kb-rt-editor {
+    border: 1px solid #2a2d3a;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #14161e;
+  }
+  .kb-rt-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 8px;
+    background: #1a1d2a;
+    border-bottom: 1px solid #2a2d3a;
+  }
+  .kb-rt-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .kb-rt-tool-btn:hover {
+    background: #2a2d3a;
+    color: #e5e7eb;
+  }
+  .kb-rt-tool-btn:active {
+    background: #374151;
+    color: #fff;
+  }
+  .kb-rt-tool-sep {
+    width: 1px;
+    height: 18px;
+    background: #2a2d3a;
+    margin: 0 4px;
+    flex-shrink: 0;
+  }
+  .kb-rt-editable,
+  .kb-rt-editable-sm {
+    padding: 10px 12px;
+    font-size: 13px;
+    color: #d1d5db;
+    line-height: 1.6;
+    min-height: 80px;
+    outline: none;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .kb-rt-editable-sm {
+    min-height: 48px;
+    font-size: 13px;
+  }
+  .kb-rt-editable:empty::before,
+  .kb-rt-editable-sm:empty::before {
+    content: attr(data-placeholder);
+    color: #4b5563;
+    font-style: italic;
+    pointer-events: none;
+  }
+  .kb-rt-editable h3,
+  .kb-rt-editable-sm h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e5e7eb;
+    margin: 8px 0 4px;
+  }
+  .kb-rt-editable ul,
+  .kb-rt-editable ol,
+  .kb-rt-editable-sm ul,
+  .kb-rt-editable-sm ol {
+    margin: 4px 0;
+    padding-left: 20px;
+  }
+  .kb-rt-editable a,
+  .kb-rt-editable-sm a {
+    color: #818cf8;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .kb-rt-display h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e5e7eb;
+    margin: 8px 0 4px;
+  }
+  .kb-rt-display ul,
+  .kb-rt-display ol {
+    margin: 4px 0;
+    padding-left: 20px;
+  }
   .kb-comment-add { display: flex; flex-direction: column; }
 
   /* ── Label Manager ── */
@@ -2161,5 +2260,11 @@ export const kanbanStyles = `
     /* Custom fields mobile */
     .kb-cf-multi-options { gap: 3px; }
     .kb-cf-multi-chip { font-size: 11px; padding: 2px 8px; }
+
+    /* Rich text editor mobile */
+    .kb-rt-toolbar { padding: 4px 6px; gap: 1px; }
+    .kb-rt-tool-btn { width: 32px; height: 32px; }
+    .kb-rt-editable { min-height: 60px; font-size: 14px; }
+    .kb-rt-editable-sm { min-height: 40px; font-size: 14px; }
   }
 `;

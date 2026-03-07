@@ -1253,6 +1253,7 @@ function BoardPage() {
           card={activeCard}
           board={board}
           onClose={() => {
+            hapticLight();
             closedCardRef.current = cardParam;
             setSelectedCard(null);
             const url = new URL(window.location.href);
