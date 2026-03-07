@@ -163,13 +163,18 @@ export function useProjectBoard() {
       let allCfValues: CardCustomFieldValue[] = [];
 
       if (cardIds.length > 0) {
-        const [commentsRes, checklistsRes, assignmentsRes, cfValuesRes] = await Promise.all([
-          supabase.from('card_comments').select('*, user_profiles(name)').in('card_id', cardIds).order('created_at', { ascending: true }),
+        const [commentsRes, checklistsRes, assignmentsRes, cfValuesRes, profilesRes] = await Promise.all([
+          supabase.from('card_comments').select('*').in('card_id', cardIds).order('created_at', { ascending: true }),
           supabase.from('card_checklists').select('*').in('card_id', cardIds).order('position'),
           supabase.from('card_label_assignments').select('*').in('card_id', cardIds),
           supabase.from('card_custom_field_values').select('*').in('card_id', cardIds),
+          supabase.from('user_profiles').select('id, name'),
         ]);
-        allComments = commentsRes.data || [];
+        const profiles = profilesRes.data || [];
+        allComments = (commentsRes.data || []).map(cm => ({
+          ...cm,
+          user_profiles: profiles.find(p => p.id === cm.user_id) ? { name: profiles.find(p => p.id === cm.user_id)!.name } : { name: 'Unknown' },
+        }));
         allChecklists = checklistsRes.data || [];
         allAssignments = assignmentsRes.data || [];
         allCfValues = (cfValuesRes.data || []) as CardCustomFieldValue[];
@@ -427,7 +432,7 @@ export function useProjectBoard() {
     column_id: string;
     title: string;
     description?: string;
-    priority?: CardPriority;
+    priority?: CardPriority | null;
     start_date?: string;
     due_date?: string;
     assignee?: string;
@@ -474,7 +479,7 @@ export function useProjectBoard() {
   const updateCard = useCallback(async (boardId: string, cardId: string, updates: any) => {
     setError(null);
     try {
-      const { label_ids, ...cardUpdates } = updates;
+      const { label_ids, repeat_schedule, repeat_series_id, ...cardUpdates } = updates;
 
       // Update card fields if any
       let cardData: any = {};

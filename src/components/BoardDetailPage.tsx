@@ -3,16 +3,17 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useProjectBoard, FullBoard } from '@/hooks/useProjectBoard';
+import { useRealtimeBoard } from '@/hooks/useRealtimeBoard';
 /* AUTH: Replace with your auth hook */
 import { useAuth } from '@/contexts/AuthContext';
-import type { BoardCard, BoardColumn, BoardLabel, CardPriority, ChecklistTemplate, UserProfile, BoardCustomField, CustomFieldType, BoardEmail, ProjectBoard, BoardLink, BoardSummaryStats, ColumnType } from '@/types/board-types';
+import type { BoardCard, BoardColumn, BoardLabel, CardPriority, RepeatSchedule, ChecklistTemplate, UserProfile, BoardCustomField, CustomFieldType, BoardEmail, ProjectBoard, BoardLink, BoardSummaryStats, ColumnType } from '@/types/board-types';
 import {
   Plus, ArrowLeft, Search, MoreHorizontal, Trash2, Edit3,
   GripVertical, MessageSquare, CheckSquare, CalendarDays, Tag,
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, AlertCircle, Pencil,
   FolderKanban, Check, Globe, Lock, StickyNote, UserPlus, Copy,
   Zap, ArrowDownAZ, ArrowUpZA, Bold, Italic, Underline, Strikethrough,
-  LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, Bell, FileText, Mail,
+  LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, Bell, FileText, Mail, Repeat,
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
 } from '@/components/BoardIcons';
 import InboxPanel from '@/components/InboxPanel';
@@ -25,6 +26,49 @@ import DatePickerInput from '@/components/DatePickerInput';
    Linkify helper – turns URLs in text into clickable <a> tags
    ═══════════════════════════════════════════════════════════ */
 const URL_REGEX = /(https?:\/\/[^\s<>"']+)/gi;
+const MENTION_REGEX = /@"([^"]+)"|@(\S+)/g;
+
+function getNextRepeatDate(createdAt: string, schedule: string): Date {
+  const d = new Date(createdAt);
+  if (schedule === 'daily') d.setDate(d.getDate() + 1);
+  else if (schedule === 'weekly') d.setDate(d.getDate() + 7);
+  else if (schedule === 'monthly') d.setDate(d.getDate() + 28);
+  return d;
+}
+
+function formatRepeatDate(date: Date): string {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const diff = Math.ceil((target.getTime() - now.getTime()) / 86400000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function renderCommentText(text: string): React.ReactNode[] {
+  // First split by mentions, then linkify each non-mention segment
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  const regex = new RegExp(MENTION_REGEX.source, 'g');
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(...linkifyText(text.slice(lastIndex, match.index)));
+    }
+    const name = match[1] || match[2];
+    nodes.push(
+      <span key={`m-${match.index}`} className="kb-mention">@{name}</span>
+    );
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    nodes.push(...linkifyText(text.slice(lastIndex)));
+  }
+  return nodes;
+}
+
 function linkifyText(text: string): React.ReactNode[] {
   const parts = text.split(URL_REGEX);
   return parts.map((part, i) =>
@@ -79,6 +123,14 @@ const PRIORITY_CONFIG: Record<CardPriority, { label: string; color: string; bg: 
   medium: { label: 'Medium', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
   high:   { label: 'High',   color: '#f97316', bg: 'rgba(249,115,22,0.12)' },
   urgent: { label: 'Urgent', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+};
+
+const PRIORITY_WEIGHT: Record<string, number> = {
+  urgent: 0,
+  high:   1,
+  medium: 2,
+  low:    3,
+  none:   4,
 };
 
 const FIELD_TYPES: { value: CustomFieldType; label: string }[] = [
@@ -292,6 +344,8 @@ function CardDetailModal({
   onDuplicate,
   onSetCustomFieldValue,
   userProfiles,
+  onNavigatePrev,
+  onNavigateNext,
 }: {
   card: BoardCard;
   board: FullBoard;
@@ -311,10 +365,12 @@ function CardDetailModal({
   onDuplicate: () => Promise<void>;
   onSetCustomFieldValue: (cardId: string, fieldId: string, value?: string, multiValue?: string[]) => Promise<void>;
   userProfiles: UserProfile[];
+  onNavigatePrev?: () => void;
+  onNavigateNext?: () => void;
 }) {
   const [editTitle, setEditTitle] = useState(card.title);
   const [editDesc, setEditDesc] = useState(card.description || '');
-  const [editPriority, setEditPriority] = useState<CardPriority>(card.priority);
+  const [editPriority, setEditPriority] = useState<CardPriority | null>(card.priority);
   const [editStartDate, setEditStartDate] = useState(card.start_date || '');
   const [editDueDate, setEditDueDate] = useState(card.due_date || '');
   const [editAssignee, setEditAssignee] = useState(card.assignee || '');
@@ -327,6 +383,7 @@ function CardDetailModal({
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [editRepeatSchedule, setEditRepeatSchedule] = useState<RepeatSchedule | ''>(card.repeat_schedule || '');
   const titleRef = useRef<HTMLInputElement>(null);
   const descRef = useRef<HTMLTextAreaElement>(null);
 
@@ -343,11 +400,13 @@ function CardDetailModal({
     await onUpdate({
       title: editTitle,
       description: editDesc,
-      priority: editPriority,
+      priority: editPriority || null,
       start_date: editStartDate || null,
       due_date: editDueDate || null,
       assignee: editAssignee || null,
       label_ids: editLabels,
+      repeat_schedule: editRepeatSchedule || null,
+      repeat_series_id: editRepeatSchedule ? (card.repeat_series_id || card.id) : null,
     });
     setSaving(false);
     onClose();
@@ -376,8 +435,22 @@ function CardDetailModal({
   return (
     <div className="kb-modal-overlay" onMouseDown={onClose}>
       <div className="kb-detail-modal" onMouseDown={e => e.stopPropagation()}>
-        {/* Close */}
-        <button className="kb-detail-close" onClick={onClose}><X size={18} /></button>
+        {/* Close + Nav */}
+        <div className="kb-detail-header-actions">
+          <div className="kb-detail-nav">
+            {onNavigatePrev && (
+              <button className="kb-detail-nav-btn" onClick={onNavigatePrev} title="Previous card (K / ←)">
+                <ChevronLeft size={16} />
+              </button>
+            )}
+            {onNavigateNext && (
+              <button className="kb-detail-nav-btn" onClick={onNavigateNext} title="Next card (J / →)">
+                <ChevronRight size={16} />
+              </button>
+            )}
+          </div>
+          <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={onClose}><X size={18} /></button>
+        </div>
 
         <div className="kb-detail-body">
           {/* Left: Main content */}
@@ -623,7 +696,7 @@ function CardDetailModal({
                     </div>
                     <p className="kb-comment-text">
                       {comment.content.split('\n').map((line, i, arr) => (
-                        <span key={i}>{linkifyText(line)}{i < arr.length - 1 && <br />}</span>
+                        <span key={i}>{renderCommentText(line)}{i < arr.length - 1 && <br />}</span>
                       ))}
                     </p>
                   </div>
@@ -649,21 +722,16 @@ function CardDetailModal({
             {/* Priority */}
             <div className="kb-form-group">
               <div className="kb-detail-section-label"><Flag size={13} /> Priority</div>
-              <div className="kb-priority-grid">
+              <select
+                className="kb-input"
+                value={editPriority || ''}
+                onChange={e => setEditPriority((e.target.value || null) as CardPriority | null)}
+              >
+                <option value="">None</option>
                 {(Object.keys(PRIORITY_CONFIG) as CardPriority[]).map(p => (
-                  <button
-                    key={p}
-                    className={`kb-priority-btn ${editPriority === p ? 'active' : ''}`}
-                    style={{
-                      '--pri-color': PRIORITY_CONFIG[p].color,
-                      '--pri-bg': PRIORITY_CONFIG[p].bg,
-                    } as any}
-                    onClick={() => setEditPriority(p)}
-                  >
-                    {PRIORITY_CONFIG[p].label}
-                  </button>
+                  <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
                 ))}
-              </div>
+              </select>
             </div>
 
             {/* Assignee */}
@@ -742,9 +810,31 @@ function CardDetailModal({
               </div>
             )}
 
+            {/* Repeat Schedule */}
+            <div className="kb-form-group">
+              <div className="kb-detail-section-label"><Repeat size={13} /> Repeat Card</div>
+              <div className="kb-repeat-picker">
+                {(['daily', 'weekly', 'monthly'] as RepeatSchedule[]).map(opt => (
+                  <button
+                    key={opt}
+                    className={`kb-repeat-option ${editRepeatSchedule === opt ? 'active' : ''}`}
+                    onClick={() => setEditRepeatSchedule(editRepeatSchedule === opt ? '' : opt)}
+                  >
+                    {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                  </button>
+                ))}
+              </div>
+              {editRepeatSchedule && (
+                <div className="kb-repeat-hint">
+                  Next repeat: <strong>{formatRepeatDate(getNextRepeatDate(card.created_at, editRepeatSchedule))}</strong>
+                  <span style={{ margin: '0 4px' }}>·</span>Disable on any copy to stop the series.
+                </div>
+              )}
+            </div>
+
             {/* Actions */}
             <div style={{ borderTop: '1px solid #2a2d3a', paddingTop: 16, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button className="kb-btn kb-btn-primary" onClick={handleSave} disabled={saving || !editTitle.trim()} style={{ width: '100%', justifyContent: 'center' }}>
+              <button className="kb-btn kb-btn-primary" onMouseDown={e => e.preventDefault()} onClick={handleSave} disabled={saving || !editTitle.trim()} style={{ width: '100%', justifyContent: 'center' }}>
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>
               <button
@@ -798,12 +888,14 @@ function KanbanCard({
   card,
   onClick,
   isDragging,
+  onPriorityChange,
 }: {
   card: BoardCard;
   onClick: () => void;
   isDragging?: boolean;
+  onPriorityChange?: (priority: CardPriority | null) => void;
 }) {
-  const pri = PRIORITY_CONFIG[card.priority] || PRIORITY_CONFIG.medium;
+  const pri = card.priority ? PRIORITY_CONFIG[card.priority] : null;
   const labels = card.labels || [];
   const comments = card.comments || [];
   const checklists = card.checklists || [];
@@ -822,9 +914,27 @@ function KanbanCard({
       onClick={onClick}
       draggable
     >
-      {/* Labels */}
-      {labels.length > 0 && (
+      {/* Priority select + Labels row */}
+      {(pri || labels.length > 0) && (
         <div className="kb-card-labels">
+          {pri && (
+            <select
+              className="kb-card-priority-select"
+              value={card.priority || ''}
+              style={{ color: pri.color, background: pri.bg, borderColor: pri.color }}
+              onClick={e => e.stopPropagation()}
+              onChange={e => {
+                e.stopPropagation();
+                const val = e.target.value || null;
+                onPriorityChange?.(val as CardPriority | null);
+              }}
+            >
+              <option value="">No Priority</option>
+              {(Object.keys(PRIORITY_CONFIG) as CardPriority[]).map(p => (
+                <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
+              ))}
+            </select>
+          )}
           {labels.map(l => (
             <span key={l.id} className="kb-card-label" style={{ background: l.color }} title={l.name}>
               {l.name}
@@ -849,6 +959,13 @@ function KanbanCard({
             {card.due_date && (
               <span>{isOverdue ? 'Overdue' : isDueSoon ? (daysUntilDue === 0 ? 'Today' : daysUntilDue === 1 ? 'Tomorrow' : 'In 2 days') : new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
             )}
+          </span>
+        )}
+
+        {/* Repeat date */}
+        {card.repeat_schedule && (
+          <span className="kb-card-repeat-front">
+            <Repeat size={10} /> Repeats {card.repeat_schedule} · Next: {formatRepeatDate(getNextRepeatDate(card.created_at, card.repeat_schedule))}
           </span>
         )}
 
@@ -1114,6 +1231,7 @@ function ListActionsModal({
 }) {
   const [bulkDueDate, setBulkDueDate] = useState('');
   const [bulkAssignee, setBulkAssignee] = useState('');
+  const [bulkPriority, setBulkPriority] = useState('');
   const [bulkLabel, setBulkLabel] = useState('');
   const [bulkMoveCol, setBulkMoveCol] = useState('');
   const [bulkChecklistItem, setBulkChecklistItem] = useState('');
@@ -1197,6 +1315,35 @@ function ListActionsModal({
                     disabled={!bulkAssignee.trim() || applying}
                     onClick={() => apply('Assignee', async () => {
                       for (const card of cards) await onUpdateCard(card.id, { assignee: bulkAssignee.trim() });
+                    })}
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+
+              {/* Set Priority */}
+              <div className="kb-list-action-row">
+                <div className="kb-list-action-label"><Flag size={13} /> Set Priority</div>
+                <div className="kb-list-action-controls">
+                  <select
+                    className="kb-input"
+                    value={bulkPriority}
+                    onChange={e => setBulkPriority(e.target.value)}
+                    style={{ flex: 1 }}
+                  >
+                    <option value="">Choose a priority...</option>
+                    <option value="none">None</option>
+                    {(Object.keys(PRIORITY_CONFIG) as CardPriority[]).map(p => (
+                      <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="kb-btn kb-btn-primary kb-btn-sm"
+                    disabled={!bulkPriority || applying}
+                    onClick={() => apply('Priority', async () => {
+                      const val = bulkPriority === 'none' ? null : bulkPriority;
+                      for (const card of cards) await onUpdateCard(card.id, { priority: val });
                     })}
                   >
                     Apply
@@ -1512,7 +1659,7 @@ function BoardPage() {
   const searchParams = useSearchParams();
   const boardId = params.id as string;
   const cardParam = searchParams.get('card');
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
 
   // Redirect unauthenticated users to sign-in, preserving the current URL
   useEffect(() => {
@@ -1540,10 +1687,11 @@ function BoardPage() {
   } = useProjectBoard();
 
   const [search, setSearch] = useState('');
-  const [filterPriority, setFilterPriority] = useState<CardPriority | ''>('');
+  const [filterPriority, setFilterPriority] = useState<CardPriority | 'none' | ''>('');
   const [filterLabel, setFilterLabel] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [selectedCard, setSelectedCard] = useState<BoardCard | null>(null);
+  const closedCardRef = useRef<string | null>(null);
   const [addingCardCol, setAddingCardCol] = useState<string | null>(null);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [addingColumn, setAddingColumn] = useState(false);
@@ -1569,6 +1717,7 @@ function BoardPage() {
   const [dragOverLinkId, setDragOverLinkId] = useState<string | null>(null);
   const [dragOverLinkPos, setDragOverLinkPos] = useState<'above' | 'below'>('below');
 
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const [dragCardId, setDragCardId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
@@ -1580,6 +1729,23 @@ function BoardPage() {
 
   const newCardRef = useRef<HTMLInputElement>(null);
   const newColRef = useRef<HTMLInputElement>(null);
+
+  // Realtime: re-fetch board when another user makes changes
+  const handleRemoteChange = useCallback(() => {
+    if (boardId) fetchBoard(boardId);
+  }, [boardId, fetchBoard]);
+
+  const handleRemoteNotification = useCallback(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  const { toasts, dismissToast } = useRealtimeBoard({
+    boardId,
+    currentUserId: user?.id ?? null,
+    cardIds: board?.cards?.map(c => c.id) ?? [],
+    onRemoteChange: handleRemoteChange,
+    onNotification: handleRemoteNotification,
+  });
 
   useEffect(() => {
     if (boardId) {
@@ -1682,7 +1848,11 @@ function BoardPage() {
       );
     }
     if (filterPriority) {
-      cards = cards.filter(c => c.priority === filterPriority);
+      if (filterPriority === 'none') {
+        cards = cards.filter(c => !c.priority);
+      } else {
+        cards = cards.filter(c => c.priority === filterPriority);
+      }
     }
     if (filterLabel) {
       cards = cards.filter(c => (c.labels || []).some(l => l.id === filterLabel));
@@ -1711,7 +1881,11 @@ function BoardPage() {
   }, [board, search, filterPriority, filterLabel, filterDate]);
 
   const getColumnCards = useCallback((colId: string) => {
-    return filteredCards.filter(c => c.column_id === colId).sort((a, b) => a.position - b.position);
+    return filteredCards.filter(c => c.column_id === colId).sort((a, b) => {
+      const pw = (PRIORITY_WEIGHT[a.priority || 'none'] ?? 4) - (PRIORITY_WEIGHT[b.priority || 'none'] ?? 4);
+      if (pw !== 0) return pw;
+      return a.position - b.position;
+    });
   }, [filteredCards]);
 
   // ── Drag & Drop (native HTML5) ──
@@ -1811,6 +1985,7 @@ function BoardPage() {
 
   // When opening card detail, find the latest version from board state
   const openCardDetail = useCallback((card: BoardCard) => {
+    closedCardRef.current = null;
     setSelectedCard(card);
     const url = new URL(window.location.href);
     url.searchParams.set('card', card.id);
@@ -1825,13 +2000,99 @@ function BoardPage() {
 
   // Auto-open card from URL ?card= param
   useEffect(() => {
-    if (cardParam && board && !selectedCard) {
-      const card = board.cards.find(c => c.id === cardParam);
-      if (card) setSelectedCard(card);
+    if (cardParam && board && closedCardRef.current !== cardParam) {
+      setSelectedCard(prev => {
+        if (prev) return prev;
+        const card = board.cards.find(c => c.id === cardParam);
+        return card || null;
+      });
     }
-  }, [cardParam, board, selectedCard]);
+    if (!cardParam) closedCardRef.current = null;
+  }, [cardParam, board]);
 
-  if (loading && !board) {
+  // ── Keyboard shortcuts (hover cards + card detail navigation) ──
+  const navigateCard = useCallback((direction: 'prev' | 'next') => {
+    if (!activeCard || !board) return;
+    const col = board.columns.find(c => c.id === activeCard.column_id);
+    if (!col) return;
+    const colCards = board.cards
+      .filter(c => c.column_id === col.id && !c.is_archived)
+      .sort((a, b) => {
+        const pw = (PRIORITY_WEIGHT[a.priority || 'none'] ?? 4) - (PRIORITY_WEIGHT[b.priority || 'none'] ?? 4);
+        if (pw !== 0) return pw;
+        return a.position - b.position;
+      });
+    const idx = colCards.findIndex(c => c.id === activeCard.id);
+    const nextIdx = direction === 'next' ? idx + 1 : idx - 1;
+    if (nextIdx >= 0 && nextIdx < colCards.length) {
+      setSelectedCard(colCards[nextIdx]);
+      const url = new URL(window.location.href);
+      url.searchParams.set('card', colCards[nextIdx].id);
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [activeCard, board]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Skip when typing in inputs/textareas/contenteditable
+      const tag = (e.target as HTMLElement).tagName;
+      const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+        (e.target as HTMLElement).isContentEditable;
+      if (isEditable) return;
+
+      // Card detail modal navigation
+      if (activeCard) {
+        if (e.key === 'j' || e.key === 'ArrowRight') { e.preventDefault(); navigateCard('next'); return; }
+        if (e.key === 'k' || e.key === 'ArrowLeft') { e.preventDefault(); navigateCard('prev'); return; }
+      }
+
+      // Hover shortcuts (only when no modal is open)
+      if (!hoveredCardId || activeCard) return;
+      const card = board?.cards.find(c => c.id === hoveredCardId);
+      if (!card) return;
+
+      if (e.key === 'c') {
+        e.preventDefault();
+        // Duplicate hovered card
+        addCard(boardId, {
+          column_id: card.column_id,
+          title: card.title + ' (copy)',
+          description: card.description || undefined,
+          priority: card.priority,
+          start_date: card.start_date || undefined,
+          due_date: card.due_date || undefined,
+          assignee: card.assignee || undefined,
+          label_ids: (card.labels || []).map(l => l.id),
+        }).then(newCard => {
+          if (newCard && card.checklists?.length) {
+            card.checklists.forEach(item => addChecklistItem(boardId, newCard.id, item.title));
+          }
+        });
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        if (confirm('Delete this card?')) {
+          deleteCard(boardId, card.id);
+        }
+      } else if (e.key === 'd') {
+        e.preventDefault();
+        openCardDetail(card);
+      } else if (e.key === 'm') {
+        e.preventDefault();
+        const myName = profile?.name;
+        if (myName) {
+          const newAssignee = card.assignee?.toLowerCase() === myName.toLowerCase() ? null : myName;
+          updateCard(boardId, card.id, { assignee: newAssignee });
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        openCardDetail(card);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [hoveredCardId, activeCard, board, boardId, profile, addCard, deleteCard, updateCard, addChecklistItem, openCardDetail, navigateCard]);
+
+  if (!board) {
     return (
       <div className="kb-root">
         <style>{kanbanStyles}</style>
@@ -1843,26 +2104,24 @@ function BoardPage() {
     );
   }
 
-  if (!board) {
-    return (
-      <div className="kb-root">
-        <style>{kanbanStyles}</style>
-        <div className="kb-loading">
-          <AlertCircle size={32} style={{ color: '#ef4444', marginBottom: 12 }} />
-          <p style={{ color: '#9ca3af' }}>Board not found</p>
-          <button className="kb-btn kb-btn-ghost" onClick={() => router.push('/boards')} style={{ marginTop: 16 }}>
-            <ArrowLeft size={14} /> Back to Boards
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const columns = [...board.columns].sort((a, b) => a.position - b.position);
 
   return (
     <div className="kb-root">
       <style>{kanbanStyles}</style>
+
+      {/* ── Realtime toast notifications ── */}
+      {toasts.length > 0 && (
+        <div className="kb-toast-container">
+          {toasts.map(t => (
+            <div key={t.id} className="kb-toast">
+              <span className="kb-toast-dot" />
+              <span className="kb-toast-msg">{t.message}</span>
+              <button className="kb-toast-dismiss" onClick={() => dismissToast(t.id)}>&times;</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Top bar ── */}
       <div className="kb-topbar">
@@ -1984,6 +2243,7 @@ function BoardPage() {
               onChange={e => setFilterPriority(e.target.value as CardPriority | '')}
             >
               <option value="">All Priorities</option>
+              <option value="none">No Priority</option>
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
@@ -2134,6 +2394,7 @@ function BoardPage() {
               onChange={e => setFilterPriority(e.target.value as CardPriority | '')}
             >
               <option value="">All Priorities</option>
+              <option value="none">No Priority</option>
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
@@ -2421,6 +2682,8 @@ function BoardPage() {
                           onDragStart={() => handleDragStart(card.id)}
                           onDragEnd={handleDragEnd}
                           onDragOver={e => handleCardDragOver(e, card.id, col.id)}
+                          onMouseEnter={() => setHoveredCardId(card.id)}
+                          onMouseLeave={() => setHoveredCardId(prev => prev === card.id ? null : prev)}
                           className={`kb-card-wrapper ${
                             dragOverCardId === card.id && dragCardId !== card.id
                               ? `drop-${dragOverPos}` : ''
@@ -2430,7 +2693,19 @@ function BoardPage() {
                             card={card}
                             onClick={() => openCardDetail(card)}
                             isDragging={dragCardId === card.id}
+                            onPriorityChange={async (p) => {
+                              await updateCard(boardId, card.id, { priority: p });
+                            }}
                           />
+                          {hoveredCardId === card.id && !dragCardId && (
+                            <div className="kb-shortcut-hints">
+                              <span title="Open card"><kbd>↵</kbd></span>
+                              <span title="Duplicate"><kbd>C</kbd></span>
+                              <span title="Due date"><kbd>D</kbd></span>
+                              <span title="Assign to me"><kbd>M</kbd></span>
+                              <span title="Delete"><kbd>⌫</kbd></span>
+                            </div>
+                          )}
                         </div>
                       ))}
 
@@ -2563,11 +2838,23 @@ function BoardPage() {
       </div>
 
       {/* ── Card detail modal ── */}
-      {activeCard && (
+      {activeCard && (() => {
+        const colCards = board.cards
+          .filter(c => c.column_id === activeCard.column_id && !c.is_archived)
+          .sort((a, b) => {
+            const pw = (PRIORITY_WEIGHT[a.priority || 'none'] ?? 4) - (PRIORITY_WEIGHT[b.priority || 'none'] ?? 4);
+            if (pw !== 0) return pw;
+            return a.position - b.position;
+          });
+        const idx = colCards.findIndex(c => c.id === activeCard.id);
+        const hasPrev = idx > 0;
+        const hasNext = idx < colCards.length - 1;
+        return (
         <CardDetailModal
           card={activeCard}
           board={board}
           onClose={() => {
+            closedCardRef.current = cardParam;
             setSelectedCard(null);
             const url = new URL(window.location.href);
             url.searchParams.delete('card');
@@ -2594,18 +2881,43 @@ function BoardPage() {
           }}
           onDelete={async () => { await deleteCard(boardId, activeCard.id); setSelectedCard(null); }}
           onAddComment={async (content) => {
-            await addComment(boardId, activeCard.id, content);
-            // Notify the card assignee about the new comment
+            const result = await addComment(boardId, activeCard.id, content);
+            if (!result) return; // Insert failed — don't send notifications
+
+            const senderName = userProfiles.find(p => p.id === user?.id)?.name || 'someone';
+            const snippet = content.length > 80 ? content.slice(0, 80) + '…' : content;
+            const notifiedUserIds = new Set<string>();
+
+            // Parse @mentions — match @"First Last" or @FirstName
+            const mentionRegex = /@"([^"]+)"|@(\S+)/g;
+            let match;
+            while ((match = mentionRegex.exec(content)) !== null) {
+              const mentionName = match[1] || match[2]; // quoted or unquoted
+              const target = userProfiles.find(p => p.name.toLowerCase() === mentionName.toLowerCase());
+              if (target && target.id !== user?.id && !notifiedUserIds.has(target.id)) {
+                notifiedUserIds.add(target.id);
+                await createNotification({
+                  user_id: target.id,
+                  board_id: boardId,
+                  card_id: activeCard.id,
+                  type: 'mention',
+                  title: `${senderName} mentioned you on "${activeCard.title}"`,
+                  body: snippet,
+                });
+              }
+            }
+
+            // Notify the card assignee about the new comment (if not already notified via @mention)
             if (activeCard.assignee) {
               const target = userProfiles.find(p => p.name.toLowerCase() === activeCard.assignee!.toLowerCase());
-              if (target && target.id !== user?.id) {
+              if (target && target.id !== user?.id && !notifiedUserIds.has(target.id)) {
                 await createNotification({
                   user_id: target.id,
                   board_id: boardId,
                   card_id: activeCard.id,
                   type: 'comment',
                   title: `New comment on "${activeCard.title}"`,
-                  body: content.length > 80 ? content.slice(0, 80) + '…' : content,
+                  body: snippet,
                 });
               }
             }
@@ -2638,8 +2950,11 @@ function BoardPage() {
           }}
           userProfiles={userProfiles}
           onSetCustomFieldValue={setCardCustomFieldValue}
+          onNavigatePrev={hasPrev ? () => navigateCard('prev') : undefined}
+          onNavigateNext={hasNext ? () => navigateCard('next') : undefined}
         />
-      )}
+        );
+      })()}
 
       {/* ── List Actions Modal ── */}
       {listActionsColId && board && (() => {
@@ -3361,14 +3676,22 @@ const kanbanStyles = `
     gap: 6px;
     flex-wrap: wrap;
   }
-  .kb-card-priority {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
+  .kb-card-priority-select {
     font-size: 10px;
     font-weight: 600;
-    padding: 2px 8px;
+    padding: 2px 6px;
     border-radius: 6px;
+    border: 1px solid #2a2d3a;
+    background: rgba(255,255,255,0.04);
+    color: #6b7280;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    max-width: 90px;
+  }
+  .kb-card-priority-select:hover {
+    border-color: #3b3f52;
   }
   .kb-card-dates {
     display: inline-flex;
@@ -3408,6 +3731,19 @@ const kanbanStyles = `
     color: #6b7280;
   }
   .kb-card-count.done { color: #22c55e; }
+  .kb-card-repeat-badge { color: #818cf8; }
+  .kb-card-repeat-front {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #818cf8;
+    background: rgba(99,102,241,0.1);
+    padding: 2px 8px;
+    border-radius: 6px;
+    width: fit-content;
+  }
   .kb-card-assignee {
     display: flex;
     align-items: center;
@@ -3415,6 +3751,68 @@ const kanbanStyles = `
     font-size: 11px;
     color: #6b7280;
     margin-top: 6px;
+  }
+
+  /* ── Card hover shortcut hints ── */
+  .kb-shortcut-hints {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: flex;
+    gap: 3px;
+    z-index: 5;
+    pointer-events: none;
+    animation: kb-hints-in 0.15s ease;
+  }
+  .kb-shortcut-hints kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    font-size: 9px;
+    font-family: inherit;
+    font-weight: 600;
+    color: #9ca3af;
+    background: rgba(30,33,48,0.92);
+    border: 1px solid #3b3f52;
+    border-radius: 4px;
+    line-height: 1;
+  }
+  @keyframes kb-hints-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Card detail nav buttons ── */
+  .kb-detail-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px 0;
+  }
+  .kb-detail-nav {
+    display: flex;
+    gap: 4px;
+  }
+  .kb-detail-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid #2a2d3a;
+    background: #1a1d27;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .kb-detail-nav-btn:hover {
+    background: #252836;
+    color: #e5e7eb;
+    border-color: #3b3f52;
   }
 
   /* ── Add card ── */
@@ -3714,9 +4112,7 @@ const kanbanStyles = `
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
   .kb-detail-close {
-    position: absolute;
-    top: 12px;
-    right: 12px;
+    position: static;
     background: none !important;
     border: none;
     color: #6b7280;
@@ -3823,28 +4219,7 @@ const kanbanStyles = `
   .kb-label-picker-item.selected { background: rgba(99,102,241,0.1) !important; }
   .kb-label-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
-  /* ── Priority buttons ── */
-  .kb-priority-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
-  }
-  .kb-priority-btn {
-    padding: 6px 10px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
-    border: 1px solid #2a2d3a;
-    background: transparent !important;
-    color: #9ca3af;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-  .kb-priority-btn.active {
-    background: var(--pri-bg) !important;
-    color: var(--pri-color);
-    border-color: var(--pri-color);
-  }
+
 
   /* ── Form groups ── */
   .kb-form-group { margin-bottom: 16px; }
@@ -4121,6 +4496,7 @@ const kanbanStyles = `
   .kb-comment-author { font-size: 12px; font-weight: 600; color: #a5b4fc; }
   .kb-comment-date { font-size: 10px; color: #6b7280; flex: 1; }
   .kb-comment-text { font-size: 13px; color: #d1d5db; margin: 0 !important; line-height: 1.5; }
+  .kb-mention { color: #60a5fa; font-weight: 600; background: rgba(96, 165, 250, 0.12); padding: 1px 4px; border-radius: 4px; }
   .kb-comment-text .kb-link,
   .kb-desc-display .kb-link {
     color: #818cf8 !important;
@@ -4596,6 +4972,17 @@ const kanbanStyles = `
     background: #23263a; color: #9ca3af; border: 1px solid #3b3f54; transition: all 0.15s;
   }
   .kb-cf-multi-chip:hover { border-color: #6366f1; color: #c7d2fe; }
+
+  /* ── Repeat Picker ── */
+  .kb-repeat-picker { display: flex; gap: 6px; }
+  .kb-repeat-option {
+    flex: 1; padding: 6px 0; border-radius: 6px; font-size: 12px; font-weight: 500;
+    text-align: center; cursor: pointer; border: 1px solid #3b3f54;
+    background: #1a1d2e; color: #9ca3af; transition: all 0.15s;
+  }
+  .kb-repeat-option:hover { border-color: #6366f1; color: #c7d2fe; }
+  .kb-repeat-option.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .kb-repeat-hint { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.4; }
   .kb-cf-multi-chip.active { background: rgba(99,102,241,0.18); color: #a5b4fc; border-color: #6366f1; }
   .kb-cf-type-badge {
     display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 8px; margin-left: 8px;
@@ -4804,6 +5191,63 @@ const kanbanStyles = `
   .kb-email-body td, .kb-email-body th {
     border: 1px solid #2a2d3a;
     padding: 6px 10px;
+  }
+
+  /* ── Realtime toast ── */
+  .kb-toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .kb-toast {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1e2130;
+    border: 1px solid #2a2d3a;
+    border-left: 3px solid #3b82f6;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #e5e7eb;
+    font-size: 13px;
+    pointer-events: auto;
+    animation: kb-toast-in 0.25s ease-out;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    max-width: 340px;
+  }
+  .kb-toast-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #3b82f6;
+    flex-shrink: 0;
+  }
+  .kb-toast-msg {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kb-toast-dismiss {
+    background: none;
+    border: none;
+    color: #6b7280;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .kb-toast-dismiss:hover { color: #e5e7eb; }
+  @keyframes kb-toast-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   /* ── Responsive ── */

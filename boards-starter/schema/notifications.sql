@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   board_id    uuid REFERENCES project_boards(id) ON DELETE CASCADE,
   card_id     uuid REFERENCES board_cards(id) ON DELETE CASCADE,
-  type        text NOT NULL CHECK (type IN ('comment', 'assignment', 'due_soon', 'overdue')),
+  type        text NOT NULL CHECK (type IN ('comment', 'assignment', 'due_soon', 'overdue', 'mention')),
   title       text NOT NULL,
   body        text,
   is_read     boolean DEFAULT false,

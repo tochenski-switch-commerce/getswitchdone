@@ -1,5 +1,7 @@
 export type CardPriority = 'low' | 'medium' | 'high' | 'urgent';
 
+export type RepeatSchedule = 'daily' | 'weekly' | 'monthly';
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -46,12 +48,14 @@ export interface BoardCard {
   title: string;
   description?: string;
   position: number;
-  priority: CardPriority;
+  priority: CardPriority | null;
   start_date?: string;
   due_date?: string;
   assignee?: string;
   created_by?: string;
   is_archived: boolean;
+  repeat_schedule?: RepeatSchedule | null;
+  repeat_series_id?: string | null;
   created_at: string;
   updated_at: string;
   labels?: BoardLabel[];

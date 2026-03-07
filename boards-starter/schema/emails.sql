@@ -52,8 +52,8 @@ CREATE POLICY "Anon insert board emails" ON board_emails
 
 -- ============================================================
 -- Update notifications.type CHECK constraint to include
--- 'email_unrouted' for unresolved email routing notifications
+-- 'email_unrouted' and 'mention' notification types
 -- ============================================================
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
 ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
-  CHECK (type IN ('comment', 'assignment', 'due_soon', 'overdue', 'email_unrouted'));
+  CHECK (type IN ('comment', 'assignment', 'due_soon', 'overdue', 'email_unrouted', 'mention'));
