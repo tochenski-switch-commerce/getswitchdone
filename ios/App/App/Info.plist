@@ -66,5 +66,7 @@
 			<string>UIApplicationShortcutIconTypeHome</string>
 		</dict>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>GSD Boards uses Face ID to protect your boards when the app is locked.</string>
 </dict>
 </plist>

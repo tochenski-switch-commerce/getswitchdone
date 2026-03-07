@@ -15,6 +15,8 @@ import {
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
 } from '@/components/BoardIcons';
 import InboxPanel from '@/components/InboxPanel';
+import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import DatePickerInput from '@/components/DatePickerInput';
 
 import { PRIORITY_CONFIG, PRIORITY_WEIGHT, sanitizeEmailHtml, emailTimeAgo } from './board-detail/helpers';
@@ -91,6 +93,13 @@ function BoardPage() {
   const [dragLinkId, setDragLinkId] = useState<string | null>(null);
   const [dragOverLinkId, setDragOverLinkId] = useState<string | null>(null);
   const [dragOverLinkPos, setDragOverLinkPos] = useState<'above' | 'below'>('below');
+
+  const handlePullRefresh = useCallback(async () => {
+    if (boardId) {
+      await Promise.all([fetchBoard(boardId), fetchNotifications()]);
+    }
+  }, [boardId, fetchBoard, fetchNotifications]);
+  const { pulling, pullDistance, refreshing } = usePullToRefresh(handlePullRefresh);
 
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
   const [dragCardId, setDragCardId] = useState<string | null>(null);
@@ -502,6 +511,8 @@ function BoardPage() {
   return (
     <div className="kb-root">
       <style>{kanbanStyles}</style>
+
+      <PullToRefreshIndicator pulling={pulling} pullDistance={pullDistance} refreshing={refreshing} />
 
       {/* ── Realtime toast notifications ── */}
       {toasts.length > 0 && (

@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 /* AUTH: Replace with your auth hook */
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
 import InboxPanel from '@/components/InboxPanel';
+import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { hapticLight } from '@/lib/haptics';
+import { isBiometricAvailable, isBiometricLockEnabled, setBiometricLockEnabled } from '@/lib/biometric';
 import {
   Plus,
   LayoutDashboard,
@@ -51,6 +54,20 @@ function BoardsListPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+
+  useEffect(() => {
+    isBiometricAvailable().then(avail => {
+      setBiometricAvailable(avail);
+      if (avail) setBiometricEnabled(isBiometricLockEnabled());
+    });
+  }, []);
+
+  const handlePullRefresh = useCallback(async () => {
+    await Promise.all([fetchBoards(), fetchNotifications()]);
+  }, [fetchBoards, fetchNotifications]);
+  const { pulling, pullDistance, refreshing } = usePullToRefresh(handlePullRefresh);
 
   const handleSaveName = async () => {
     if (!nameInput.trim()) return;
@@ -100,6 +117,7 @@ function BoardsListPage() {
   return (
     <div className="kb-root">
       <style>{boardsListStyles}</style>
+      <PullToRefreshIndicator pulling={pulling} pullDistance={pullDistance} refreshing={refreshing} />
       <div className="kb-container">
         {/* Header */}
         <div className="kb-header">
@@ -177,6 +195,44 @@ function BoardsListPage() {
                         </div>
                       )}
                     </div>
+                    {biometricAvailable && (
+                      <div className="kb-user-dropdown-section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <div className="kb-user-dropdown-label" style={{ marginBottom: 0 }}>Face ID Lock</div>
+                          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Lock when leaving the app</div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const next = !biometricEnabled;
+                            setBiometricLockEnabled(next);
+                            setBiometricEnabled(next);
+                            hapticLight();
+                          }}
+                          style={{
+                            width: 44,
+                            height: 26,
+                            borderRadius: 13,
+                            border: 'none',
+                            background: biometricEnabled ? '#4f46e5' : '#374151',
+                            position: 'relative',
+                            cursor: 'pointer',
+                            transition: 'background 0.2s ease',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <div style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: '50%',
+                            background: '#fff',
+                            position: 'absolute',
+                            top: 3,
+                            left: biometricEnabled ? 21 : 3,
+                            transition: 'left 0.2s ease',
+                          }} />
+                        </button>
+                      </div>
+                    )}
                     <div className="kb-user-dropdown-divider" />
                     <button
                       className="kb-user-dropdown-item danger"

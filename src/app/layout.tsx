@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '@/contexts/AuthContext';
 
 import QuickActionHandler from '@/components/QuickActionHandler';
+import BiometricLockScreen from '@/components/BiometricLockScreen';
 
 export const metadata: Metadata = {
   title: 'GSD Boards',
@@ -85,6 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         `}</style>
         <AuthProvider>
           <QuickActionHandler />
+          <BiometricLockScreen />
           {children}
         </AuthProvider>
         <ServiceWorkerRegistration />
