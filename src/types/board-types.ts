@@ -62,6 +62,7 @@ export interface BoardCard {
   comments?: CardComment[];
   checklists?: CardChecklist[];
   custom_field_values?: CardCustomFieldValue[];
+  card_links?: CardLink[];
 }
 
 export interface CardLabelAssignment {
@@ -187,6 +188,17 @@ export interface BoardSummaryStats {
   board_id: string;
   card_count: number;
   column_count: number;
+}
+
+// ── Card Links ──
+
+export interface CardLink {
+  id: string;
+  source_card_id: string;
+  target_card_id: string;
+  created_at: string;
+  target_card?: { id: string; title: string; board_id: string; column_id: string; is_archived: boolean };
+  source_card?: { id: string; title: string; board_id: string; column_id: string; is_archived: boolean };
 }
 
 // ── Board Emails ──

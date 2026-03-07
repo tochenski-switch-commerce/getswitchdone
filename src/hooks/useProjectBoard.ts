@@ -20,6 +20,7 @@ import type {
   BoardEmail,
   BoardLink,
   BoardSummaryStats,
+  CardLink,
 } from '@/types/board-types';
 
 // ── Full board shape ──
@@ -161,14 +162,17 @@ export function useProjectBoard() {
       let allChecklists: any[] = [];
       let allAssignments: any[] = [];
       let allCfValues: CardCustomFieldValue[] = [];
+      let allCardLinks: CardLink[] = [];
 
       if (cardIds.length > 0) {
-        const [commentsRes, checklistsRes, assignmentsRes, cfValuesRes, profilesRes] = await Promise.all([
+        const [commentsRes, checklistsRes, assignmentsRes, cfValuesRes, profilesRes, cardLinksSourceRes, cardLinksTargetRes] = await Promise.all([
           supabase.from('card_comments').select('*').in('card_id', cardIds).order('created_at', { ascending: true }),
           supabase.from('card_checklists').select('*').in('card_id', cardIds).order('position'),
           supabase.from('card_label_assignments').select('*').in('card_id', cardIds),
           supabase.from('card_custom_field_values').select('*').in('card_id', cardIds),
           supabase.from('user_profiles').select('id, name'),
+          supabase.from('card_links').select('*, target_card:board_cards!target_card_id(id, title, board_id, column_id, is_archived)').in('source_card_id', cardIds),
+          supabase.from('card_links').select('*, source_card:board_cards!source_card_id(id, title, board_id, column_id, is_archived)').in('target_card_id', cardIds),
         ]);
         const profiles = profilesRes.data || [];
         allComments = (commentsRes.data || []).map(cm => ({
@@ -178,9 +182,23 @@ export function useProjectBoard() {
         allChecklists = checklistsRes.data || [];
         allAssignments = assignmentsRes.data || [];
         allCfValues = (cfValuesRes.data || []) as CardCustomFieldValue[];
+
+        // Merge card links from both directions, normalize Supabase array wrapping
+        const sourceLinks = ((cardLinksSourceRes.data || []) as any[]).map(l => ({
+          ...l,
+          target_card: Array.isArray(l.target_card) ? l.target_card[0] : l.target_card,
+        })) as CardLink[];
+        const targetLinks = ((cardLinksTargetRes.data || []) as any[]).map(l => ({
+          ...l,
+          source_card: Array.isArray(l.source_card) ? l.source_card[0] : l.source_card,
+        })) as CardLink[];
+        // Deduplicate by id
+        const linkMap = new Map<string, CardLink>();
+        for (const l of [...sourceLinks, ...targetLinks]) linkMap.set(l.id, { ...linkMap.get(l.id), ...l });
+        allCardLinks = Array.from(linkMap.values());
       }
 
-      // Stitch comments, checklists, labels, custom field values onto cards
+      // Stitch comments, checklists, labels, custom field values, card links onto cards
       const cards = (cardsRes.data || []).map(card => ({
         ...card,
         comments: allComments.filter(cm => cm.card_id === card.id),
@@ -190,6 +208,7 @@ export function useProjectBoard() {
           .map(a => labels.find(l => l.id === a.label_id))
           .filter(Boolean),
         custom_field_values: allCfValues.filter(v => v.card_id === card.id),
+        card_links: allCardLinks.filter(l => l.source_card_id === card.id || l.target_card_id === card.id),
       }));
 
       const fullBoard: FullBoard = { ...boardRes.data, columns, cards, labels, customFields, boardLinks, boardLinkStats };
@@ -479,7 +498,7 @@ export function useProjectBoard() {
   const updateCard = useCallback(async (boardId: string, cardId: string, updates: any) => {
     setError(null);
     try {
-      const { label_ids, repeat_schedule, repeat_series_id, ...cardUpdates } = updates;
+      const { label_ids, ...cardUpdates } = updates;
 
       // Update card fields if any
       let cardData: any = {};
@@ -631,6 +650,35 @@ export function useProjectBoard() {
       return null;
     }
   }, [userProfiles]);
+
+  const editComment = useCallback(async (boardId: string, cardId: string, commentId: string, content: string) => {
+    setError(null);
+    try {
+      const { data, error: err } = await supabase
+        .from('card_comments')
+        .update({ content })
+        .eq('id', commentId)
+        .select('*')
+        .single();
+      if (err) throw err;
+
+      setBoard(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cards: prev.cards.map(c =>
+            c.id === cardId
+              ? { ...c, comments: (c.comments || []).map(cm => cm.id === commentId ? { ...cm, content: data.content, updated_at: data.updated_at } : cm) }
+              : c
+          ),
+        };
+      });
+      return true;
+    } catch (err: any) {
+      setError(err.message);
+      return false;
+    }
+  }, []);
 
   const deleteComment = useCallback(async (boardId: string, cardId: string, commentId: string) => {
     setError(null);
@@ -1057,6 +1105,23 @@ export function useProjectBoard() {
     }
   }, []);
 
+  const markCardNotificationsRead = useCallback(async (cardId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error: err } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('card_id', cardId)
+        .eq('is_read', false);
+      if (err) throw err;
+      setNotifications(prev => prev.map(n => n.card_id === cardId && !n.is_read ? { ...n, is_read: true } : n));
+    } catch (err: any) {
+      console.error('Failed to mark card notifications read:', err.message);
+    }
+  }, []);
+
   const markAllNotificationsRead = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -1252,6 +1317,84 @@ export function useProjectBoard() {
     }
   }, []);
 
+  // ── Card Links ──
+
+  const addCardLink = useCallback(async (sourceCardId: string, targetCardId: string) => {
+    try {
+      const { data, error: err } = await supabase
+        .from('card_links')
+        .insert({ source_card_id: sourceCardId, target_card_id: targetCardId })
+        .select('*, target_card:board_cards!target_card_id(id, title, board_id, column_id, is_archived)')
+        .single();
+      if (err) throw err;
+      const link = {
+        ...data,
+        target_card: Array.isArray(data.target_card) ? data.target_card[0] : data.target_card,
+      } as CardLink;
+      // Also fetch source_card info for the reverse side
+      const { data: srcCard } = await supabase
+        .from('board_cards')
+        .select('id, title, board_id, column_id, is_archived')
+        .eq('id', sourceCardId)
+        .single();
+      if (srcCard) link.source_card = srcCard;
+      setBoard(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cards: prev.cards.map(c => {
+            if (c.id === sourceCardId || c.id === targetCardId) {
+              return { ...c, card_links: [...(c.card_links || []), link] };
+            }
+            return c;
+          }),
+        };
+      });
+      return link;
+    } catch (err: any) {
+      setError(err.message);
+      return null;
+    }
+  }, []);
+
+  const removeCardLink = useCallback(async (linkId: string) => {
+    // Find the link to know which cards to update
+    let sourceId: string | undefined;
+    let targetId: string | undefined;
+    setBoard(prev => {
+      if (!prev) return prev;
+      for (const c of prev.cards) {
+        const link = (c.card_links || []).find(l => l.id === linkId);
+        if (link) { sourceId = link.source_card_id; targetId = link.target_card_id; break; }
+      }
+      return {
+        ...prev,
+        cards: prev.cards.map(c => ({
+          ...c,
+          card_links: (c.card_links || []).filter(l => l.id !== linkId),
+        })),
+      };
+    });
+    try {
+      const { error: err } = await supabase.from('card_links').delete().eq('id', linkId);
+      if (err) throw err;
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
+  const searchCards = useCallback(async (boardId: string, query: string) => {
+    const { data, error: err } = await supabase
+      .from('board_cards')
+      .select('id, title, board_id, column_id, is_archived')
+      .eq('board_id', boardId)
+      .eq('is_archived', false)
+      .ilike('title', `%${query}%`)
+      .limit(10);
+    if (err) { setError(err.message); return []; }
+    return data || [];
+  }, []);
+
   return {
     boards, board, loading, error, checklistTemplates, userProfiles, notifications,
     boardEmails, unroutedEmails,
@@ -1259,13 +1402,14 @@ export function useProjectBoard() {
     addColumn, updateColumn, deleteColumn, reorderColumns,
     addBoardLink, removeBoardLink, reorderBoardLinks,
     addCard, updateCard, deleteCard, moveCard, reorderCardsInColumn,
-    addComment, deleteComment,
+    addCardLink, removeCardLink, searchCards,
+    addComment, editComment, deleteComment,
     addChecklistItem, toggleChecklistItem, deleteChecklistItem,
     fetchChecklistTemplates, saveChecklistTemplate, deleteChecklistTemplate, applyChecklistTemplate,
     addLabel, updateLabel, deleteLabel,
     addCustomField, updateCustomField, deleteCustomField, setCardCustomFieldValue,
     fetchUserProfiles,
-    fetchNotifications, createNotification, markNotificationRead, markAllNotificationsRead, deleteNotification, clearAllNotifications,
+    fetchNotifications, createNotification, markNotificationRead, markCardNotificationsRead, markAllNotificationsRead, deleteNotification, clearAllNotifications,
     fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
     setBoard,
   };
