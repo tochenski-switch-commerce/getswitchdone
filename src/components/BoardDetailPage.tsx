@@ -889,11 +889,13 @@ function KanbanCard({
   onClick,
   isDragging,
   onPriorityChange,
+  hasAlert,
 }: {
   card: BoardCard;
   onClick: () => void;
   isDragging?: boolean;
   onPriorityChange?: (priority: CardPriority | null) => void;
+  hasAlert?: boolean;
 }) {
   const pri = card.priority ? PRIORITY_CONFIG[card.priority] : null;
   const labels = card.labels || [];
@@ -944,7 +946,14 @@ function KanbanCard({
       )}
 
       {/* Title */}
-      <p className="kb-card-title">{card.title}</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        <p className="kb-card-title" style={{ flex: 1 }}>{card.title}</p>
+        {hasAlert && (
+          <span className="kb-card-alert" title="You have unread notifications for this card">
+            <Bell size={12} />
+          </span>
+        )}
+      </div>
 
       {/* Metadata row */}
       <div className="kb-card-meta">
@@ -1730,6 +1739,16 @@ function BoardPage() {
   const newCardRef = useRef<HTMLInputElement>(null);
   const newColRef = useRef<HTMLInputElement>(null);
 
+  // Reset card selection when navigating to a different board (e.g. from inbox)
+  const prevBoardIdRef = useRef(boardId);
+  useEffect(() => {
+    if (prevBoardIdRef.current !== boardId) {
+      setSelectedCard(null);
+      closedCardRef.current = null;
+      prevBoardIdRef.current = boardId;
+    }
+  }, [boardId]);
+
   // Realtime: re-fetch board when another user makes changes
   const handleRemoteChange = useCallback(() => {
     if (boardId) fetchBoard(boardId);
@@ -1833,6 +1852,15 @@ function BoardPage() {
   useEffect(() => {
     if (addingColumn && newColRef.current) newColRef.current.focus();
   }, [addingColumn]);
+
+  // ── Card IDs with unread notifications for current user ──
+  const alertCardIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const n of notifications) {
+      if (!n.is_read && n.card_id) ids.add(n.card_id);
+    }
+    return ids;
+  }, [notifications]);
 
   // ── Filtered cards ──
   const filteredCards = useMemo(() => {
@@ -2693,6 +2721,7 @@ function BoardPage() {
                             card={card}
                             onClick={() => openCardDetail(card)}
                             isDragging={dragCardId === card.id}
+                            hasAlert={alertCardIds.has(card.id)}
                             onPriorityChange={async (p) => {
                               await updateCard(boardId, card.id, { priority: p });
                             }}
@@ -3780,6 +3809,23 @@ const kanbanStyles = `
     white-space: nowrap;
     min-width: 0;
   }
+  .kb-card-alert {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(245,158,11,0.15);
+    color: #f59e0b;
+    margin-top: 1px;
+    animation: kb-alert-pulse 2s ease-in-out infinite;
+  }
+  @keyframes kb-alert-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
 
   /* ── Keyboard shortcut help bar ── */
   .kb-shortcut-bar {
@@ -4143,6 +4189,7 @@ const kanbanStyles = `
     justify-content: center;
     z-index: 50000;
     padding: 40px 16px 120px;
+    padding-top: max(40px, env(safe-area-inset-top, 40px));
     overflow-y: auto;
   }
   .kb-detail-modal {
@@ -5330,7 +5377,7 @@ const kanbanStyles = `
     .kb-card-priority-select { max-width: 74px; font-size: 9px; }
 
     /* Detail modal mobile */
-    .kb-modal-overlay { padding: 16px 8px 80px; }
+    .kb-modal-overlay { padding: 8px 8px 80px; padding-top: max(8px, env(safe-area-inset-top, 8px)); }
     .kb-detail-modal { border-radius: 14px; max-width: calc(100vw - 16px); }
     .kb-detail-title-input { font-size: 17px !important; }
     .kb-detail-sidebar { padding: 20px 16px; }

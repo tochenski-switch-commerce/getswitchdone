@@ -376,7 +376,7 @@ function BoardsListPage() {
           onMarkAllRead={markAllNotificationsRead}
           onDelete={deleteNotification}
           onClearAll={clearAllNotifications}
-          onNavigate={(boardId) => router.push(`/boards/${boardId}`)}
+          onNavigate={(boardId, cardId) => router.push(`/boards/${boardId}${cardId ? `?card=${cardId}` : ''}`)}
         />
       )}
     </div>
