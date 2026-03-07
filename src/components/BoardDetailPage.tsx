@@ -2697,15 +2697,6 @@ function BoardPage() {
                               await updateCard(boardId, card.id, { priority: p });
                             }}
                           />
-                          {hoveredCardId === card.id && !dragCardId && (
-                            <div className="kb-shortcut-hints">
-                              <span className="kb-shortcut-badge"><kbd>↵</kbd> Open</span>
-                              <span className="kb-shortcut-badge"><kbd>C</kbd> Copy</span>
-                              <span className="kb-shortcut-badge"><kbd>D</kbd> Dates</span>
-                              <span className="kb-shortcut-badge"><kbd>M</kbd> Assign&nbsp;me</span>
-                              <span className="kb-shortcut-badge"><kbd>⌫</kbd> Delete</span>
-                            </div>
-                          )}
                         </div>
                       ))}
 
@@ -2836,6 +2827,22 @@ function BoardPage() {
           />
         </div>
       </div>
+
+      {/* ── Keyboard shortcut help bar ── */}
+      {hoveredCardId && !activeCard && (
+        <div className="kb-shortcut-bar">
+          <span>Hover shortcuts:</span>
+          <span className="kb-shortcut-bar-item"><kbd>↵</kbd> Open</span>
+          <span className="kb-shortcut-bar-sep">·</span>
+          <span className="kb-shortcut-bar-item"><kbd>C</kbd> Copy</span>
+          <span className="kb-shortcut-bar-sep">·</span>
+          <span className="kb-shortcut-bar-item"><kbd>D</kbd> Dates</span>
+          <span className="kb-shortcut-bar-sep">·</span>
+          <span className="kb-shortcut-bar-item"><kbd>M</kbd> Assign me</span>
+          <span className="kb-shortcut-bar-sep">·</span>
+          <span className="kb-shortcut-bar-item"><kbd>⌫</kbd> Delete</span>
+        </div>
+      )}
 
       {/* ── Card detail modal ── */}
       {activeCard && (() => {
@@ -3638,6 +3645,8 @@ const kanbanStyles = `
     cursor: pointer;
     transition: all 0.15s ease;
     user-select: none;
+    overflow: hidden;
+    min-width: 0;
   }
   .kb-card:hover {
     border-color: #3b3f52;
@@ -3653,6 +3662,7 @@ const kanbanStyles = `
     flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 8px;
+    min-width: 0;
   }
   .kb-card-label {
     font-size: 10px;
@@ -3661,6 +3671,9 @@ const kanbanStyles = `
     padding: 2px 8px;
     border-radius: 6px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
   }
   .kb-card-title {
     font-size: 13px !important;
@@ -3673,8 +3686,9 @@ const kanbanStyles = `
   .kb-card-meta {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px 6px;
     flex-wrap: wrap;
+    min-width: 0;
   }
   .kb-card-priority-select {
     font-size: 10px;
@@ -3702,6 +3716,11 @@ const kanbanStyles = `
     padding: 2px 6px;
     border-radius: 6px;
     background: rgba(255,255,255,0.04);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    min-width: 0;
   }
   .kb-card-dates.overdue {
     color: #ef4444;
@@ -3722,6 +3741,7 @@ const kanbanStyles = `
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-shrink: 0;
   }
   .kb-card-count {
     display: inline-flex;
@@ -3742,7 +3762,11 @@ const kanbanStyles = `
     background: rgba(99,102,241,0.1);
     padding: 2px 8px;
     border-radius: 6px;
-    width: fit-content;
+    max-width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .kb-card-assignee {
     display: flex;
@@ -3751,54 +3775,60 @@ const kanbanStyles = `
     font-size: 11px;
     color: #6b7280;
     margin-top: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
   }
 
-  /* ── Card hover shortcut hints ── */
-  .kb-shortcut-hints {
-    position: absolute;
-    bottom: 100%;
+  /* ── Keyboard shortcut help bar ── */
+  .kb-shortcut-bar {
+    position: fixed;
+    bottom: 0;
     left: 0;
     right: 0;
     display: flex;
+    align-items: center;
     justify-content: center;
-    gap: 2px;
-    z-index: 15;
+    gap: 6px;
+    padding: 6px 16px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    font-size: 11px;
+    color: #6b7280;
+    background: rgba(15,17,23,0.85);
+    border-top: 1px solid #1e2130;
+    backdrop-filter: blur(8px);
+    z-index: 50;
     pointer-events: none;
-    animation: kb-hints-in 0.12s ease;
-    padding-bottom: 4px;
+    animation: kb-bar-in 0.2s ease;
   }
-  .kb-shortcut-badge {
+  .kb-shortcut-bar-item {
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    padding: 2px 6px;
-    font-size: 10px;
-    font-weight: 500;
-    color: #c9cdd5;
-    background: rgba(20,22,34,0.95);
-    border: 1px solid #3b3f52;
-    border-radius: 5px;
-    white-space: nowrap;
-    backdrop-filter: blur(6px);
+    color: #9ca3af;
   }
-  .kb-shortcut-badge kbd {
+  .kb-shortcut-bar-sep {
+    color: #3b3f52;
+  }
+  .kb-shortcut-bar kbd {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 15px;
-    height: 15px;
+    min-width: 16px;
+    height: 16px;
     padding: 0 3px;
     font-size: 9px;
     font-family: inherit;
     font-weight: 700;
-    color: #e5e7eb;
-    background: #2a2d3a;
-    border: 1px solid #4b5066;
+    color: #c9cdd5;
+    background: #1e2130;
+    border: 1px solid #3b3f52;
     border-radius: 3px;
     line-height: 1;
   }
-  @keyframes kb-hints-in {
-    from { opacity: 0; transform: translateY(4px); }
+  @keyframes kb-bar-in {
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
@@ -5280,8 +5310,25 @@ const kanbanStyles = `
     .kb-add-column { width: 280px; min-width: 280px; }
     .kb-detail-body { flex-direction: column; }
     .kb-detail-sidebar { width: 100%; border-top: 1px solid #2a2d3a; }
-    .kb-detail-main { border-right: none; }
+    .kb-detail-main { border-right: none; padding: 20px 16px; }
     .kb-note-panel { width: 100%; }
     .kb-email-panel { width: 100%; }
+
+    /* Card mobile fixes */
+    .kb-card-label { max-width: 100px; }
+    .kb-card-repeat-front { font-size: 9px; }
+    .kb-card-meta { gap: 3px 5px; }
+    .kb-card-priority-select { max-width: 74px; font-size: 9px; }
+
+    /* Detail modal mobile */
+    .kb-modal-overlay { padding: 16px 8px 80px; }
+    .kb-detail-modal { border-radius: 14px; }
+    .kb-detail-title-input { font-size: 17px !important; }
+    .kb-detail-sidebar { padding: 20px 16px; }
+    .kb-textarea { font-size: 14px !important; }
+
+    /* Custom fields mobile */
+    .kb-cf-multi-options { gap: 3px; }
+    .kb-cf-multi-chip { font-size: 11px; padding: 2px 8px; }
   }
 `;

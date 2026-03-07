@@ -477,7 +477,7 @@ const boardsListStyles = `
   /* Board grid */
   .kb-board-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
     gap: 16px;
   }
   .kb-board-card {
@@ -576,8 +576,9 @@ const boardsListStyles = `
     border: 1px solid #2a2d3a;
     border-radius: 16px;
     padding: 28px;
-    max-width: 480px;
+    max-width: min(90vw, 480px);
     width: 100%;
+    box-sizing: border-box;
     box-shadow: 0 24px 64px rgba(0,0,0,0.5);
   }
   .kb-modal-title {
@@ -840,5 +841,17 @@ const boardsListStyles = `
   }
   .kb-hex-input::placeholder {
     color: #4b5563;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .kb-header { flex-wrap: wrap; gap: 8px; }
+    .kb-page-title { font-size: 20px !important; }
+    .kb-board-grid { grid-template-columns: 1fr; }
+    .kb-modal { max-width: min(90vw, 380px); padding: 20px; }
+    .kb-modal-title { font-size: 16px !important; }
+    .kb-user-dropdown { width: min(90vw, 260px); }
+    .kb-board-card { padding: 16px; }
+    .kb-icon-option { width: 32px; height: 32px; }
   }
 `;

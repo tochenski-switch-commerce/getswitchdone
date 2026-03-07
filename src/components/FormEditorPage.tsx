@@ -787,5 +787,19 @@ const editorStyles = `
     display: flex;
     gap: 12px;
     align-items: start;
+    flex-wrap: wrap;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .kb-header { flex-wrap: wrap; gap: 8px; }
+    .kb-page-title { font-size: 20px !important; }
+    .kb-editor-settings { padding: 16px; }
+    .kb-editor-fields { padding: 16px; }
+    .kb-field-row { gap: 8px; }
+    .kb-field-row .kb-form-group { width: 100% !important; min-width: 0 !important; }
+    .kb-link-text { word-break: break-all; white-space: normal; }
+    .kb-field-summary { flex-wrap: wrap; gap: 4px; }
+    .kb-input, .kb-textarea { font-size: 16px; }
   }
 `;

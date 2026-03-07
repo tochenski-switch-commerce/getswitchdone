@@ -44,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Force dark color scheme */}
         <meta name="color-scheme" content="dark" />
       </head>
-      <body style={{ margin: 0, padding: 0, backgroundColor: '#0f1117' }}>
+      <body style={{ margin: 0, backgroundColor: '#0f1117' }}>
         <style>{`
           /* PWA safe-area & scroll handling */
           html, body {
@@ -54,10 +54,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }
           /* Safe-area padding for iPhone notch / Dynamic Island */
           body {
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
-            padding-left: env(safe-area-inset-left);
-            padding-right: env(safe-area-inset-right);
+            padding: 0;
+            padding-top: env(safe-area-inset-top) !important;
+            padding-bottom: env(safe-area-inset-bottom) !important;
+            padding-left: env(safe-area-inset-left) !important;
+            padding-right: env(safe-area-inset-right) !important;
           }
           /* Prevent text-size adjust on orientation change */
           html {

@@ -445,4 +445,14 @@ const publicFormStyles = `
   textarea.pf-input {
     resize: vertical;
   }
+
+  /* ── Responsive ── */
+  @media (max-width: 480px) {
+    .pf-root { padding: 24px 12px 60px; }
+    .pf-card-header { padding: 20px 16px 0; padding-bottom: 16px; }
+    .pf-title { font-size: 18px !important; }
+    .pf-form { padding: 16px; }
+    .pf-success-state, .pf-error-state { padding: 40px 16px; }
+    .pf-input { font-size: 16px; }
+  }
 `;

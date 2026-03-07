@@ -229,7 +229,9 @@ const datePickerStyles = `
     border: 1px solid #374151;
     border-radius: 12px;
     padding: 12px;
-    min-width: 260px;
+    min-width: min(260px, calc(100vw - 32px));
+    max-width: calc(100vw - 24px);
+    box-sizing: border-box;
     box-shadow: 0 12px 40px rgba(0,0,0,0.5);
     animation: dp-fade-in 0.12s ease;
   }

@@ -515,7 +515,7 @@ const formsListStyles = `
   }
   .kb-board-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
     gap: 16px;
   }
   .kb-board-card {
@@ -591,7 +591,8 @@ const formsListStyles = `
     border-radius: 16px;
     padding: 28px;
     width: 90%;
-    max-width: 460px;
+    max-width: min(90vw, 460px);
+    box-sizing: border-box;
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   }
   .kb-modal-title {
@@ -632,5 +633,16 @@ const formsListStyles = `
     justify-content: flex-end;
     gap: 10px;
     margin-top: 20px;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .kb-header { flex-wrap: wrap; gap: 8px; }
+    .kb-page-title { font-size: 20px !important; }
+    .kb-board-grid { grid-template-columns: 1fr; }
+    .kb-modal { padding: 20px; }
+    .kb-board-card { padding: 16px; }
+    .kb-filter-bar { gap: 8px; }
+    .kb-filter-chip { padding: 5px 10px; font-size: 12px; }
   }
 `;

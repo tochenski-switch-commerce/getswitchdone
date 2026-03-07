@@ -243,4 +243,11 @@ const authStyles = `
     border-radius: 8px;
     border: 1px solid rgba(239,68,68,0.2);
   }
+
+  /* ── Responsive ── */
+  @media (max-width: 480px) {
+    .kb-auth-card { padding: 24px 20px; }
+    .kb-auth-title { font-size: 20px; }
+    .kb-input { font-size: 16px; }
+  }
 `;
