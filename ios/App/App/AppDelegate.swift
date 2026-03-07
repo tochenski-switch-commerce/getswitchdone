@@ -1,34 +1,22 @@
 import UIKit
 import Capacitor
+import LocalAuthentication
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
+    private var biometricRegistered = false
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Register custom local plugins
-        let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge
-        bridge?.registerPluginInstance(NativeBiometric())
         return true
     }
 
-    func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
-    }
-
-    func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
-    }
-
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        if !biometricRegistered, let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge {
+            bridge.registerPluginInstance(NativeBiometric())
+            biometricRegistered = true
+        }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
@@ -59,4 +47,53 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         completionHandler(true)
     }
 
+}
+
+// MARK: - Native Biometric Plugin (Face ID / Touch ID)
+
+@objc(NativeBiometric)
+public class NativeBiometric: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "NativeBiometric"
+    public let jsName = "NativeBiometric"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "isAvailable", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "verifyIdentity", returnType: CAPPluginReturnPromise),
+    ]
+
+    @objc func isAvailable(_ call: CAPPluginCall) {
+        let context = LAContext()
+        var error: NSError?
+        let available = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+
+        var biometryType = "none"
+        if available {
+            switch context.biometryType {
+            case .faceID: biometryType = "FACE_ID"
+            case .touchID: biometryType = "TOUCH_ID"
+            case .opticID: biometryType = "OPTIC_ID"
+            @unknown default: biometryType = "UNKNOWN"
+            }
+        }
+
+        call.resolve([
+            "isAvailable": available,
+            "biometryType": biometryType,
+        ])
+    }
+
+    @objc func verifyIdentity(_ call: CAPPluginCall) {
+        let reason = call.getString("reason") ?? "Authenticate"
+        let context = LAContext()
+        context.localizedFallbackTitle = call.getString("fallbackTitle") ?? "Use Passcode"
+
+        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, error in
+            DispatchQueue.main.async {
+                if success {
+                    call.resolve(["verified": true])
+                } else {
+                    call.reject("Authentication failed", nil, error)
+                }
+            }
+        }
+    }
 }
