@@ -81,7 +81,8 @@ export function sanitizeRichText(html: string): string {
   if (!html) return '';
   // If plain text (no HTML tags), convert newlines to <br>
   if (!/<[a-z][\s\S]*>/i.test(html)) {
-    return html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    return html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      .replace(/@&quot;([^&]+)&quot;|@"([^"]+)"|@(\w+)/g, '<span class="kb-mention">$&</span>');
   }
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -92,7 +93,8 @@ export function sanitizeRichText(html: string): string {
     .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
     .replace(/\son\w+\s*=\s*\S+/gi, '')
     .replace(/javascript\s*:/gi, 'blocked:')
-    .replace(/data\s*:/gi, 'blocked:');
+    .replace(/data\s*:/gi, 'blocked:')
+    .replace(/@&quot;([^&]+)&quot;|@"([^"]+)"|@(\w+)/g, '<span class="kb-mention">$&</span>');
 }
 
 /* ═══════════════════════════════════════════════════════════

@@ -1307,9 +1307,10 @@ function BoardPage() {
             const snippet = content.length > 80 ? content.slice(0, 80) + '…' : content;
             const notifiedUserIds = new Set<string>();
 
+            const plainContent = content.replace(/<[^>]+>/g, ' ');
             const mentionRegex = /@"([^"]+)"|@(\S+)/g;
             let match;
-            while ((match = mentionRegex.exec(content)) !== null) {
+            while ((match = mentionRegex.exec(plainContent)) !== null) {
               const mentionName = match[1] || match[2];
               const target = userProfiles.find(p => p.name.toLowerCase() === mentionName.toLowerCase());
               if (target && target.id !== user?.id && !notifiedUserIds.has(target.id)) {
