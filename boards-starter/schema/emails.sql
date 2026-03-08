@@ -50,6 +50,14 @@ CREATE POLICY "Delete board emails" ON board_emails
 CREATE POLICY "Anon insert board emails" ON board_emails
   FOR INSERT TO anon WITH CHECK (true);
 
+-- Allow anon to read board_emails (for webhook dedup check)
+CREATE POLICY "Anon read board emails" ON board_emails
+  FOR SELECT TO anon USING (true);
+
+-- Allow anon to read project_boards (for subject-line board matching in webhook)
+CREATE POLICY "Anon view boards for email routing" ON project_boards
+  FOR SELECT TO anon USING (true);
+
 -- ============================================================
 -- Update notifications.type CHECK constraint to include
 -- 'email_unrouted' and 'mention' notification types

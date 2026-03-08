@@ -120,10 +120,33 @@ export default function CardDetailModal({
     if (!sel || !sel.rangeCount || !editorRef.current) return null;
     const range = sel.getRangeAt(0);
     if (!editorRef.current.contains(range.startContainer)) return null;
-    const textNode = range.startContainer;
-    if (textNode.nodeType !== Node.TEXT_NODE) return null;
+
+    let textNode: Node | null = range.startContainer;
+    let offset = range.startOffset;
+
+    // If caret is on the element itself (common on iOS), walk to the text node
+    if (textNode.nodeType !== Node.TEXT_NODE) {
+      const child = textNode.childNodes[offset > 0 ? offset - 1 : 0];
+      if (child && child.nodeType === Node.TEXT_NODE) {
+        textNode = child;
+        offset = (child.textContent || '').length;
+      } else if (child) {
+        // Walk into the child to find the last text node
+        const walker = document.createTreeWalker(child, NodeFilter.SHOW_TEXT);
+        let last: Node | null = null;
+        while (walker.nextNode()) last = walker.currentNode;
+        if (last) {
+          textNode = last;
+          offset = (last.textContent || '').length;
+        } else {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    }
+
     const text = textNode.textContent || '';
-    const offset = range.startOffset;
     const beforeCursor = text.slice(0, offset);
     const atIdx = beforeCursor.lastIndexOf('@');
     if (atIdx === -1) return null;
@@ -134,25 +157,28 @@ export default function CardDetailModal({
   }, []);
 
   const handleMentionInput = useCallback((editorRef: React.RefObject<HTMLDivElement | null>, source: 'add' | 'edit') => {
-    const ctx = getMentionContext(editorRef);
-    if (ctx) {
-      mentionEditorRef.current = source;
-      setMentionQuery(ctx.query);
-      setMentionIndex(0);
-      // Position dropdown near the caret using fixed viewport coordinates
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount) {
-        const r = sel.getRangeAt(0);
-        const rect = r.getBoundingClientRect();
-        setMentionPos({
-          top: rect.bottom + 4,
-          left: rect.left,
-        });
+    // Defer to next frame so iOS WebView selection is settled after input
+    requestAnimationFrame(() => {
+      const ctx = getMentionContext(editorRef);
+      if (ctx) {
+        mentionEditorRef.current = source;
+        setMentionQuery(ctx.query);
+        setMentionIndex(0);
+        // Position dropdown near the caret using fixed viewport coordinates
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount) {
+          const r = sel.getRangeAt(0);
+          const rect = r.getBoundingClientRect();
+          setMentionPos({
+            top: rect.bottom + 4,
+            left: rect.left,
+          });
+        }
+        setMentionActive(true);
+      } else {
+        setMentionActive(false);
       }
-      setMentionActive(true);
-    } else {
-      setMentionActive(false);
-    }
+    });
   }, [getMentionContext]);
 
   const insertMention = useCallback((user: UserProfile) => {
