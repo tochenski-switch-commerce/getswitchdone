@@ -23,6 +23,7 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
   const channelRef = useRef<RealtimeChannel | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const cardIdsRef = useRef<Set<string>>(new Set());
+  const recentlyUpdatedByMeRef = useRef<Set<string>>(new Set());
   const onRemoteChangeRef = useRef(onRemoteChange);
   const onNotificationRef = useRef(onNotification);
 
@@ -42,6 +43,11 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
       timestamp: Date.now(),
     };
     setToasts(prev => [...prev.slice(-4), toast]);
+  }, []);
+
+  const markCardUpdated = useCallback((cardId: string) => {
+    recentlyUpdatedByMeRef.current.add(cardId);
+    setTimeout(() => recentlyUpdatedByMeRef.current.delete(cardId), 3000);
   }, []);
 
   useEffect(() => {
@@ -73,10 +79,16 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
       const recordBoardId = record?.board_id || record?.id;
       if (recordBoardId && recordBoardId !== boardId) return;
       if (isOwnChange(payload)) return;
-      scheduleRefetch();
 
+      // Suppress toast for cards we just updated locally
       const table = payload.table as string;
       const eventType = payload.eventType as string;
+      if (table === 'board_cards' && eventType === 'UPDATE' && record?.id && recentlyUpdatedByMeRef.current.has(record.id)) {
+        scheduleRefetch();
+        return;
+      }
+
+      scheduleRefetch();
 
       if (table === 'board_cards') {
         if (eventType === 'INSERT') addToast('A new card was added');
@@ -102,6 +114,11 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
       const record = payload.new || payload.old;
       if (!record?.card_id || !cardIdsRef.current.has(record.card_id)) return;
       if (isOwnChange(payload)) return;
+      // Suppress events for cards we just updated locally
+      if (recentlyUpdatedByMeRef.current.has(record.card_id)) {
+        scheduleRefetch();
+        return;
+      }
       scheduleRefetch();
 
       const table = payload.table as string;
@@ -162,5 +179,5 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
     return () => clearTimeout(timer);
   }, [toasts]);
 
-  return { toasts, dismissToast };
+  return { toasts, dismissToast, markCardUpdated };
 }

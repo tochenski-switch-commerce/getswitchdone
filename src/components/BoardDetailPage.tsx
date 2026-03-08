@@ -133,7 +133,7 @@ function BoardPage() {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  const { toasts, dismissToast } = useRealtimeBoard({
+  const { toasts, dismissToast, markCardUpdated } = useRealtimeBoard({
     boardId,
     currentUserId: user?.id ?? null,
     cardIds: board?.cards?.map(c => c.id) ?? [],
@@ -481,6 +481,7 @@ function BoardPage() {
         e.preventDefault();
         const today = new Date().toISOString().split('T')[0];
         const newDueDate = card.due_date ? null : today;
+        markCardUpdated(card.id);
         updateCard(boardId, card.id, { due_date: newDueDate });
       } else if (e.key === 'm') {
         e.preventDefault();
@@ -489,6 +490,7 @@ function BoardPage() {
           const currentAssignees = card.assignees || (card.assignee ? [card.assignee] : []);
           const isAssigned = currentAssignees.some(a => a.toLowerCase() === myName.toLowerCase());
           const newAssignees = isAssigned ? currentAssignees.filter(a => a.toLowerCase() !== myName.toLowerCase()) : [...currentAssignees, myName];
+          markCardUpdated(card.id);
           updateCard(boardId, card.id, { assignee: newAssignees[0] || null, assignees: newAssignees });
         }
       } else if (e.key === 'Enter') {
@@ -1116,6 +1118,7 @@ function BoardPage() {
                             isDragging={dragCardId === card.id}
                             hasAlert={alertCardIds.has(card.id)}
                             onPriorityChange={async (p) => {
+                              markCardUpdated(card.id);
                               await updateCard(boardId, card.id, { priority: p });
                             }}
                           />
@@ -1293,6 +1296,7 @@ function BoardPage() {
           onUpdate={async (updates) => {
             const oldAssignees = new Set((activeCard.assignees || (activeCard.assignee ? [activeCard.assignee] : [])).map(a => a.toLowerCase()));
             const newAssignees: string[] = updates.assignees || [];
+            markCardUpdated(activeCard.id);
             await updateCard(boardId, activeCard.id, updates);
             // Notify newly added assignees
             for (const name of newAssignees) {
@@ -1404,7 +1408,7 @@ function BoardPage() {
             column={col}
             cards={colCards}
             board={board}
-            onUpdateCard={async (cardId, updates) => { await updateCard(boardId, cardId, updates); }}
+            onUpdateCard={async (cardId, updates) => { markCardUpdated(cardId); await updateCard(boardId, cardId, updates); }}
             onDeleteCard={async (cardId) => { await deleteCard(boardId, cardId); }}
             onMoveCard={async (cardId, newColId) => { await moveCard(boardId, cardId, newColId, 0); }}
             onAddChecklistItem={async (cardId, title) => { await addChecklistItem(boardId, cardId, title); }}
