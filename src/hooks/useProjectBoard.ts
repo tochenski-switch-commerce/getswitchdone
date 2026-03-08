@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { setBadgeCount, clearBadge } from '@/lib/badge';
 import type {
   ProjectBoard,
   BoardColumn,
@@ -1070,6 +1071,9 @@ export function useProjectBoard() {
         .limit(50);
       if (err) throw err;
       setNotifications(data || []);
+      // Update app icon badge with unread count
+      const unread = (data || []).filter((n: Notification) => !n.is_read).length;
+      setBadgeCount(unread);
     } catch (err: any) {
       console.error('Failed to fetch notifications:', err.message);
     }
@@ -1100,7 +1104,11 @@ export function useProjectBoard() {
         .update({ is_read: true })
         .eq('id', notificationId);
       if (err) throw err;
-      setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n));
+      setNotifications(prev => {
+        const updated = prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n);
+        setBadgeCount(updated.filter(n => !n.is_read).length);
+        return updated;
+      });
     } catch (err: any) {
       console.error('Failed to mark notification read:', err.message);
     }
@@ -1117,7 +1125,11 @@ export function useProjectBoard() {
         .eq('card_id', cardId)
         .eq('is_read', false);
       if (err) throw err;
-      setNotifications(prev => prev.map(n => n.card_id === cardId && !n.is_read ? { ...n, is_read: true } : n));
+      setNotifications(prev => {
+        const updated = prev.map(n => n.card_id === cardId && !n.is_read ? { ...n, is_read: true } : n);
+        setBadgeCount(updated.filter(n => !n.is_read).length);
+        return updated;
+      });
     } catch (err: any) {
       console.error('Failed to mark card notifications read:', err.message);
     }
@@ -1134,6 +1146,7 @@ export function useProjectBoard() {
         .eq('is_read', false);
       if (err) throw err;
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      clearBadge();
     } catch (err: any) {
       console.error('Failed to mark all read:', err.message);
     }
@@ -1146,7 +1159,11 @@ export function useProjectBoard() {
         .delete()
         .eq('id', notificationId);
       if (err) throw err;
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      setNotifications(prev => {
+        const updated = prev.filter(n => n.id !== notificationId);
+        setBadgeCount(updated.filter(n => !n.is_read).length);
+        return updated;
+      });
     } catch (err: any) {
       console.error('Failed to delete notification:', err.message);
     }
@@ -1162,6 +1179,7 @@ export function useProjectBoard() {
         .eq('user_id', user.id);
       if (err) throw err;
       setNotifications([]);
+      clearBadge();
     } catch (err: any) {
       console.error('Failed to clear notifications:', err.message);
     }

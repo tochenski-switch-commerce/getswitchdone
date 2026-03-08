@@ -41,11 +41,19 @@ export async function POST(req: NextRequest) {
   }
 
   const iosTokens = tokens.filter(t => t.platform === 'ios');
+
+  // Get actual unread notification count for this user
+  const { count: unreadCount } = await supabaseAdmin
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user_id)
+    .eq('is_read', false);
+
   const payload = {
     aps: {
       alert: { title, body: body || '' },
       sound: 'default',
-      badge: 1,
+      badge: (unreadCount ?? 0) + 1, // +1 for the notification being created
     },
     type,
     board_id,

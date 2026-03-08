@@ -1,22 +1,44 @@
 import UIKit
 import Capacitor
 import LocalAuthentication
+import UserNotifications
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
-    private var biometricRegistered = false
+    private var pluginsRegistered = false
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // Set notification delegate for foreground display
+        UNUserNotificationCenter.current().delegate = self
         return true
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        if !biometricRegistered, let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge {
+        // Clear app icon badge when user opens the app
+        application.applicationIconBadgeNumber = 0
+
+        if !pluginsRegistered, let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge {
             bridge.registerPluginInstance(NativeBiometric())
-            biometricRegistered = true
+            bridge.registerPluginInstance(BadgeManager())
+            pluginsRegistered = true
         }
+    }
+
+    // Forward APNs token to Capacitor PushNotifications plugin
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(
+            name: .capacitorDidRegisterForRemoteNotifications,
+            object: deviceToken
+        )
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(
+            name: .capacitorDidFailToRegisterForRemoteNotifications,
+            object: error
+        )
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
@@ -95,5 +117,53 @@ public class NativeBiometric: CAPPlugin, CAPBridgedPlugin {
                 }
             }
         }
+    }
+}
+
+// MARK: - Badge Manager Plugin
+
+@objc(BadgeManager)
+public class BadgeManager: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "BadgeManager"
+    public let jsName = "BadgeManager"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "setBadgeCount", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearBadge", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getBadgeCount", returnType: CAPPluginReturnPromise),
+    ]
+
+    @objc func setBadgeCount(_ call: CAPPluginCall) {
+        let count = call.getInt("count") ?? 0
+        DispatchQueue.main.async {
+            UIApplication.shared.applicationIconBadgeNumber = count
+            call.resolve(["success": true])
+        }
+    }
+
+    @objc func clearBadge(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            UIApplication.shared.applicationIconBadgeNumber = 0
+            call.resolve(["success": true])
+        }
+    }
+
+    @objc func getBadgeCount(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let count = UIApplication.shared.applicationIconBadgeNumber
+            call.resolve(["count": count])
+        }
+    }
+}
+
+// MARK: - Show push notifications in foreground
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Show banner + sound + badge even when app is in foreground
+        completionHandler([.banner, .sound, .badge])
     }
 }
