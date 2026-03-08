@@ -165,7 +165,7 @@ export function useProjectBoard() {
       // Index 0: board link stats (or null)
       phase2.push(
         targetBoardIds.length > 0
-          ? supabase.rpc('get_board_summary_stats', { board_ids: targetBoardIds })
+          ? Promise.resolve(supabase.rpc('get_board_summary_stats', { board_ids: targetBoardIds }))
           : Promise.resolve({ data: [] })
       );
 
