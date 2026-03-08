@@ -24,15 +24,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing "from" field' }, { status: 400 });
     }
 
-    // Build a Resend-like payload
+    // Build a Resend-like wrapped payload
     const payload = {
-      from: from,
-      to: 'gsd@localhost',
-      subject: subject || '(no subject)',
-      text: body || '',
-      html: body ? `<p>${body.replace(/\n/g, '<br/>')}</p>` : '',
-      message_id: `test-${Date.now()}@localhost`,
-      headers: {},
+      type: 'email.received',
+      created_at: new Date().toISOString(),
+      data: {
+        email_id: `test-${Date.now()}`,
+        from: from,
+        to: ['gsd@localhost'],
+        subject: subject || '(no subject)',
+        message_id: `<test-${Date.now()}@localhost>`,
+      },
     };
 
     // Call the real inbound endpoint
@@ -47,10 +49,21 @@ export async function POST(request: NextRequest) {
       inboundHeaders['Authorization'] = `Bearer ${process.env.INBOUND_EMAIL_SECRET}`;
     }
 
+    // For test emails, also pass body directly since we won't have an email_id in Resend
+    // Override the payload to include text/html in data for test purposes
+    const testPayload = {
+      ...payload,
+      data: {
+        ...payload.data,
+        text: body || '',
+        html: body ? `<p>${body.replace(/\n/g, '<br/>')}</p>` : '',
+      },
+    };
+
     const result = await fetch(inboundUrl, {
       method: 'POST',
       headers: inboundHeaders,
-      body: JSON.stringify(payload),
+      body: JSON.stringify(testPayload),
     });
 
     const data = await result.json();

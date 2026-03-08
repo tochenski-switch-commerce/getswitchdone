@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { Resend } from 'resend';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ── Fuzzy matching helpers ──
 
@@ -25,7 +27,6 @@ function wordSimilarity(a: string, b: string): number {
   for (const w of wordsA) {
     if (wordsB.has(w)) overlap++;
   }
-  // Jaccard-like: overlap / size of the smaller set (board title is usually shorter)
   return overlap / Math.min(wordsA.size, wordsB.size);
 }
 
@@ -46,7 +47,6 @@ function matchBoard(cleanedSubject: string, boards: BoardCandidate[]): BoardCand
   // Phase 1: Substring matches
   const substringMatches = boards.filter(b => subjectNorm.includes(normalize(b.title)));
   if (substringMatches.length > 0) {
-    // Pick the longest title (most specific match)
     return substringMatches.reduce((best, b) => b.title.length > best.title.length ? b : best);
   }
 
@@ -68,27 +68,78 @@ function matchBoard(cleanedSubject: string, boards: BoardCandidate[]): BoardCand
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify webhook secret
-    const authHeader = request.headers.get('authorization');
-    const expectedSecret = process.env.INBOUND_EMAIL_SECRET;
-    if (expectedSecret) {
-      const token = authHeader?.replace(/^Bearer\s+/i, '');
-      if (token !== expectedSecret) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Verify webhook signature if secret is configured
+    const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let event: any;
+
+    if (webhookSecret) {
+      const payload = await request.text();
+      try {
+        event = resend.webhooks.verify({
+          payload,
+          headers: {
+            id: request.headers.get('svix-id') || '',
+            timestamp: request.headers.get('svix-timestamp') || '',
+            signature: request.headers.get('svix-signature') || '',
+          },
+          webhookSecret,
+        });
+      } catch {
+        // Also allow Bearer token auth (for test endpoint)
+        const authHeader = request.headers.get('authorization');
+        const fallbackSecret = process.env.INBOUND_EMAIL_SECRET;
+        if (fallbackSecret && authHeader?.replace(/^Bearer\s+/i, '') === fallbackSecret) {
+          event = JSON.parse(payload);
+        } else {
+          return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
+        }
       }
+    } else {
+      // No webhook secret — accept Bearer token or unsigned requests (dev mode)
+      const authHeader = request.headers.get('authorization');
+      const fallbackSecret = process.env.INBOUND_EMAIL_SECRET;
+      if (fallbackSecret) {
+        const token = authHeader?.replace(/^Bearer\s+/i, '');
+        if (token !== fallbackSecret) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+      }
+      event = await request.json();
     }
 
-    const body = await request.json();
+    // Handle Resend's wrapped format: { type: "email.received", data: { ... } }
+    // Also handle flat format from test endpoint
+    const isResendFormat = event.type === 'email.received' && event.data;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const emailData: any = isResendFormat ? event.data : event;
 
-    // Parse Resend Inbound payload fields
-    // Resend sends: from, to, subject, text, html, headers, message_id (among others)
-    const fromRaw = body.from || '';
-    const toRaw = body.to || '';
-    const subject = body.subject || '';
-    const bodyText = body.text || '';
-    const bodyHtml = body.html || '';
-    const messageId = body.message_id || body.messageId || '';
-    const headers = body.headers || {};
+    const fromRaw = String(emailData.from || '');
+    const toRaw = emailData.to || '';
+    const subject = String(emailData.subject || '');
+    const messageId = String(emailData.message_id || emailData.messageId || '');
+
+    // Resend webhook doesn't include body — fetch it via API if we have an email_id
+    let bodyText = String(emailData.text || emailData.body_text || '');
+    let bodyHtml = String(emailData.html || emailData.body_html || '');
+    let headers: Record<string, unknown> = emailData.headers || {};
+
+    if (isResendFormat && emailData.email_id) {
+      try {
+        const { data: fullEmail } = await resend.emails.receiving.get(
+          String(emailData.email_id)
+        );
+        if (fullEmail) {
+          const emailContent = fullEmail as unknown as Record<string, unknown>;
+          bodyText = (emailContent.text as string) || bodyText;
+          bodyHtml = (emailContent.html as string) || bodyHtml;
+          headers = (emailContent.headers as Record<string, unknown>) || headers;
+        }
+      } catch (err) {
+        console.error('Failed to fetch email content from Resend:', err);
+        // Continue with whatever we have
+      }
+    }
 
     // Parse "Name <email>" format
     const fromMatch = fromRaw.match(/^(.+?)\s*<(.+?)>$/);

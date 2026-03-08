@@ -193,7 +193,8 @@ export default function CardDetailModal({
     parent.insertBefore(mention, textNode);
     parent.insertBefore(spaceAfter, textNode);
     parent.removeChild(textNode);
-    // Place caret after the space
+    // Re-focus the editor first, then place caret after the space
+    editorRef.current?.focus();
     const sel = window.getSelection();
     if (sel) {
       const r = document.createRange();
