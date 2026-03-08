@@ -4,6 +4,15 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import {
+  isBiometricAvailable,
+  getBiometryType,
+  biometryLabel,
+  hasLoginCredentials,
+  getLoginCredentials,
+  deleteLoginCredentials,
+  storeLoginCredentials,
+} from '@/lib/biometric';
 
 export default function AuthPage() {
   return (
@@ -23,6 +32,9 @@ function AuthForm() {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [biometricReady, setBiometricReady] = useState(false);
+  const [biometryType, setBiometryType] = useState('');
+  const [biometricLoading, setBiometricLoading] = useState(false);
 
   // Redirect if already signed in
   useEffect(() => {
@@ -31,9 +43,70 @@ function AuthForm() {
     }
   }, [loading, user, router, returnTo]);
 
+  // Check for stored biometric credentials and auto-trigger
+  useEffect(() => {
+    if (loading || user) return;
+    let canceled = false;
+    (async () => {
+      const available = await isBiometricAvailable();
+      if (!available || canceled) return;
+      const hasCreds = await hasLoginCredentials();
+      if (!hasCreds || canceled) return;
+      const type = await getBiometryType();
+      if (canceled) return;
+      setBiometryType(type);
+      setBiometricReady(true);
+      // Auto-trigger biometric prompt
+      setBiometricLoading(true);
+      try {
+        const creds = await getLoginCredentials();
+        if (canceled) return;
+        if (creds) {
+          const { error: err } = await supabase.auth.signInWithPassword({
+            email: creds.username,
+            password: creds.password,
+          });
+          if (!canceled && err) {
+            setError(err.message);
+            if (err.message.toLowerCase().includes('invalid')) {
+              await deleteLoginCredentials();
+              setBiometricReady(false);
+            }
+          }
+        }
+      } catch { /* user canceled */ }
+      if (!canceled) setBiometricLoading(false);
+    })();
+    return () => { canceled = true; };
+  }, [loading, user]);
+
   if (!loading && user) {
     return null;
   }
+
+  const handleBiometricLogin = async () => {
+    setBiometricLoading(true);
+    setError('');
+    try {
+      const creds = await getLoginCredentials();
+      if (creds) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: creds.username,
+          password: creds.password,
+        });
+        if (signInError) {
+          setError(signInError.message);
+          if (signInError.message.toLowerCase().includes('invalid')) {
+            await deleteLoginCredentials();
+            setBiometricReady(false);
+          }
+        } else {
+          router.push(returnTo);
+        }
+      }
+    } catch { /* user canceled */ }
+    setBiometricLoading(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +128,7 @@ function AuthForm() {
     if (signInError) {
       setError(signInError.message);
     } else {
+      storeLoginCredentials(email, password);
       router.push(returnTo);
     }
   };
@@ -66,6 +140,30 @@ function AuthForm() {
         <div className="kb-auth-card">
           <h1 className="kb-auth-title">GSD Boards</h1>
           <p className="kb-auth-subtitle">Sign in to your account</p>
+
+          {biometricReady && (
+            <>
+              <button
+                className="kb-biometric-btn"
+                onClick={handleBiometricLogin}
+                disabled={biometricLoading}
+                type="button"
+              >
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7 3H5a2 2 0 0 0-2 2v2" />
+                  <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                  <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                  <path d="M17 21h2a2 2 0 0 0 2-2v-2" />
+                  <path d="M9 9.5v1" strokeWidth="2" />
+                  <path d="M15 9.5v1" strokeWidth="2" />
+                  <path d="M12 9.5v3.5l-1.5 1.5" />
+                  <path d="M8 17c1.33.67 2.67 1 4 1s2.67-.33 4-1" />
+                </svg>
+                <span>{biometricLoading ? 'Verifying...' : `Sign in with ${biometryLabel(biometryType)}`}</span>
+              </button>
+              <div className="kb-auth-divider"><span>or</span></div>
+            </>
+          )}
 
           <form onSubmit={handleSubmit}>
             <div className="kb-form-group">
@@ -242,6 +340,48 @@ const authStyles = `
     background: rgba(239,68,68,0.1);
     border-radius: 8px;
     border: 1px solid rgba(239,68,68,0.2);
+  }
+  .kb-biometric-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid #2a2d3a;
+    background: rgba(99, 102, 241, 0.08);
+    color: #818cf8;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    width: 100%;
+    margin-bottom: 0;
+  }
+  .kb-biometric-btn:hover {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: #4f46e5;
+  }
+  .kb-biometric-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .kb-auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: #4b5563;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .kb-auth-divider::before,
+  .kb-auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #2a2d3a;
   }
 
   /* ── Responsive ── */

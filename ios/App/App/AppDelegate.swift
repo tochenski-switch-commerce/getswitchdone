@@ -1,6 +1,7 @@
 import UIKit
 import Capacitor
 import LocalAuthentication
+import Security
 import UserNotifications
 
 @UIApplicationMain
@@ -70,6 +71,10 @@ public class NativeBiometric: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "isAvailable", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "verifyIdentity", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setCredentials", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getCredentials", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "deleteCredentials", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "hasCredentials", returnType: CAPPluginReturnPromise),
     ]
 
     @objc func isAvailable(_ call: CAPPluginCall) {
@@ -107,6 +112,127 @@ public class NativeBiometric: CAPPlugin, CAPBridgedPlugin {
                 }
             }
         }
+    }
+
+    // MARK: - Keychain Credentials (biometric-protected)
+
+    @objc func setCredentials(_ call: CAPPluginCall) {
+        guard let server = call.getString("server"),
+              let username = call.getString("username"),
+              let password = call.getString("password") else {
+            call.reject("Missing required parameters")
+            return
+        }
+
+        // Remove existing item first
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: server,
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        // Create biometric access control
+        var accessError: Unmanaged<CFError>?
+        guard let accessControl = SecAccessControlCreateWithFlags(
+            nil,
+            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+            .biometryCurrentSet,
+            &accessError
+        ) else {
+            call.reject("Failed to create access control")
+            return
+        }
+
+        guard let passwordData = password.data(using: .utf8) else {
+            call.reject("Failed to encode password")
+            return
+        }
+
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: server,
+            kSecAttrAccount as String: username,
+            kSecValueData as String: passwordData,
+            kSecAttrAccessControl as String: accessControl,
+        ]
+
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        if status == errSecSuccess {
+            call.resolve(["success": true])
+        } else {
+            call.reject("Failed to store credentials (status: \(status))")
+        }
+    }
+
+    @objc func getCredentials(_ call: CAPPluginCall) {
+        guard let server = call.getString("server") else {
+            call.reject("Missing server parameter")
+            return
+        }
+
+        let reason = call.getString("reason") ?? "Sign in to GSD Boards"
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: server,
+            kSecReturnData as String: true,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecUseOperationPrompt as String: reason,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        if status == errSecSuccess,
+           let item = result as? [String: Any],
+           let data = item[kSecValueData as String] as? Data,
+           let password = String(data: data, encoding: .utf8),
+           let username = item[kSecAttrAccount as String] as? String {
+            call.resolve([
+                "username": username,
+                "password": password,
+            ])
+        } else if status == errSecUserCanceled || status == errSecAuthFailed {
+            call.reject("Authentication canceled", "USER_CANCELED")
+        } else {
+            call.reject("No credentials found", "NOT_FOUND")
+        }
+    }
+
+    @objc func deleteCredentials(_ call: CAPPluginCall) {
+        guard let server = call.getString("server") else {
+            call.reject("Missing server parameter")
+            return
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: server,
+        ]
+
+        SecItemDelete(query as CFDictionary)
+        call.resolve(["success": true])
+    }
+
+    @objc func hasCredentials(_ call: CAPPluginCall) {
+        guard let server = call.getString("server") else {
+            call.reject("Missing server parameter")
+            return
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: server,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        // errSecInteractionNotAllowed means the item exists but requires biometric
+        call.resolve(["hasCredentials": status == errSecSuccess || status == errSecInteractionNotAllowed])
     }
 }
 
