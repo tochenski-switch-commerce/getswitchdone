@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import type { BoardCard, CardPriority } from '@/types/board-types';
 import {
   MessageSquare, CheckSquare, CalendarDays,
@@ -7,7 +8,7 @@ import {
 } from '@/components/BoardIcons';
 import { PRIORITY_CONFIG } from './helpers';
 
-export default function KanbanCard({
+function KanbanCard({
   card,
   onClick,
   isDragging,
@@ -119,3 +120,5 @@ export default function KanbanCard({
     </div>
   );
 }
+
+export default React.memo(KanbanCard);

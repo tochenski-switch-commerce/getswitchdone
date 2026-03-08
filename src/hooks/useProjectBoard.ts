@@ -134,14 +134,15 @@ export function useProjectBoard() {
     if (!background) setLoading(true);
     setError(null);
     try {
-      // Phase 1: Fetch board-scoped data in parallel
-      const [boardRes, colsRes, cardsRes, labelsRes, customFieldsRes, boardLinksRes] = await Promise.all([
+      // Phase 1: Fetch board-scoped data + user profiles in parallel
+      const [boardRes, colsRes, cardsRes, labelsRes, customFieldsRes, boardLinksRes, profilesRes] = await Promise.all([
         supabase.from('project_boards').select('*').eq('id', boardId).single(),
         supabase.from('board_columns').select('*').eq('board_id', boardId).order('position'),
         supabase.from('board_cards').select('*').eq('board_id', boardId).eq('is_archived', false).order('position'),
         supabase.from('board_labels').select('*').eq('board_id', boardId),
         supabase.from('board_custom_fields').select('*').eq('board_id', boardId).order('position'),
         supabase.from('board_links').select('*, target_board:project_boards!target_board_id(id, title, icon, icon_color, is_public)').eq('board_id', boardId).order('position'),
+        supabase.from('user_profiles').select('id, name'),
       ]);
 
       if (boardRes.error) throw boardRes.error;
@@ -149,21 +150,25 @@ export function useProjectBoard() {
       const columns = colsRes.data || [];
       const labels = labelsRes.data || [];
       const customFields = (customFieldsRes.data || []) as BoardCustomField[];
+      const profiles = profilesRes.data || [];
       const boardLinks = ((boardLinksRes.data || []) as any[]).map(l => ({
         ...l,
         target_board: Array.isArray(l.target_board) ? l.target_board[0] : l.target_board,
       })) as BoardLink[];
 
-      // Fetch summary stats for linked boards
-      const targetBoardIds = boardLinks.map(l => l.target_board_id);
-      let boardLinkStats: BoardSummaryStats[] = [];
-      if (targetBoardIds.length > 0) {
-        const { data: statsData } = await supabase.rpc('get_board_summary_stats', { board_ids: targetBoardIds });
-        boardLinkStats = (statsData || []) as BoardSummaryStats[];
-      }
-
-      // Phase 2: Fetch card-scoped data only for this board's cards
+      // Phase 2: Fetch card-scoped data AND board link stats in parallel
       const cardIds = (cardsRes.data || []).map(c => c.id);
+      const targetBoardIds = boardLinks.map(l => l.target_board_id);
+
+      // Build all Phase 2 promises
+      const phase2: Promise<any>[] = [];
+      // Index 0: board link stats (or null)
+      phase2.push(
+        targetBoardIds.length > 0
+          ? supabase.rpc('get_board_summary_stats', { board_ids: targetBoardIds })
+          : Promise.resolve({ data: [] })
+      );
+
       let allComments: any[] = [];
       let allChecklists: any[] = [];
       let allAssignments: any[] = [];
@@ -171,17 +176,24 @@ export function useProjectBoard() {
       let allCardLinks: CardLink[] = [];
 
       if (cardIds.length > 0) {
-        const [commentsRes, checklistsRes, assignmentsRes, cfValuesRes, profilesRes, cardLinksSourceRes, cardLinksTargetRes] = await Promise.all([
+        // Indices 1-6: card-scoped queries
+        phase2.push(
           supabase.from('card_comments').select('*').in('card_id', cardIds).order('created_at', { ascending: true }),
           supabase.from('card_checklists').select('*').in('card_id', cardIds).order('position'),
           supabase.from('card_label_assignments').select('*').in('card_id', cardIds),
           supabase.from('card_custom_field_values').select('*').in('card_id', cardIds),
-          supabase.from('user_profiles').select('id, name'),
           supabase.from('card_links').select('*, target_card:board_cards!target_card_id(id, title, board_id, column_id, is_archived)').in('source_card_id', cardIds),
           supabase.from('card_links').select('*, source_card:board_cards!source_card_id(id, title, board_id, column_id, is_archived)').in('target_card_id', cardIds),
-        ]);
-        const profiles = profilesRes.data || [];
-        allComments = (commentsRes.data || []).map(cm => ({
+        );
+      }
+
+      const phase2Results = await Promise.all(phase2);
+
+      const boardLinkStats = (phase2Results[0]?.data || []) as BoardSummaryStats[];
+
+      if (cardIds.length > 0) {
+        const [, commentsRes, checklistsRes, assignmentsRes, cfValuesRes, cardLinksSourceRes, cardLinksTargetRes] = phase2Results;
+        allComments = (commentsRes.data || []).map((cm: any) => ({
           ...cm,
           user_profiles: profiles.find(p => p.id === cm.user_id) ? { name: profiles.find(p => p.id === cm.user_id)!.name } : { name: 'Unknown' },
         }));

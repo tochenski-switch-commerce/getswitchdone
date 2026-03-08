@@ -504,9 +504,22 @@ function BoardPage() {
     return (
       <div className="kb-root">
         <style>{kanbanStyles}</style>
-        <div className="kb-loading">
-          <div className="kb-spinner" />
-          <p style={{ color: '#9ca3af' }}>Loading board...</p>
+        {/* Skeleton loading — shows column/card placeholders instead of spinner */}
+        <div style={{ padding: '16px 24px' }}>
+          <div style={{ height: 28, width: 200, background: '#23262b', borderRadius: 6, marginBottom: 16 }} />
+          <div style={{ display: 'flex', gap: 16, overflowX: 'auto' }}>
+            {[0, 1, 2, 3].map(col => (
+              <div key={col} style={{ minWidth: 280, flex: '0 0 280px' }}>
+                <div style={{ height: 20, width: 100, background: '#23262b', borderRadius: 4, marginBottom: 12 }} />
+                {[0, 1, 2].map(card => (
+                  <div key={card} style={{
+                    height: 72 + card * 12, background: '#1a1d21', borderRadius: 8,
+                    marginBottom: 8, opacity: 0.6 - card * 0.15,
+                  }} />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
