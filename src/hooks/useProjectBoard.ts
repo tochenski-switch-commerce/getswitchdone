@@ -3,6 +3,13 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { setBadgeCount, clearBadge } from '@/lib/badge';
+
+// Fast cached user lookup — reads from local session instead of making
+// a network request like supabase.auth.getUser() does every time.
+async function getCachedUser() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user ?? null;
+}
 import type {
   ProjectBoard,
   BoardColumn,
@@ -74,8 +81,7 @@ export function useProjectBoard() {
     setLoading(true);
     setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      console.log('[fetchBoards] user:', user?.id, user?.email);
+      const user = await getCachedUser();
       if (!user) throw new Error('Not authenticated');
 
       // RLS policies handle visibility (own boards + public boards)
@@ -84,7 +90,6 @@ export function useProjectBoard() {
         .select('*')
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
-      console.log('[fetchBoards] data:', data, 'error:', err);
       if (err) throw err;
       setBoards(data || []);
     } catch (err: any) {
@@ -97,7 +102,7 @@ export function useProjectBoard() {
   const createBoard = useCallback(async (title: string, description?: string, icon?: string, icon_color?: string) => {
     setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) throw new Error('Not authenticated');
 
       // Create board
@@ -125,8 +130,8 @@ export function useProjectBoard() {
   }, []);
 
   // ─── Single board ──────────────────────────────────────────
-  const fetchBoard = useCallback(async (boardId: string) => {
-    setLoading(true);
+  const fetchBoard = useCallback(async (boardId: string, background = false) => {
+    if (!background) setLoading(true);
     setError(null);
     try {
       // Phase 1: Fetch board-scoped data in parallel
@@ -219,7 +224,7 @@ export function useProjectBoard() {
       setError(err.message);
       return null;
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
 
@@ -261,7 +266,7 @@ export function useProjectBoard() {
   const duplicateBoard = useCallback(async (boardId: string) => {
     setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) throw new Error('Not authenticated');
 
       // Fetch source board and related data in parallel
@@ -461,7 +466,7 @@ export function useProjectBoard() {
   }) => {
     setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
 
       // Determine next position in column
       const colCards = board?.cards.filter(c => c.column_id === data.column_id) || [];
@@ -621,7 +626,7 @@ export function useProjectBoard() {
   const addComment = useCallback(async (boardId: string, cardId: string, content: string) => {
     setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) throw new Error('Not authenticated');
 
       const { data, error: err } = await supabase
@@ -816,7 +821,7 @@ export function useProjectBoard() {
   const saveChecklistTemplate = useCallback(async (boardId: string, name: string, items: string[]) => {
     setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) throw new Error('Not authenticated');
       const { data, error: err } = await supabase
         .from('checklist_templates')
@@ -1062,7 +1067,7 @@ export function useProjectBoard() {
   // ─── Notifications ──────────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) return;
       const { data, error: err } = await supabase
         .from('notifications')
@@ -1117,7 +1122,7 @@ export function useProjectBoard() {
 
   const markCardNotificationsRead = useCallback(async (cardId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) return;
       const { error: err } = await supabase
         .from('notifications')
@@ -1138,7 +1143,7 @@ export function useProjectBoard() {
 
   const markAllNotificationsRead = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) return;
       const { error: err } = await supabase
         .from('notifications')
@@ -1172,7 +1177,7 @@ export function useProjectBoard() {
 
   const clearAllNotifications = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) return;
       const { error: err } = await supabase
         .from('notifications')

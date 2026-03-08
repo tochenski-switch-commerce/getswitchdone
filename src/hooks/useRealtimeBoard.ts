@@ -57,7 +57,7 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         onRemoteChangeRef.current();
-      }, 400);
+      }, 1000);
     };
 
     const isOwnChange = (payload: any): boolean => {

@@ -124,9 +124,9 @@ function BoardPage() {
     }
   }, [boardId]);
 
-  // Realtime: re-fetch board when another user makes changes
+  // Realtime: re-fetch board in background when another user makes changes
   const handleRemoteChange = useCallback(() => {
-    if (boardId) fetchBoard(boardId);
+    if (boardId) fetchBoard(boardId, true);
   }, [boardId, fetchBoard]);
 
   const handleRemoteNotification = useCallback(() => {
@@ -143,11 +143,14 @@ function BoardPage() {
 
   useEffect(() => {
     if (boardId) {
-      fetchBoard(boardId);
-      fetchChecklistTemplates(boardId);
-      fetchUserProfiles();
-      fetchNotifications();
-      fetchBoards();
+      // Fire all initial fetches in parallel
+      Promise.all([
+        fetchBoard(boardId),
+        fetchChecklistTemplates(boardId),
+        fetchUserProfiles(),
+        fetchNotifications(),
+        fetchBoards(),
+      ]);
     }
   }, [boardId, fetchBoard, fetchChecklistTemplates, fetchUserProfiles, fetchNotifications, fetchBoards]);
 

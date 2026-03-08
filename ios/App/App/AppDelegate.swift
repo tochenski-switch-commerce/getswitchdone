@@ -1,8 +1,7 @@
 import UIKit
 import Capacitor
 import LocalAuthentication
-// TODO: Re-enable after Apple Developer push notification approval
-// import UserNotifications
+import UserNotifications
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -11,8 +10,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private var pluginsRegistered = false
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // TODO: Re-enable after Apple Developer push notification approval
-        // UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().delegate = self
         return true
     }
 
@@ -139,13 +137,12 @@ public class BadgeManager: CAPPlugin, CAPBridgedPlugin {
 }
 
 // MARK: - Show push notifications in foreground
-// TODO: Re-enable after Apple Developer push notification approval
-// extension AppDelegate: UNUserNotificationCenterDelegate {
-//     func userNotificationCenter(
-//         _ center: UNUserNotificationCenter,
-//         willPresent notification: UNNotification,
-//         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-//     ) {
-//         completionHandler([.banner, .sound, .badge])
-//     }
-// }
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+    }
+}
