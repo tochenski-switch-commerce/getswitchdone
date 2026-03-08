@@ -66,6 +66,18 @@ function matchBoard(cleanedSubject: string, boards: BoardCandidate[]): BoardCand
 
 // ── Webhook handler ──
 
+/** GET /api/email/inbound — quick health check */
+export async function GET() {
+  const hasWebhookSecret = !!process.env.RESEND_WEBHOOK_SECRET;
+  const hasResendKey = !!process.env.RESEND_API_KEY;
+  const hasInboundSecret = !!process.env.INBOUND_EMAIL_SECRET;
+  const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return NextResponse.json({
+    status: 'ok',
+    env: { hasWebhookSecret, hasResendKey, hasInboundSecret, hasSupabaseUrl },
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Verify webhook signature if secret is configured
@@ -73,8 +85,18 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let event: any;
 
+    console.log('[inbound] POST received, webhookSecret set:', !!webhookSecret);
+    console.log('[inbound] headers:', {
+      svixId: request.headers.get('svix-id'),
+      svixTs: request.headers.get('svix-timestamp'),
+      svixSig: request.headers.get('svix-signature')?.slice(0, 20) + '...',
+      auth: request.headers.get('authorization')?.slice(0, 20),
+      contentType: request.headers.get('content-type'),
+    });
+
     if (webhookSecret) {
       const payload = await request.text();
+      console.log('[inbound] raw payload length:', payload.length, 'first 200:', payload.slice(0, 200));
       try {
         event = resend.webhooks.verify({
           payload,
@@ -85,13 +107,17 @@ export async function POST(request: NextRequest) {
           },
           webhookSecret,
         });
-      } catch {
+        console.log('[inbound] svix verify succeeded');
+      } catch (verifyErr) {
+        console.error('[inbound] svix verify failed:', verifyErr);
         // Also allow Bearer token auth (for test endpoint)
         const authHeader = request.headers.get('authorization');
         const fallbackSecret = process.env.INBOUND_EMAIL_SECRET;
         if (fallbackSecret && authHeader?.replace(/^Bearer\s+/i, '') === fallbackSecret) {
           event = JSON.parse(payload);
+          console.log('[inbound] Bearer token fallback accepted');
         } else {
+          console.error('[inbound] No valid auth — returning 401');
           return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
         }
       }
@@ -110,9 +136,12 @@ export async function POST(request: NextRequest) {
 
     // Handle Resend's wrapped format: { type: "email.received", data: { ... } }
     // Also handle flat format from test endpoint
+    console.log('[inbound] event type:', event?.type, 'has data:', !!event?.data);
     const isResendFormat = event.type === 'email.received' && event.data;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const emailData: any = isResendFormat ? event.data : event;
+    console.log('[inbound] emailData keys:', Object.keys(emailData || {}));
+    console.log('[inbound] from:', emailData?.from, 'subject:', emailData?.subject, 'email_id:', emailData?.email_id);
 
     const fromRaw = String(emailData.from || '');
     const toRaw = emailData.to || '';
@@ -126,9 +155,11 @@ export async function POST(request: NextRequest) {
 
     if (isResendFormat && emailData.email_id) {
       try {
-        const { data: fullEmail } = await resend.emails.receiving.get(
+        console.log('[inbound] fetching email content for:', emailData.email_id);
+        const { data: fullEmail, error: fetchError } = await resend.emails.receiving.get(
           String(emailData.email_id)
         );
+        console.log('[inbound] receiving.get result — data:', !!fullEmail, 'error:', fetchError);
         if (fullEmail) {
           const emailContent = fullEmail as unknown as Record<string, unknown>;
           bodyText = (emailContent.text as string) || bodyText;
@@ -136,7 +167,7 @@ export async function POST(request: NextRequest) {
           headers = (emailContent.headers as Record<string, unknown>) || headers;
         }
       } catch (err) {
-        console.error('Failed to fetch email content from Resend:', err);
+        console.error('[inbound] Failed to fetch email content from Resend:', err);
         // Continue with whatever we have
       }
     }
@@ -150,6 +181,8 @@ export async function POST(request: NextRequest) {
       : Array.isArray(toRaw) && toRaw.length > 0
         ? String(toRaw[0]).replace(/^.*<(.+?)>$/, '$1')
         : '';
+
+    console.log('[inbound] parsed — from:', fromAddress, 'fromName:', fromName, 'to:', toAddress, 'subject:', subject);
 
     if (!fromAddress) {
       return NextResponse.json({ error: 'Missing from address' }, { status: 400 });
@@ -176,7 +209,9 @@ export async function POST(request: NextRequest) {
       .eq('is_archived', false);
 
     const cleanedSubject = cleanSubject(subject);
+    console.log('[inbound] boards found:', boards?.length, 'cleanedSubject:', cleanedSubject);
     const matched = matchBoard(cleanedSubject, boards || []);
+    console.log('[inbound] matched board:', matched?.title || 'NONE');
 
     // Insert the email
     const { error: insertErr } = await supabase
@@ -194,9 +229,10 @@ export async function POST(request: NextRequest) {
       }]);
 
     if (insertErr) {
-      console.error('Failed to insert email:', insertErr);
-      return NextResponse.json({ error: 'Failed to store email' }, { status: 500 });
+      console.error('[inbound] Failed to insert email:', insertErr);
+      return NextResponse.json({ error: 'Failed to store email', detail: insertErr.message }, { status: 500 });
     }
+    console.log('[inbound] email inserted successfully');
 
     // If unrouted, notify all users
     if (!matched) {
@@ -221,7 +257,7 @@ export async function POST(request: NextRequest) {
       board_id: matched?.id || null,
     });
   } catch (err: unknown) {
-    console.error('Email inbound error:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('[inbound] Unhandled error:', err);
+    return NextResponse.json({ error: 'Internal server error', detail: String(err) }, { status: 500 });
   }
 }
