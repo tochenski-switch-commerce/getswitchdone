@@ -196,7 +196,7 @@ export default function CardDetailModal({
     // Re-focus the editor first, then place caret after the space
     editorRef.current?.focus();
     const sel = window.getSelection();
-    if (sel) {
+    if (sel && editorRef.current?.contains(spaceAfter)) {
       const r = document.createRange();
       r.setStart(spaceAfter, 1);
       r.collapse(true);
