@@ -17,20 +17,27 @@ let currentToken: string | null = null;
 const listeners: string[] = [];
 
 export async function registerPushNotifications(userId: string) {
+  console.log('[PUSH] registerPushNotifications called, userId:', userId);
+  console.log('[PUSH] isNative:', isNative(), 'registered:', registered);
   if (!isNative() || registered) return;
 
   const push = getPlugin();
+  console.log('[PUSH] plugin:', push ? 'found' : 'NOT FOUND');
   if (!push) return;
 
   try {
     let permStatus = await push.checkPermissions();
+    console.log('[PUSH] permStatus:', JSON.stringify(permStatus));
     if (permStatus.receive === 'prompt') {
       permStatus = await push.requestPermissions();
+      console.log('[PUSH] after request:', JSON.stringify(permStatus));
     }
-    if (permStatus.receive !== 'granted') return;
+    if (permStatus.receive !== 'granted') { console.log('[PUSH] not granted, bailing'); return; }
 
+    console.log('[PUSH] registering listeners...');
     // Registration success
     const regListener = await push.addListener('registration', async (token: any) => {
+      console.log('[PUSH] got token:', token.value?.substring(0, 20) + '...');
       currentToken = token.value;
       await supabase.from('device_tokens').upsert(
         {
