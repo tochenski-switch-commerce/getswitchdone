@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
         priority: cardPriority,
         due_date: cardDueDate,
         assignee: cardAssignee,
+        assignees: cardAssignee ? [cardAssignee] : [],
         position: nextPosition,
         is_archived: false,
       }])

@@ -50,6 +50,7 @@ export interface BoardCard {
   start_date?: string;
   due_date?: string;
   assignee?: string;
+  assignees?: string[];
   created_by?: string;
   is_archived: boolean;
   created_at: string;

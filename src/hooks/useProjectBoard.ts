@@ -456,6 +456,7 @@ export function useProjectBoard() {
     start_date?: string;
     due_date?: string;
     assignee?: string;
+    assignees?: string[];
     label_ids?: string[];
   }) => {
     setError(null);

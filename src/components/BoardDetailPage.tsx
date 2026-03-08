@@ -246,7 +246,7 @@ function BoardPage() {
       cards = cards.filter(c =>
         c.title.toLowerCase().includes(q) ||
         c.description?.toLowerCase().includes(q) ||
-        c.assignee?.toLowerCase().includes(q) ||
+        (c.assignees || []).some(a => a.toLowerCase().includes(q)) ||
         (c.labels || []).some(l => l.name.toLowerCase().includes(q))
       );
     }
@@ -461,7 +461,8 @@ function BoardPage() {
           priority: card.priority,
           start_date: card.start_date || undefined,
           due_date: card.due_date || undefined,
-          assignee: card.assignee || undefined,
+          assignee: card.assignees?.[0] || card.assignee || undefined,
+          assignees: card.assignees || (card.assignee ? [card.assignee] : []),
           label_ids: (card.labels || []).map(l => l.id),
         }).then(newCard => {
           if (newCard && card.checklists?.length) {
@@ -482,8 +483,10 @@ function BoardPage() {
         e.preventDefault();
         const myName = profile?.name;
         if (myName) {
-          const newAssignee = card.assignee?.toLowerCase() === myName.toLowerCase() ? null : myName;
-          updateCard(boardId, card.id, { assignee: newAssignee });
+          const currentAssignees = card.assignees || (card.assignee ? [card.assignee] : []);
+          const isAssigned = currentAssignees.some(a => a.toLowerCase() === myName.toLowerCase());
+          const newAssignees = isAssigned ? currentAssignees.filter(a => a.toLowerCase() !== myName.toLowerCase()) : [...currentAssignees, myName];
+          updateCard(boardId, card.id, { assignee: newAssignees[0] || null, assignees: newAssignees });
         }
       } else if (e.key === 'Enter') {
         e.preventDefault();
@@ -1272,20 +1275,23 @@ function BoardPage() {
             window.history.replaceState({}, '', url.toString());
           }}
           onUpdate={async (updates) => {
-            const oldAssignee = activeCard.assignee;
-            const newAssignee = updates.assignee;
+            const oldAssignees = new Set((activeCard.assignees || (activeCard.assignee ? [activeCard.assignee] : [])).map(a => a.toLowerCase()));
+            const newAssignees: string[] = updates.assignees || [];
             await updateCard(boardId, activeCard.id, updates);
-            if (newAssignee && newAssignee !== oldAssignee) {
-              const target = userProfiles.find(p => p.name.toLowerCase() === newAssignee.toLowerCase());
-              if (target && target.id !== user?.id) {
-                await createNotification({
-                  user_id: target.id,
-                  board_id: boardId,
-                  card_id: activeCard.id,
-                  type: 'assignment',
-                  title: `You were assigned to "${activeCard.title}"`,
-                  body: `Assigned by ${userProfiles.find(p => p.id === user?.id)?.name || 'someone'}`,
-                });
+            // Notify newly added assignees
+            for (const name of newAssignees) {
+              if (!oldAssignees.has(name.toLowerCase())) {
+                const target = userProfiles.find(p => p.name.toLowerCase() === name.toLowerCase());
+                if (target && target.id !== user?.id) {
+                  await createNotification({
+                    user_id: target.id,
+                    board_id: boardId,
+                    card_id: activeCard.id,
+                    type: 'assignment',
+                    title: `You were assigned to "${activeCard.title}"`,
+                    body: `Assigned by ${userProfiles.find(p => p.id === user?.id)?.name || 'someone'}`,
+                  });
+                }
               }
             }
           }}
@@ -1316,9 +1322,11 @@ function BoardPage() {
               }
             }
 
-            if (activeCard.assignee) {
-              const target = userProfiles.find(p => p.name.toLowerCase() === activeCard.assignee!.toLowerCase());
+            const cardAssignees = activeCard.assignees || (activeCard.assignee ? [activeCard.assignee] : []);
+            for (const assigneeName of cardAssignees) {
+              const target = userProfiles.find(p => p.name.toLowerCase() === assigneeName.toLowerCase());
               if (target && target.id !== user?.id && !notifiedUserIds.has(target.id)) {
+                notifiedUserIds.add(target.id);
                 await createNotification({
                   user_id: target.id,
                   board_id: boardId,
@@ -1348,7 +1356,8 @@ function BoardPage() {
               priority: activeCard.priority,
               start_date: activeCard.start_date || undefined,
               due_date: activeCard.due_date || undefined,
-              assignee: activeCard.assignee || undefined,
+              assignee: activeCard.assignees?.[0] || activeCard.assignee || undefined,
+              assignees: activeCard.assignees || (activeCard.assignee ? [activeCard.assignee] : []),
               label_ids: (activeCard.labels || []).map(l => l.id),
             });
             if (newCard && activeCard.checklists?.length) {

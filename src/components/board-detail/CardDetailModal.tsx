@@ -71,7 +71,8 @@ export default function CardDetailModal({
   const [editPriority, setEditPriority] = useState<CardPriority | null>(card.priority);
   const [editStartDate, setEditStartDate] = useState(card.start_date || '');
   const [editDueDate, setEditDueDate] = useState(card.due_date || '');
-  const [editAssignee, setEditAssignee] = useState(card.assignee || '');
+  const [editAssignees, setEditAssignees] = useState<string[]>(card.assignees?.length ? card.assignees : card.assignee ? [card.assignee] : []);
+  const [showAssigneePicker, setShowAssigneePicker] = useState(false);
   const [editLabels, setEditLabels] = useState<string[]>((card.labels || []).map(l => l.id));
   const [commentText, setCommentText] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -154,7 +155,8 @@ export default function CardDetailModal({
         priority: editPriority || null,
         start_date: editStartDate || null,
         due_date: editDueDate || null,
-        assignee: editAssignee || null,
+        assignee: editAssignees.length > 0 ? editAssignees[0] : null,
+        assignees: editAssignees,
         label_ids: editLabels,
       });
       setSaving(false);
@@ -667,19 +669,48 @@ export default function CardDetailModal({
               </select>
             </div>
 
-            {/* Assignee */}
+            {/* Assignees */}
             <div className="kb-form-group">
-              <div className="kb-detail-section-label"><User size={13} /> Assignee</div>
-              <select
-                className="kb-input"
-                value={editAssignee}
-                onChange={e => setEditAssignee(e.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {userProfiles.filter(p => p.name).map(p => (
-                  <option key={p.id} value={p.name}>@{p.name}</option>
+              <div className="kb-detail-section-label">
+                <User size={13} /> Assignees
+                <button className="kb-btn-icon-sm" onClick={() => setShowAssigneePicker(!showAssigneePicker)}>
+                  {showAssigneePicker ? <X size={12} /> : <Plus size={12} />}
+                </button>
+              </div>
+              <div className="kb-label-chips">
+                {editAssignees.map(name => (
+                  <span key={name} className="kb-label-chip" style={{ background: '#3b82f622', color: '#3b82f6', borderColor: '#3b82f644' }}>
+                    @{name}
+                    <button onClick={() => setEditAssignees(prev => prev.filter(n => n !== name))} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, marginLeft: 4 }}>
+                      <X size={10} />
+                    </button>
+                  </span>
                 ))}
-              </select>
+                {editAssignees.length === 0 && <span style={{ color: '#888', fontSize: 12 }}>Unassigned</span>}
+              </div>
+              {showAssigneePicker && (
+                <div className="kb-label-picker">
+                  {userProfiles.filter(p => p.name).map(p => {
+                    const isSelected = editAssignees.includes(p.name);
+                    return (
+                      <button
+                        key={p.id}
+                        className={`kb-label-picker-item ${isSelected ? 'selected' : ''}`}
+                        onClick={() => {
+                          setEditAssignees(prev =>
+                            isSelected ? prev.filter(n => n !== p.name) : [...prev, p.name]
+                          );
+                        }}
+                        style={{ '--label-color': '#3b82f6' } as any}
+                      >
+                        <span className="kb-label-dot" style={{ background: '#3b82f6' }} />
+                        @{p.name}
+                        {isSelected && <Check size={12} style={{ marginLeft: 'auto', color: '#3b82f6' }} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Dates */}

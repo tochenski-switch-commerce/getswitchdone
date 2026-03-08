@@ -107,11 +107,13 @@ export default function KanbanCard({
         </span>
       </div>
 
-      {/* Assignee */}
-      {card.assignee && (
+      {/* Assignees */}
+      {((card.assignees && card.assignees.length > 0) || card.assignee) && (
         <div className="kb-card-assignee">
           <User size={10} />
-          @{card.assignee}
+          {(card.assignees && card.assignees.length > 0 ? card.assignees : card.assignee ? [card.assignee] : []).map((name, i) => (
+            <span key={name}>{i > 0 && ', '}@{name}</span>
+          ))}
         </div>
       )}
     </div>
