@@ -1505,6 +1505,58 @@ export const kanbanStyles = `
   }
   .kb-comment-add { display: flex; flex-direction: column; }
 
+  /* ── @Mention Dropdown ── */
+  .kb-mention-dropdown {
+    position: absolute;
+    z-index: 100;
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    max-height: 180px;
+    overflow-y: auto;
+    min-width: 180px;
+    max-width: 260px;
+    padding: 4px;
+  }
+  .kb-mention-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: #d1d5db;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s ease;
+  }
+  .kb-mention-option:hover,
+  .kb-mention-option-active {
+    background: #2563eb;
+    color: #fff;
+  }
+  .kb-mention-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #374151;
+    color: #a5b4fc;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .kb-mention-option-active .kb-mention-avatar {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+  }
+
   /* ── Label Manager ── */
   .kb-lm-modal {
     background: #1a1d27 !important;

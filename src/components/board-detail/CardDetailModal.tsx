@@ -98,6 +98,127 @@ export default function CardDetailModal({
   const commentAddRef = useRef<HTMLDivElement>(null);
   const commentEditRef = useRef<HTMLDivElement>(null);
 
+  // @mention state
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionActive, setMentionActive] = useState(false);
+  const [mentionPos, setMentionPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionEditorRef = useRef<'add' | 'edit'>('add');
+  const mentionDropdownRef = useRef<HTMLDivElement>(null);
+
+  const mentionUsers = userProfiles.filter(p => p.name && p.name.toLowerCase().includes(mentionQuery.toLowerCase()));
+
+  const getMentionContext = useCallback((editorRef: React.RefObject<HTMLDivElement | null>) => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !editorRef.current) return null;
+    const range = sel.getRangeAt(0);
+    if (!editorRef.current.contains(range.startContainer)) return null;
+    const textNode = range.startContainer;
+    if (textNode.nodeType !== Node.TEXT_NODE) return null;
+    const text = textNode.textContent || '';
+    const offset = range.startOffset;
+    const beforeCursor = text.slice(0, offset);
+    const atIdx = beforeCursor.lastIndexOf('@');
+    if (atIdx === -1) return null;
+    // Make sure there's no space between @ and cursor (allow empty query right after @)
+    const query = beforeCursor.slice(atIdx + 1);
+    if (/\s/.test(query)) return null;
+    return { textNode, atIdx, query, offset };
+  }, []);
+
+  const handleMentionInput = useCallback((editorRef: React.RefObject<HTMLDivElement | null>, source: 'add' | 'edit') => {
+    const ctx = getMentionContext(editorRef);
+    if (ctx) {
+      mentionEditorRef.current = source;
+      setMentionQuery(ctx.query);
+      setMentionIndex(0);
+      // Position dropdown near the caret
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const r = sel.getRangeAt(0);
+        const rect = r.getBoundingClientRect();
+        const editorRect = editorRef.current!.getBoundingClientRect();
+        setMentionPos({
+          top: rect.bottom - editorRect.top + 4,
+          left: rect.left - editorRect.left,
+        });
+      }
+      setMentionActive(true);
+    } else {
+      setMentionActive(false);
+    }
+  }, [getMentionContext]);
+
+  const insertMention = useCallback((user: UserProfile) => {
+    const editorRef = mentionEditorRef.current === 'add' ? commentAddRef : commentEditRef;
+    const ctx = getMentionContext(editorRef);
+    if (!ctx) { setMentionActive(false); return; }
+    const { textNode, atIdx, offset } = ctx;
+    const text = textNode.textContent || '';
+    // Split text node: before @, mention span, after cursor
+    const before = text.slice(0, atIdx);
+    const after = text.slice(offset);
+    const parent = textNode.parentNode!;
+    // Create mention span
+    const mention = document.createElement('span');
+    mention.className = 'kb-mention';
+    mention.contentEditable = 'false';
+    mention.dataset.userId = user.id;
+    mention.textContent = `@${user.name}`;
+    // Build replacement nodes
+    const beforeNode = document.createTextNode(before);
+    const spaceAfter = document.createTextNode('\u00A0' + after);
+    parent.insertBefore(beforeNode, textNode);
+    parent.insertBefore(mention, textNode);
+    parent.insertBefore(spaceAfter, textNode);
+    parent.removeChild(textNode);
+    // Place caret after the space
+    const sel = window.getSelection();
+    if (sel) {
+      const r = document.createRange();
+      r.setStart(spaceAfter, 1);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    setMentionActive(false);
+    // Trigger state update
+    if (editorRef.current) {
+      const html = editorRef.current.innerHTML;
+      if (mentionEditorRef.current === 'add') setCommentText(html);
+      else setEditingCommentText(html);
+    }
+  }, [getMentionContext]);
+
+  const handleMentionKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!mentionActive || mentionUsers.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setMentionIndex(i => (i + 1) % mentionUsers.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMentionIndex(i => (i - 1 + mentionUsers.length) % mentionUsers.length);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      insertMention(mentionUsers[mentionIndex]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setMentionActive(false);
+    }
+  }, [mentionActive, mentionUsers, mentionIndex, insertMention]);
+
+  // Close mention dropdown on outside click
+  useEffect(() => {
+    if (!mentionActive) return;
+    const handler = (e: MouseEvent) => {
+      if (mentionDropdownRef.current && !mentionDropdownRef.current.contains(e.target as Node)) {
+        setMentionActive(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [mentionActive]);
+
   useEffect(() => {
     if (editingDesc && descRef.current) {
       const html = editDesc;
@@ -638,17 +759,36 @@ export default function CardDetailModal({
                             <div className="kb-rt-tool-sep" />
                             <button className="kb-rt-tool-btn" onMouseDown={e => { e.preventDefault(); insertLink(commentEditRef); }} title="Insert link"><LinkIcon size={12} /></button>
                           </div>
-                          <div
-                            ref={commentEditRef}
-                            className="kb-rt-editable kb-rt-editable-sm"
-                            contentEditable
-                            suppressContentEditableWarning
-                            onInput={() => {
-                              if (commentEditRef.current) setEditingCommentText(commentEditRef.current.innerHTML);
-                            }}
-                            onClick={handleClickLink}
-                            data-placeholder="Edit comment..."
-                          />
+                          <div style={{ position: 'relative' }}>
+                            <div
+                              ref={commentEditRef}
+                              className="kb-rt-editable kb-rt-editable-sm"
+                              contentEditable
+                              suppressContentEditableWarning
+                              onInput={() => {
+                                if (commentEditRef.current) setEditingCommentText(commentEditRef.current.innerHTML);
+                                handleMentionInput(commentEditRef, 'edit');
+                              }}
+                              onKeyDown={handleMentionKeyDown}
+                              onClick={handleClickLink}
+                              data-placeholder="Edit comment..."
+                            />
+                            {mentionActive && mentionEditorRef.current === 'edit' && mentionUsers.length > 0 && (
+                              <div ref={mentionDropdownRef} className="kb-mention-dropdown" style={{ top: mentionPos.top, left: mentionPos.left }}>
+                                {mentionUsers.map((u, i) => (
+                                  <button
+                                    key={u.id}
+                                    className={`kb-mention-option${i === mentionIndex ? ' kb-mention-option-active' : ''}`}
+                                    onMouseDown={e => { e.preventDefault(); insertMention(u); }}
+                                    onMouseEnter={() => setMentionIndex(i)}
+                                  >
+                                    <span className="kb-mention-avatar">{u.name.charAt(0).toUpperCase()}</span>
+                                    <span>{u.name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div className="kb-comment-edit-actions">
                           <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={async () => { const html = commentEditRef.current?.innerHTML || ''; await onEditComment(comment.id, html); setEditingCommentId(null); }} disabled={!editingCommentText || editingCommentText === '<br>'}>Save</button>
@@ -674,17 +814,36 @@ export default function CardDetailModal({
                     <div className="kb-rt-tool-sep" />
                     <button className="kb-rt-tool-btn" onMouseDown={e => { e.preventDefault(); insertLink(commentAddRef); }} title="Insert link"><LinkIcon size={12} /></button>
                   </div>
-                  <div
-                    ref={commentAddRef}
-                    className="kb-rt-editable kb-rt-editable-sm"
-                    contentEditable
-                    suppressContentEditableWarning
-                    onInput={() => {
-                      if (commentAddRef.current) setCommentText(commentAddRef.current.innerHTML);
-                    }}
-                    onClick={handleClickLink}
-                    data-placeholder="Write a comment..."
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <div
+                      ref={commentAddRef}
+                      className="kb-rt-editable kb-rt-editable-sm"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onInput={() => {
+                        if (commentAddRef.current) setCommentText(commentAddRef.current.innerHTML);
+                        handleMentionInput(commentAddRef, 'add');
+                      }}
+                      onKeyDown={handleMentionKeyDown}
+                      onClick={handleClickLink}
+                      data-placeholder="Write a comment..."
+                    />
+                    {mentionActive && mentionEditorRef.current === 'add' && mentionUsers.length > 0 && (
+                      <div ref={mentionDropdownRef} className="kb-mention-dropdown" style={{ top: mentionPos.top, left: mentionPos.left }}>
+                        {mentionUsers.map((u, i) => (
+                          <button
+                            key={u.id}
+                            className={`kb-mention-option${i === mentionIndex ? ' kb-mention-option-active' : ''}`}
+                            onMouseDown={e => { e.preventDefault(); insertMention(u); }}
+                            onMouseEnter={() => setMentionIndex(i)}
+                          >
+                            <span className="kb-mention-avatar">{u.name.charAt(0).toUpperCase()}</span>
+                            <span>{u.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={handleAddComment} disabled={!commentText || commentText === '<br>'} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
                   Comment
