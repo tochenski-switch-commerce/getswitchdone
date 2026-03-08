@@ -82,8 +82,15 @@ export default function CardDetailModal({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isFirstRender = useRef(true);
-  const pendingChangesRef = useRef(false);
+  const lastSavedRef = useRef({
+    title: card.title,
+    description: card.description || '',
+    priority: card.priority,
+    start_date: card.start_date || '',
+    due_date: card.due_date || '',
+    assignees: (card.assignees?.length ? card.assignees : card.assignee ? [card.assignee] : []) as string[],
+    label_ids: (card.labels || []).map(l => l.id) as string[],
+  });
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -132,15 +139,14 @@ export default function CardDetailModal({
       mentionEditorRef.current = source;
       setMentionQuery(ctx.query);
       setMentionIndex(0);
-      // Position dropdown near the caret
+      // Position dropdown near the caret using fixed viewport coordinates
       const sel = window.getSelection();
       if (sel && sel.rangeCount) {
         const r = sel.getRangeAt(0);
         const rect = r.getBoundingClientRect();
-        const editorRect = editorRef.current!.getBoundingClientRect();
         setMentionPos({
-          top: rect.bottom - editorRect.top + 4,
-          left: rect.left - editorRect.left,
+          top: rect.bottom + 4,
+          left: rect.left,
         });
       }
       setMentionActive(true);
@@ -263,13 +269,27 @@ export default function CardDetailModal({
     }
   }, []);
 
+  const getIsDirty = useCallback(() => {
+    const last = lastSavedRef.current;
+    const descHtml = descRef.current?.innerHTML || editDesc;
+    const currentDesc = editingDesc ? descHtml : editDesc;
+    if (editTitle !== last.title) return true;
+    if (currentDesc !== last.description) return true;
+    if ((editPriority || null) !== (last.priority || null)) return true;
+    if (editStartDate !== last.start_date) return true;
+    if (editDueDate !== last.due_date) return true;
+    if (editAssignees.length !== last.assignees.length || editAssignees.some((a, i) => a !== last.assignees[i])) return true;
+    if (editLabels.length !== last.label_ids.length || editLabels.some((l, i) => l !== last.label_ids[i])) return true;
+    return false;
+  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editAssignees, editLabels, editingDesc]);
+
   const doSave = useCallback(async () => {
-    if (!editTitle.trim()) return;
+    if (!editTitle.trim() || !getIsDirty()) return;
     setSaveError(null);
     setAutoSaveStatus('saving');
     try {
       const descHtml = descRef.current?.innerHTML || editDesc;
-      await onUpdate({
+      const updates = {
         title: editTitle,
         description: editingDesc ? descHtml : editDesc,
         priority: editPriority || null,
@@ -278,8 +298,17 @@ export default function CardDetailModal({
         assignee: editAssignees.length > 0 ? editAssignees[0] : null,
         assignees: editAssignees,
         label_ids: editLabels,
-      });
-      pendingChangesRef.current = false;
+      };
+      await onUpdate(updates);
+      lastSavedRef.current = {
+        title: editTitle,
+        description: editingDesc ? descHtml : editDesc,
+        priority: editPriority,
+        start_date: editStartDate,
+        due_date: editDueDate,
+        assignees: [...editAssignees],
+        label_ids: [...editLabels],
+      };
       setAutoSaveStatus('saved');
       setTimeout(() => setAutoSaveStatus(s => s === 'saved' ? 'idle' : s), 2000);
     } catch (err: any) {
@@ -287,15 +316,10 @@ export default function CardDetailModal({
       setAutoSaveStatus('idle');
       setSaveError(err.message || 'Failed to save card. Please try again.');
     }
-  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editAssignees, editLabels, editingDesc, onUpdate]);
+  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editAssignees, editLabels, editingDesc, onUpdate, getIsDirty]);
 
   // Debounced auto-save
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    pendingChangesRef.current = true;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
       doSave();
@@ -305,7 +329,7 @@ export default function CardDetailModal({
     };
   }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editAssignees, editLabels, doSave]);
 
-  // Flush auto-save on unmount
+  // Cleanup timer on unmount
   useEffect(() => {
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
@@ -363,9 +387,7 @@ export default function CardDetailModal({
               clearTimeout(autoSaveTimerRef.current);
               autoSaveTimerRef.current = null;
             }
-            if (pendingChangesRef.current) {
-              await doSave();
-            }
+            await doSave();
             onClose();
           }}>
       <div className="kb-detail-modal" onMouseDown={e => e.stopPropagation()}>
@@ -388,9 +410,7 @@ export default function CardDetailModal({
               clearTimeout(autoSaveTimerRef.current);
               autoSaveTimerRef.current = null;
             }
-            if (pendingChangesRef.current) {
-              await doSave();
-            }
+            await doSave();
             onClose();
           }}><X size={18} /></button>
         </div>
@@ -759,36 +779,19 @@ export default function CardDetailModal({
                             <div className="kb-rt-tool-sep" />
                             <button className="kb-rt-tool-btn" onMouseDown={e => { e.preventDefault(); insertLink(commentEditRef); }} title="Insert link"><LinkIcon size={12} /></button>
                           </div>
-                          <div style={{ position: 'relative' }}>
-                            <div
-                              ref={commentEditRef}
-                              className="kb-rt-editable kb-rt-editable-sm"
-                              contentEditable
-                              suppressContentEditableWarning
-                              onInput={() => {
-                                if (commentEditRef.current) setEditingCommentText(commentEditRef.current.innerHTML);
-                                handleMentionInput(commentEditRef, 'edit');
-                              }}
-                              onKeyDown={handleMentionKeyDown}
-                              onClick={handleClickLink}
-                              data-placeholder="Edit comment..."
-                            />
-                            {mentionActive && mentionEditorRef.current === 'edit' && mentionUsers.length > 0 && (
-                              <div ref={mentionDropdownRef} className="kb-mention-dropdown" style={{ top: mentionPos.top, left: mentionPos.left }}>
-                                {mentionUsers.map((u, i) => (
-                                  <button
-                                    key={u.id}
-                                    className={`kb-mention-option${i === mentionIndex ? ' kb-mention-option-active' : ''}`}
-                                    onMouseDown={e => { e.preventDefault(); insertMention(u); }}
-                                    onMouseEnter={() => setMentionIndex(i)}
-                                  >
-                                    <span className="kb-mention-avatar">{u.name.charAt(0).toUpperCase()}</span>
-                                    <span>{u.name}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                          <div
+                            ref={commentEditRef}
+                            className="kb-rt-editable kb-rt-editable-sm"
+                            contentEditable
+                            suppressContentEditableWarning
+                            onInput={() => {
+                              if (commentEditRef.current) setEditingCommentText(commentEditRef.current.innerHTML);
+                              handleMentionInput(commentEditRef, 'edit');
+                            }}
+                            onKeyDown={handleMentionKeyDown}
+                            onClick={handleClickLink}
+                            data-placeholder="Edit comment..."
+                          />
                         </div>
                         <div className="kb-comment-edit-actions">
                           <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={async () => { const html = commentEditRef.current?.innerHTML || ''; await onEditComment(comment.id, html); setEditingCommentId(null); }} disabled={!editingCommentText || editingCommentText === '<br>'}>Save</button>
@@ -814,41 +817,39 @@ export default function CardDetailModal({
                     <div className="kb-rt-tool-sep" />
                     <button className="kb-rt-tool-btn" onMouseDown={e => { e.preventDefault(); insertLink(commentAddRef); }} title="Insert link"><LinkIcon size={12} /></button>
                   </div>
-                  <div style={{ position: 'relative' }}>
-                    <div
-                      ref={commentAddRef}
-                      className="kb-rt-editable kb-rt-editable-sm"
-                      contentEditable
-                      suppressContentEditableWarning
-                      onInput={() => {
-                        if (commentAddRef.current) setCommentText(commentAddRef.current.innerHTML);
-                        handleMentionInput(commentAddRef, 'add');
-                      }}
-                      onKeyDown={handleMentionKeyDown}
-                      onClick={handleClickLink}
-                      data-placeholder="Write a comment..."
-                    />
-                    {mentionActive && mentionEditorRef.current === 'add' && mentionUsers.length > 0 && (
-                      <div ref={mentionDropdownRef} className="kb-mention-dropdown" style={{ top: mentionPos.top, left: mentionPos.left }}>
-                        {mentionUsers.map((u, i) => (
-                          <button
-                            key={u.id}
-                            className={`kb-mention-option${i === mentionIndex ? ' kb-mention-option-active' : ''}`}
-                            onMouseDown={e => { e.preventDefault(); insertMention(u); }}
-                            onMouseEnter={() => setMentionIndex(i)}
-                          >
-                            <span className="kb-mention-avatar">{u.name.charAt(0).toUpperCase()}</span>
-                            <span>{u.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <div
+                    ref={commentAddRef}
+                    className="kb-rt-editable kb-rt-editable-sm"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={() => {
+                      if (commentAddRef.current) setCommentText(commentAddRef.current.innerHTML);
+                      handleMentionInput(commentAddRef, 'add');
+                    }}
+                    onKeyDown={handleMentionKeyDown}
+                    onClick={handleClickLink}
+                    data-placeholder="Write a comment..."
+                  />
                 </div>
                 <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={handleAddComment} disabled={!commentText || commentText === '<br>'} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
                   Comment
                 </button>
               </div>
+              {mentionActive && mentionUsers.length > 0 && (
+                <div ref={mentionDropdownRef} className="kb-mention-dropdown" style={{ top: mentionPos.top, left: mentionPos.left }}>
+                  {mentionUsers.map((u, i) => (
+                    <button
+                      key={u.id}
+                      className={`kb-mention-option${i === mentionIndex ? ' kb-mention-option-active' : ''}`}
+                      onMouseDown={e => { e.preventDefault(); insertMention(u); }}
+                      onMouseEnter={() => setMentionIndex(i)}
+                    >
+                      <span className="kb-mention-avatar">{u.name.charAt(0).toUpperCase()}</span>
+                      <span>{u.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

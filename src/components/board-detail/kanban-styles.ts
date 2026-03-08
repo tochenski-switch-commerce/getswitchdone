@@ -1507,8 +1507,8 @@ export const kanbanStyles = `
 
   /* ── @Mention Dropdown ── */
   .kb-mention-dropdown {
-    position: absolute;
-    z-index: 100;
+    position: fixed;
+    z-index: 9999;
     background: #1a1d27;
     border: 1px solid #2a2d3a;
     border-radius: 10px;
