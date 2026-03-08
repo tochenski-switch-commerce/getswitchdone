@@ -178,12 +178,12 @@ export function useProjectBoard() {
       if (cardIds.length > 0) {
         // Indices 1-6: card-scoped queries
         phase2.push(
-          supabase.from('card_comments').select('*').in('card_id', cardIds).order('created_at', { ascending: true }),
-          supabase.from('card_checklists').select('*').in('card_id', cardIds).order('position'),
-          supabase.from('card_label_assignments').select('*').in('card_id', cardIds),
-          supabase.from('card_custom_field_values').select('*').in('card_id', cardIds),
-          supabase.from('card_links').select('*, target_card:board_cards!target_card_id(id, title, board_id, column_id, is_archived)').in('source_card_id', cardIds),
-          supabase.from('card_links').select('*, source_card:board_cards!source_card_id(id, title, board_id, column_id, is_archived)').in('target_card_id', cardIds),
+          Promise.resolve(supabase.from('card_comments').select('*').in('card_id', cardIds).order('created_at', { ascending: true })),
+          Promise.resolve(supabase.from('card_checklists').select('*').in('card_id', cardIds).order('position')),
+          Promise.resolve(supabase.from('card_label_assignments').select('*').in('card_id', cardIds)),
+          Promise.resolve(supabase.from('card_custom_field_values').select('*').in('card_id', cardIds)),
+          Promise.resolve(supabase.from('card_links').select('*, target_card:board_cards!target_card_id(id, title, board_id, column_id, is_archived)').in('source_card_id', cardIds)),
+          Promise.resolve(supabase.from('card_links').select('*, source_card:board_cards!source_card_id(id, title, board_id, column_id, is_archived)').in('target_card_id', cardIds)),
         );
       }
 
