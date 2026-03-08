@@ -1503,11 +1503,10 @@ export const kanbanStyles = `
     margin: 4px 0;
     padding-left: 20px;
   }
-  .kb-comment-add { display: flex; flex-direction: column; }
+  .kb-comment-add { display: flex; flex-direction: column; position: relative; }
 
   /* ── @Mention Dropdown ── */
   .kb-mention-dropdown {
-    position: fixed;
     z-index: 9999;
     background: #1a1d27;
     border: 1px solid #2a2d3a;

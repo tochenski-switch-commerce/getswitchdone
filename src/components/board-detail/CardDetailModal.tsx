@@ -108,7 +108,6 @@ export default function CardDetailModal({
   // @mention state
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionActive, setMentionActive] = useState(false);
-  const [mentionPos, setMentionPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionEditorRef = useRef<'add' | 'edit'>('add');
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
@@ -164,16 +163,6 @@ export default function CardDetailModal({
         mentionEditorRef.current = source;
         setMentionQuery(ctx.query);
         setMentionIndex(0);
-        // Position dropdown near the caret using fixed viewport coordinates
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount) {
-          const r = sel.getRangeAt(0);
-          const rect = r.getBoundingClientRect();
-          setMentionPos({
-            top: rect.bottom + 4,
-            left: rect.left,
-          });
-        }
         setMentionActive(true);
       } else {
         setMentionActive(false);
@@ -857,12 +846,28 @@ export default function CardDetailModal({
                     data-placeholder="Write a comment..."
                   />
                 </div>
+                {mentionActive && mentionEditorRef.current === 'add' && mentionUsers.length > 0 && (
+                  <div ref={mentionDropdownRef} className="kb-mention-dropdown">
+                    {mentionUsers.map((u, i) => (
+                      <button
+                        key={u.id}
+                        className={`kb-mention-option${i === mentionIndex ? ' kb-mention-option-active' : ''}`}
+                        onMouseDown={e => { e.preventDefault(); insertMention(u); }}
+                        onMouseEnter={() => setMentionIndex(i)}
+                      >
+                        <span className="kb-mention-avatar">{u.name.charAt(0).toUpperCase()}</span>
+                        <span>{u.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={handleAddComment} disabled={!commentText || commentText === '<br>'} style={{ marginTop: 8, alignSelf: 'flex-end' }}>
                   Comment
                 </button>
               </div>
-              {mentionActive && mentionUsers.length > 0 && (
-                <div ref={mentionDropdownRef} className="kb-mention-dropdown" style={{ top: mentionPos.top, left: mentionPos.left }}>
+              {/* Edit comment mention dropdown rendered separately */}
+              {mentionActive && mentionEditorRef.current === 'edit' && mentionUsers.length > 0 && (
+                <div ref={mentionDropdownRef} className="kb-mention-dropdown kb-mention-dropdown-edit">
                   {mentionUsers.map((u, i) => (
                     <button
                       key={u.id}
