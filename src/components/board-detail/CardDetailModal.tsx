@@ -213,19 +213,77 @@ export default function CardDetailModal({
   }, [getMentionContext]);
 
   const handleMentionKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!mentionActive || mentionUsers.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setMentionIndex(i => (i + 1) % mentionUsers.length);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setMentionIndex(i => (i - 1 + mentionUsers.length) % mentionUsers.length);
-    } else if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault();
-      insertMention(mentionUsers[mentionIndex]);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      setMentionActive(false);
+    // Handle mention autocomplete navigation
+    if (mentionActive && mentionUsers.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex(i => (i + 1) % mentionUsers.length);
+        return;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex(i => (i - 1 + mentionUsers.length) % mentionUsers.length);
+        return;
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(mentionUsers[mentionIndex]);
+        return;
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionActive(false);
+        return;
+      }
+    }
+
+    // Handle deleting mention spans with Backspace/Delete
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      const sel = window.getSelection();
+      if (!sel || !sel.isCollapsed || !sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      const node = range.startContainer;
+      const offset = range.startOffset;
+
+      let mentionToRemove: Element | null = null;
+
+      if (e.key === 'Backspace') {
+        if (node.nodeType === Node.TEXT_NODE && offset === 0) {
+          // Caret at start of text node — check previous sibling
+          const prev = node.previousSibling as Element | null;
+          if (prev && prev.nodeType === Node.ELEMENT_NODE && prev.classList?.contains('kb-mention')) {
+            mentionToRemove = prev;
+          }
+        } else if (node.nodeType === Node.ELEMENT_NODE && offset > 0) {
+          // Caret between child nodes — check the child before
+          const prev = node.childNodes[offset - 1] as Element | null;
+          if (prev && prev.nodeType === Node.ELEMENT_NODE && prev.classList?.contains('kb-mention')) {
+            mentionToRemove = prev;
+          }
+        }
+      } else {
+        // Delete key
+        if (node.nodeType === Node.TEXT_NODE && offset === (node.textContent || '').length) {
+          const next = node.nextSibling as Element | null;
+          if (next && next.nodeType === Node.ELEMENT_NODE && next.classList?.contains('kb-mention')) {
+            mentionToRemove = next;
+          }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          const next = node.childNodes[offset] as Element | null;
+          if (next && next.nodeType === Node.ELEMENT_NODE && next.classList?.contains('kb-mention')) {
+            mentionToRemove = next;
+          }
+        }
+      }
+
+      if (mentionToRemove) {
+        e.preventDefault();
+        mentionToRemove.remove();
+        // Trigger state update
+        const editorEl = (e.target as HTMLElement).closest('.kb-rt-editable, .kb-rt-editable-sm') as HTMLElement | null;
+        if (editorEl) {
+          const html = editorEl.innerHTML;
+          if (editorEl === commentAddRef.current) setCommentText(html);
+          else if (editorEl === commentEditRef.current) setEditingCommentText(html);
+        }
+      }
     }
   }, [mentionActive, mentionUsers, mentionIndex, insertMention]);
 
