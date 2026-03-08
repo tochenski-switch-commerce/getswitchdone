@@ -50,6 +50,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         completionHandler(true)
     }
 
+    // Forward APNs token to Capacitor push plugin
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
 }
 
 // MARK: - Native Biometric Plugin (Face ID / Touch ID)
