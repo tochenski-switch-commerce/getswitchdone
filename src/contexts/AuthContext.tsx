@@ -3,7 +3,8 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAuthorizedEmail } from '@/lib/authorized-users';
-import { registerPushNotifications, unregisterPushNotifications } from '@/lib/push-notifications';
+// TODO: Re-enable after Apple Developer push notification approval
+// import { registerPushNotifications, unregisterPushNotifications } from '@/lib/push-notifications';
 import type { User, Session } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types/board-types';
 
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id);
-        registerPushNotifications(session.user.id);
+        // registerPushNotifications(session.user.id);  // TODO: re-enable after Apple approval
       } else {
         setProfile(null);
       }
@@ -83,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    if (user) await unregisterPushNotifications(user.id);
+    // if (user) await unregisterPushNotifications(user.id);  // TODO: re-enable after Apple approval
     await supabase.auth.signOut();
   };
 

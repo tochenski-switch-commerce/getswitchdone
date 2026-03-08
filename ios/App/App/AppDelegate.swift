@@ -1,7 +1,8 @@
 import UIKit
 import Capacitor
 import LocalAuthentication
-import UserNotifications
+// TODO: Re-enable after Apple Developer push notification approval
+// import UserNotifications
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -10,35 +11,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private var pluginsRegistered = false
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Set notification delegate for foreground display
-        UNUserNotificationCenter.current().delegate = self
+        // TODO: Re-enable after Apple Developer push notification approval
+        // UNUserNotificationCenter.current().delegate = self
         return true
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Clear app icon badge when user opens the app
-        application.applicationIconBadgeNumber = 0
-
         if !pluginsRegistered, let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge {
             bridge.registerPluginInstance(NativeBiometric())
             bridge.registerPluginInstance(BadgeManager())
             pluginsRegistered = true
         }
-    }
-
-    // Forward APNs token to Capacitor PushNotifications plugin
-    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        NotificationCenter.default.post(
-            name: .capacitorDidRegisterForRemoteNotifications,
-            object: deviceToken
-        )
-    }
-
-    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        NotificationCenter.default.post(
-            name: .capacitorDidFailToRegisterForRemoteNotifications,
-            object: error
-        )
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
@@ -156,14 +139,13 @@ public class BadgeManager: CAPPlugin, CAPBridgedPlugin {
 }
 
 // MARK: - Show push notifications in foreground
-
-extension AppDelegate: UNUserNotificationCenterDelegate {
-    func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        // Show banner + sound + badge even when app is in foreground
-        completionHandler([.banner, .sound, .badge])
-    }
-}
+// TODO: Re-enable after Apple Developer push notification approval
+// extension AppDelegate: UNUserNotificationCenterDelegate {
+//     func userNotificationCenter(
+//         _ center: UNUserNotificationCenter,
+//         willPresent notification: UNNotification,
+//         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+//     ) {
+//         completionHandler([.banner, .sound, .badge])
+//     }
+// }
