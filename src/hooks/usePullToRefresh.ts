@@ -33,49 +33,55 @@ export function usePullToRefresh(onRefresh: () => Promise<void>) {
   useEffect(() => {
     if (!isNative()) return;
 
-    const onTouchStart = (e: TouchEvent) => {
-      // Only activate when scrolled to top
-      const scrollTop = window.scrollY || document.documentElement.scrollTop;
-      if (scrollTop <= 0 && !refreshing) {
-        startY.current = e.touches[0].clientY;
-        isPulling.current = true;
-      }
-    };
+    let onTouchStart: ((e: TouchEvent) => void) | null = null;
+    let onTouchMove: ((e: TouchEvent) => void) | null = null;
+    let onTouchEnd: (() => void) | null = null;
 
-    const onTouchMove = (e: TouchEvent) => {
-      if (!isPulling.current || refreshing) return;
-      const currentY = e.touches[0].clientY;
-      const diff = currentY - startY.current;
-      if (diff > 0) {
-        // Apply resistance — pull distance is dampened
-        const distance = Math.min(diff * 0.5, 120);
-        setPullDistance(distance);
-        setPulling(true);
-      } else {
-        setPullDistance(0);
-        setPulling(false);
-      }
-    };
+    try {
+      onTouchStart = (e: TouchEvent) => {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        if (scrollTop <= 0 && !refreshing) {
+          startY.current = e.touches[0].clientY;
+          isPulling.current = true;
+        }
+      };
 
-    const onTouchEnd = () => {
-      if (!isPulling.current) return;
-      isPulling.current = false;
-      if (pullDistance >= THRESHOLD && !refreshing) {
-        handleRefresh();
-      } else {
-        setPullDistance(0);
-        setPulling(false);
-      }
-    };
+      onTouchMove = (e: TouchEvent) => {
+        if (!isPulling.current || refreshing) return;
+        const currentY = e.touches[0].clientY;
+        const diff = currentY - startY.current;
+        if (diff > 0) {
+          const distance = Math.min(diff * 0.5, 120);
+          setPullDistance(distance);
+          setPulling(true);
+        } else {
+          setPullDistance(0);
+          setPulling(false);
+        }
+      };
 
-    window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
-    window.addEventListener('touchend', onTouchEnd, { passive: true });
+      onTouchEnd = () => {
+        if (!isPulling.current) return;
+        isPulling.current = false;
+        if (pullDistance >= THRESHOLD && !refreshing) {
+          handleRefresh();
+        } else {
+          setPullDistance(0);
+          setPulling(false);
+        }
+      };
+
+      window.addEventListener('touchstart', onTouchStart, { passive: true });
+      window.addEventListener('touchmove', onTouchMove, { passive: true });
+      window.addEventListener('touchend', onTouchEnd, { passive: true });
+    } catch { /* ignore */ }
 
     return () => {
-      window.removeEventListener('touchstart', onTouchStart);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
+      try {
+        if (onTouchStart) window.removeEventListener('touchstart', onTouchStart);
+        if (onTouchMove) window.removeEventListener('touchmove', onTouchMove);
+        if (onTouchEnd) window.removeEventListener('touchend', onTouchEnd);
+      } catch { /* ignore */ }
     };
   }, [pullDistance, refreshing, handleRefresh]);
 

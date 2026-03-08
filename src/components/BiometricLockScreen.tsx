@@ -28,34 +28,44 @@ export default function BiometricLockScreen() {
   useEffect(() => {
     if (!isNative()) return;
 
-    // Lock on app resume (foreground)
-    const handleResume = async () => {
-      const available = await isBiometricAvailable();
-      if (available && isBiometricLockEnabled()) {
-        setLocked(true);
-        // Small delay to let the lock screen render before prompting
-        setTimeout(async () => {
-          const success = await verifyBiometric();
-          if (success) setLocked(false);
-        }, 300);
-      }
-    };
-
-    // Listen for the Capacitor 'resume' event
-    const cap = (window as any).Capacitor;
-    const appPlugin = cap?.Plugins?.App;
     let removeListener: (() => void) | null = null;
 
-    if (appPlugin?.addListener) {
-      appPlugin.addListener('appStateChange', (state: { isActive: boolean }) => {
-        if (state.isActive) handleResume();
-      }).then((handle: any) => {
-        removeListener = () => handle?.remove?.();
-      });
-    }
+    try {
+      const handleResume = async () => {
+        try {
+          const available = await isBiometricAvailable();
+          if (available && isBiometricLockEnabled()) {
+            setLocked(true);
+            setTimeout(async () => {
+              try {
+                const success = await verifyBiometric();
+                if (success) setLocked(false);
+              } catch { /* ignore */ }
+            }, 300);
+          }
+        } catch { /* ignore */ }
+      };
+
+      const cap = (window as any).Capacitor;
+      const appPlugin = cap?.Plugins?.App;
+
+      if (appPlugin?.addListener) {
+        const result = appPlugin.addListener('appStateChange', (state: { isActive: boolean }) => {
+          if (state.isActive) handleResume();
+        });
+        // handle both Promise and direct return
+        if (result && typeof result.then === 'function') {
+          result.then((handle: any) => {
+            removeListener = () => handle?.remove?.();
+          }).catch(() => {});
+        } else if (result && typeof result.remove === 'function') {
+          removeListener = () => result.remove();
+        }
+      }
+    } catch { /* ignore biometric setup errors */ }
 
     return () => {
-      removeListener?.();
+      try { removeListener?.(); } catch { /* ignore */ }
     };
   }, []);
 

@@ -61,7 +61,7 @@ function BoardsListPage() {
     isBiometricAvailable().then(avail => {
       setBiometricAvailable(avail);
       if (avail) setBiometricEnabled(isBiometricLockEnabled());
-    });
+    }).catch(() => {});
   }, []);
 
   const handlePullRefresh = useCallback(async () => {

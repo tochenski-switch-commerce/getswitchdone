@@ -3,6 +3,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 
 import QuickActionHandler from '@/components/QuickActionHandler';
 import BiometricLockScreen from '@/components/BiometricLockScreen';
+import ErrorCatcher from '@/components/ErrorCatcher';
 
 export const metadata: Metadata = {
   title: 'GSD Boards',
@@ -85,6 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }
         `}</style>
         <AuthProvider>
+          <ErrorCatcher />
           <QuickActionHandler />
           <BiometricLockScreen />
           {children}
