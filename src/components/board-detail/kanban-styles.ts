@@ -2225,12 +2225,12 @@ export const kanbanStyles = `
   /* ── Responsive ── */
   @media (max-width: 768px) {
     .kb-topbar { flex-direction: column; align-items: flex-start; }
-    .kb-topbar-right { width: 100%; flex-wrap: nowrap; }
+    .kb-topbar-right { width: 100%; flex-wrap: wrap; gap: 8px; }
     .kb-filters-inline { display: none !important; }
     .kb-mobile-filter-btn { display: flex !important; }
     .kb-mobile-filter-panel { display: flex; }
-    .kb-search-box { flex: 1; min-width: 0; }
-    .kb-search-input { width: 100% !important; }
+    .kb-search-box { width: 100%; min-width: 0; order: -1; }
+    .kb-search-input { width: 100% !important; font-size: 16px !important; }
     .kb-column { width: 280px; min-width: 280px; }
     .kb-add-column { width: 280px; min-width: 280px; }
     .kb-detail-body { flex-direction: column; overflow-x: hidden; }
