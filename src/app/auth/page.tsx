@@ -117,14 +117,17 @@ function AuthForm() {
     // After successful login, check if we should offer Face ID enrollment
     const available = await isBiometricAvailable();
     const hasCreds = await hasLoginCredentials();
+    console.log('[AUTH] biometric check:', { available, hasCreds });
     if (available && !hasCreds) {
       const type = await getBiometryType();
+      console.log('[AUTH] showing biometric prompt, type:', type);
       setBiometryType(type);
       setPendingCredentials({ email, password });
       setShowBiometricPrompt(true);
       return; // don't navigate yet — wait for user choice
     }
 
+    console.log('[AUTH] skipping biometric prompt, redirecting');
     // If already enrolled or not available, just go
     setHoldRedirect(false);
     router.push(returnTo);
