@@ -16,19 +16,22 @@ import {
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
   BotMessageSquare,
 } from '@/components/BoardIcons';
-import InboxPanel from '@/components/InboxPanel';
-import AiPanel from '@/components/AiPanel';
+import dynamic from 'next/dynamic';
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
-import DatePickerInput from '@/components/DatePickerInput';
+
+const InboxPanel = dynamic(() => import('@/components/InboxPanel'), { ssr: false });
+const AiPanel = dynamic(() => import('@/components/AiPanel'), { ssr: false });
+const DatePickerInput = dynamic(() => import('@/components/DatePickerInput'), { ssr: false });
 
 import { PRIORITY_CONFIG, PRIORITY_WEIGHT, sanitizeEmailHtml, emailTimeAgo } from './board-detail/helpers';
 import InlineEdit from './board-detail/InlineEdit';
-import CardDetailModal from './board-detail/CardDetailModal';
 import KanbanCard from './board-detail/KanbanCard';
-import LabelManagerModal from './board-detail/LabelManagerModal';
-import ListActionsModal from './board-detail/ListActionsModal';
-import CustomFieldManagerModal from './board-detail/CustomFieldManagerModal';
+
+const CardDetailModal = dynamic(() => import('./board-detail/CardDetailModal'), { ssr: false });
+const LabelManagerModal = dynamic(() => import('./board-detail/LabelManagerModal'), { ssr: false });
+const ListActionsModal = dynamic(() => import('./board-detail/ListActionsModal'), { ssr: false });
+const CustomFieldManagerModal = dynamic(() => import('./board-detail/CustomFieldManagerModal'), { ssr: false });
 import { kanbanStyles } from './board-detail/kanban-styles';
 import { hapticLight, hapticMedium, hapticHeavy, hapticSelection } from '@/lib/haptics';
 
@@ -94,6 +97,8 @@ function BoardPage() {
   const [emailSearchResults, setEmailSearchResults] = useState<BoardEmail[] | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<BoardEmail | null>(null);
   const [routeTarget, setRouteTarget] = useState<Record<string, string>>({});
+  const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
+  const [dragExpandedCol, setDragExpandedCol] = useState<string | null>(null);
   const [linkPickerColId, setLinkPickerColId] = useState<string | null>(null);
   const [linkPickerSearch, setLinkPickerSearch] = useState('');
   const [dragLinkId, setDragLinkId] = useState<string | null>(null);
@@ -194,53 +199,6 @@ function BoardPage() {
       if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
     };
   }, []);
-
-  // ── Due date/time notification checker ──
-  // Runs every 60s and on board load. Creates 'overdue' notifications for cards past their due date+time.
-  const notifiedCardsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!board?.cards || !user?.id) return;
-
-    const checkOverdue = () => {
-      const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-      for (const card of board.cards) {
-        if (card.is_archived || !card.due_date) continue;
-        if (notifiedCardsRef.current.has(card.id)) continue;
-
-        let isOverdue = false;
-        if (card.due_date < todayStr) {
-          isOverdue = true;
-        } else if (card.due_date === todayStr && card.due_time) {
-          const [h, m] = card.due_time.split(':').map(Number);
-          if (h * 60 + m <= currentMinutes) {
-            isOverdue = true;
-          }
-        }
-
-        if (isOverdue) {
-          notifiedCardsRef.current.add(card.id);
-          const timeStr = card.due_time
-            ? (() => { const [h, m] = card.due_time!.split(':').map(Number); const p = h >= 12 ? 'PM' : 'AM'; const hr = h === 0 ? 12 : h > 12 ? h - 12 : h; return ` at ${hr}:${String(m).padStart(2, '0')} ${p}`; })()
-            : '';
-          createNotification({
-            user_id: user!.id,
-            board_id: boardId,
-            card_id: card.id,
-            type: 'overdue',
-            title: `"${card.title}" is overdue`,
-            body: `Due ${new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${timeStr}`,
-          });
-        }
-      }
-    };
-
-    checkOverdue();
-    const interval = setInterval(checkOverdue, 60_000);
-    return () => clearInterval(interval);
-  }, [board?.cards, user?.id, boardId, createNotification]);
 
   const execNoteCmd = (cmd: string, value?: string) => {
     document.execCommand(cmd, false, value);
@@ -386,6 +344,10 @@ function BoardPage() {
     if (dragCardId && col?.column_type === 'board_links') return;
     if (colId !== dragOverCol) hapticSelection();
     setDragOverCol(colId);
+    // Auto-expand collapsed column on drag-over
+    if (collapsedCols.has(colId) && dragExpandedCol !== colId) {
+      setDragExpandedCol(colId);
+    }
   };
 
   const handleCardDragOver = (e: React.DragEvent, cardId: string, colId: string) => {
@@ -404,6 +366,7 @@ function BoardPage() {
     e.preventDefault();
     setDragOverCol(null);
     setDragOverCardId(null);
+    setDragExpandedCol(null);
     const col = columns.find(c => c.id === colId);
     if (dragCardId && col?.column_type === 'board_links') { setDragCardId(null); return; }
     if (!dragCardId || !board) return;
@@ -447,6 +410,7 @@ function BoardPage() {
     setDragCardId(null);
     setDragOverCol(null);
     setDragOverCardId(null);
+    setDragExpandedCol(null);
   };
 
   // ── Quick add card ──
@@ -1038,6 +1002,26 @@ function BoardPage() {
             const colCards = getColumnCards(col.id);
             const isLinkCol = col.column_type === 'board_links';
             const colLinks = isLinkCol ? (board?.boardLinks || []).filter(l => l.column_id === col.id).sort((a, b) => a.position - b.position) : [];
+            const isCollapsed = collapsedCols.has(col.id) && dragExpandedCol !== col.id;
+
+            if (isCollapsed) {
+              return (
+                <div
+                  key={col.id}
+                  className={`kb-column kb-column-collapsed ${dragOverCol === col.id ? 'drag-over' : ''}`}
+                  onDragOver={e => handleDragOver(e, col.id)}
+                  onDragLeave={() => { setDragOverCol(null); setDragExpandedCol(null); }}
+                  onDrop={e => { handleDrop(e, col.id); setDragExpandedCol(null); }}
+                  onClick={() => setCollapsedCols(prev => { const next = new Set(prev); next.delete(col.id); return next; })}
+                  title={`Expand ${col.title}`}
+                >
+                  <span className="kb-column-dot" style={{ background: col.color }} />
+                  <span className="kb-collapsed-count">{isLinkCol ? colLinks.length : colCards.length}</span>
+                  <span className="kb-collapsed-title">{col.title}</span>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={col.id}
@@ -1107,6 +1091,15 @@ function BoardPage() {
                         </button>
                       </>
                     )}
+                    <button
+                      className="kb-btn-icon-sm"
+                      onClick={() => {
+                        setCollapsedCols(prev => { const next = new Set(prev); next.add(col.id); return next; });
+                      }}
+                      title="Collapse column"
+                    >
+                      <ChevronLeft size={14} /><ChevronRight size={14} style={{ marginLeft: -8 }} />
+                    </button>
                     <button
                       className="kb-btn-icon-sm"
                       onClick={() => {

@@ -378,6 +378,42 @@ export const kanbanStyles = `
     border-color: #6366f1 !important;
     box-shadow: 0 0 0 2px rgba(99,102,241,0.2) inset;
   }
+
+  /* ── Collapsed column ── */
+  .kb-column.kb-column-collapsed {
+    width: 44px;
+    min-width: 44px;
+    padding: 14px 0;
+    cursor: pointer;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, width 0.2s ease;
+  }
+  .kb-column.kb-column-collapsed:hover {
+    border-color: #374151;
+    background: #1a1c28 !important;
+  }
+  .kb-collapsed-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    background: #1e2130;
+    padding: 1px 7px;
+    border-radius: 10px;
+  }
+  .kb-collapsed-title {
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    font-size: 13px;
+    font-weight: 600;
+    color: #9ca3af;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-height: calc(100vh - 280px);
+  }
   .kb-column-header {
     padding: 12px 14px 8px;
     display: flex;

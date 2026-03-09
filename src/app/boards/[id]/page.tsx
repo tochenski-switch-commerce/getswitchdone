@@ -1,9 +1,14 @@
+import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
-import BoardDetailPage from '@/components/BoardDetailPage';
+import BoardDetailLoading from './loading';
+
+const BoardDetailPage = dynamic(() => import('@/components/BoardDetailPage'), {
+  loading: () => <BoardDetailLoading />,
+});
 
 export default function BoardPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<BoardDetailLoading />}>
       <BoardDetailPage />
     </Suspense>
   );

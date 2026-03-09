@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS teams (
 CREATE TABLE IF NOT EXISTS team_members (
   team_id     uuid NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  role        text NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'member')),
+  role        text NOT NULL DEFAULT 'editor' CHECK (role IN ('owner', 'editor', 'viewer')),
   joined_at   timestamptz DEFAULT now(),
   PRIMARY KEY (team_id, user_id)
 );
@@ -332,7 +332,7 @@ BEGIN
 
   -- Add member (ignore if already exists)
   INSERT INTO team_members (team_id, user_id, role)
-    VALUES (v_team_id, auth.uid(), 'member')
+    VALUES (v_team_id, auth.uid(), 'editor')
     ON CONFLICT (team_id, user_id) DO NOTHING;
 
   -- Increment use count

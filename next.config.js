@@ -9,6 +9,9 @@ const nextConfig = {
 
   // Suppress file-tracing warnings from the home-directory lockfile
   serverExternalPackages: [],
+
+  // Tree-shake large packages — only import what's actually used
+  optimizePackageImports: ['@supabase/supabase-js', 'ai', 'zod'],
 };
 
 module.exports = nextConfig;

@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 /* AUTH: Replace with your auth hook */
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
 import { useTeams } from '@/hooks/useTeams';
-import InboxPanel from '@/components/InboxPanel';
+
+const InboxPanel = dynamic(() => import('@/components/InboxPanel'), { ssr: false });
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { hapticLight } from '@/lib/haptics';

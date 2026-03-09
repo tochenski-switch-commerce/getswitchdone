@@ -1,5 +1,7 @@
+import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
-import TeamsListPage from '@/components/TeamsListPage';
+
+const TeamsListPage = dynamic(() => import('@/components/TeamsListPage'));
 
 export default function TeamsPage() {
   return (

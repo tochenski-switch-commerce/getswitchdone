@@ -1,5 +1,7 @@
+import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
-import FormsListPage from '@/components/FormsListPage';
+
+const FormsListPage = dynamic(() => import('@/components/FormsListPage'));
 
 export default function FormsPage() {
   return (
