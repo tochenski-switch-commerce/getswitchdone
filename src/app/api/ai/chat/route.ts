@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { streamText, tool } from 'ai';
+import { streamText, tool, stepCountIs } from 'ai';
 import { z } from 'zod';
 import { gsdModel } from '@/lib/ai';
 import { createClient } from '@supabase/supabase-js';
@@ -114,6 +114,7 @@ GUIDELINES:
     model: gsdModel,
     system: systemPrompt,
     messages,
+    stopWhen: stepCountIs(5),
     tools: {
       addCard: tool({
         description: 'Add a new card to a column on the board',

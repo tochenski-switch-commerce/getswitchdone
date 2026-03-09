@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { setBadgeCount } from '@/lib/badge';
-import { Bell, LogOut } from '@/components/BoardIcons';
+import { Bell, LogOut, Settings } from '@/components/BoardIcons';
 import type { Notification } from '@/types/board-types';
 import dynamic from 'next/dynamic';
 
@@ -89,7 +89,7 @@ export default function TopNav() {
           padding: 6px 12px;
           background: #0f1117;
           border-bottom: 1px solid rgba(255,255,255,0.06);
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
         }
         .kb-nav-tab {
           padding: 6px 16px;
@@ -241,6 +241,12 @@ export default function TopNav() {
                     {profile?.name && <div className="kb-profile-name">{profile.name}</div>}
                     <div className="kb-profile-email">{user.email}</div>
                   </div>
+                  <button
+                    className="kb-profile-dropdown-item"
+                    onClick={() => { setShowProfile(false); router.push('/profile'); }}
+                  >
+                    <Settings size={14} /> Profile & Settings
+                  </button>
                   <button
                     className="kb-profile-dropdown-item danger"
                     onClick={async () => { setShowProfile(false); await signOut(); router.push('/auth'); }}

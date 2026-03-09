@@ -14,7 +14,7 @@ import {
   Zap, Bold, Italic, Underline, Strikethrough,
   LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, FileText, Mail, Clock,
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
-  BotMessageSquare,
+  BotMessageSquare, ClipboardList,
 } from '@/components/BoardIcons';
 import dynamic from 'next/dynamic';
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
@@ -22,6 +22,7 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
 const AiPanel = dynamic(() => import('@/components/AiPanel'), { ssr: false });
 const AutopilotBanner = dynamic(() => import('@/components/AutopilotBanner'), { ssr: false });
+const MeetingNotesModal = dynamic(() => import('@/components/MeetingNotesModal'), { ssr: false });
 const DatePickerInput = dynamic(() => import('@/components/DatePickerInput'), { ssr: false });
 
 import { PRIORITY_CONFIG, PRIORITY_WEIGHT, sanitizeEmailHtml, emailTimeAgo } from './board-detail/helpers';
@@ -91,6 +92,7 @@ function BoardPage() {
   const [iconColorHex, setIconColorHex] = useState('');
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [aiInitialPrompt, setAiInitialPrompt] = useState<string | undefined>();
+  const [showMeetingNotes, setShowMeetingNotes] = useState(false);
   const [showEmailPanel, setShowEmailPanel] = useState(false);
   const [emailView, setEmailView] = useState<'board' | 'unrouted'>('board');
   const [emailSearch, setEmailSearch] = useState('');
@@ -821,6 +823,15 @@ function BoardPage() {
                 color: '#fff', fontSize: 10, fontWeight: 700, padding: '0 4px', marginLeft: 4,
               }}>{unroutedEmails.length}</span>
             )}
+          </button>
+
+          {/* Meeting Notes → Cards */}
+          <button
+            className="kb-btn-icon"
+            onClick={() => setShowMeetingNotes(true)}
+            title="Meeting Notes → Cards"
+          >
+            <ClipboardList size={16} />
           </button>
 
           {/* GSD AI */}
@@ -1806,6 +1817,20 @@ function BoardPage() {
           onClose={() => { setShowAiPanel(false); setAiInitialPrompt(undefined); }}
           onBoardChanged={() => fetchBoard(boardId)}
           initialPrompt={aiInitialPrompt}
+        />
+      )}
+
+      {/* ── Meeting Notes modal ── */}
+      {showMeetingNotes && board && (
+        <MeetingNotesModal
+          boardId={boardId}
+          boardTitle={board.title}
+          columns={columns}
+          userProfiles={userProfiles}
+          accessToken={session?.access_token || ''}
+          onClose={() => setShowMeetingNotes(false)}
+          onCardsCreated={() => fetchBoard(boardId)}
+          addCard={addCard}
         />
       )}
     </div>

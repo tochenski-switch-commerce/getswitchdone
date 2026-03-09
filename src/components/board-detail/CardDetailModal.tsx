@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Edit3,
   MessageSquare, CheckSquare, CalendarDays, Tag,
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, Pencil,
-  Check, Copy, LinkIcon, SlidersHorizontal, Repeat,
+  Check, Copy, LinkIcon, SlidersHorizontal, Repeat, ClipboardList,
   Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
@@ -179,6 +179,12 @@ export default function CardDetailModal({
       repeat_series_id: repeat_rule ? repeat_series_id : null,
     });
     setSaving(false);
+  };
+
+  const handleClose = async () => {
+    if (!saving && editTitle.trim()) {
+      await handleSave();
+    }
     onClose();
   };
 
@@ -228,7 +234,7 @@ export default function CardDetailModal({
   const completedCount = checklists.filter(c => c.is_completed).length;
 
   return (
-    <div className="kb-modal-overlay" onMouseDown={onClose}>
+    <div className="kb-modal-overlay" onMouseDown={handleClose}>
       <div className="kb-detail-modal" onMouseDown={e => e.stopPropagation()}>
         {/* Close + Nav */}
         <div className="kb-detail-header-actions">
@@ -244,7 +250,7 @@ export default function CardDetailModal({
               </button>
             )}
           </div>
-          <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={onClose}><X size={18} /></button>
+          <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={handleClose}><X size={18} /></button>
         </div>
 
         <div className="kb-detail-body">
@@ -830,8 +836,8 @@ export default function CardDetailModal({
 
             {/* Actions */}
             <div style={{ borderTop: '1px solid #2a2d3a', paddingTop: 16, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button className="kb-btn kb-btn-primary" onMouseDown={e => e.preventDefault()} onClick={handleSave} disabled={saving || !editTitle.trim()} style={{ width: '100%', justifyContent: 'center' }}>
-                {saving ? 'Saving...' : 'Save Changes'}
+              <button className="kb-btn kb-btn-primary" onMouseDown={e => e.preventDefault()} onClick={handleClose} disabled={saving || !editTitle.trim()} style={{ width: '100%', justifyContent: 'center' }}>
+                {saving ? 'Saving...' : 'Save & Close'}
               </button>
               <button
                 className="kb-btn kb-btn-ghost"
@@ -855,6 +861,51 @@ export default function CardDetailModal({
               >
                 <LinkIcon size={13} />
                 Copy Link
+              </button>
+              <button
+                className="kb-btn kb-btn-ghost"
+                onClick={() => {
+                  const lines: string[] = [];
+                  lines.push(`Title: ${card.title}`);
+                  if (column) lines.push(`Column: ${column.title}`);
+                  if (card.priority) lines.push(`Priority: ${PRIORITY_CONFIG[card.priority].label}`);
+                  if (card.assignee) {
+                    const profile = userProfiles.find(p => p.id === card.assignee);
+                    lines.push(`Assignee: ${profile?.name ?? card.assignee}`);
+                  }
+                  if (card.start_date) lines.push(`Start Date: ${card.start_date}`);
+                  if (card.due_date) lines.push(`Due Date: ${card.due_date}${card.due_time ? ` ${card.due_time}` : ''}`);
+                  if (card.labels && card.labels.length > 0) lines.push(`Labels: ${card.labels.map(l => l.name).join(', ')}`);
+                  if (card.description) {
+                    const plain = card.description.replace(/<[^>]+>/g, '').trim();
+                    if (plain) lines.push(`Description: ${plain}`);
+                  }
+                  if (card.checklists && card.checklists.length > 0) {
+                    lines.push('Checklist:');
+                    card.checklists.forEach(item => lines.push(`  ${item.is_completed ? '[x]' : '[ ]'} ${item.title}`));
+                  }
+                  if (card.custom_field_values && card.custom_field_values.length > 0) {
+                    card.custom_field_values.forEach(cfv => {
+                      const field = board.customFields.find(f => f.id === cfv.field_id);
+                      const val = cfv.multi_value?.join(', ') || cfv.value;
+                      if (field && val) lines.push(`${field.title}: ${val}`);
+                    });
+                  }
+                  if (card.repeat_rule) lines.push(`Repeat: ${formatRepeatSummary(card.repeat_rule)}`);
+                  if (card.comments && card.comments.length > 0) {
+                    lines.push('Comments:');
+                    card.comments.forEach(c => {
+                      const name = c.user_profiles?.name ?? 'Unknown';
+                      const text = c.content.replace(/<[^>]+>/g, '').trim();
+                      lines.push(`  ${name}: ${text}`);
+                    });
+                  }
+                  navigator.clipboard.writeText(lines.join('\n'));
+                }}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <ClipboardList size={13} />
+                Copy Content
               </button>
               <button
                 className="kb-btn kb-btn-danger"

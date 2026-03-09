@@ -48,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Force dark color scheme */}
         <meta name="color-scheme" content="dark" />
       </head>
-      <body style={{ margin: 0, backgroundColor: '#0f1117' }}>
+      <body style={{ margin: 0, backgroundColor: '#0f1117', fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" }}>
         <style>{`
           /* PWA safe-area & scroll handling */
           html, body {
