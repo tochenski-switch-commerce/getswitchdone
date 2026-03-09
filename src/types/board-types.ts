@@ -255,3 +255,24 @@ export interface BoardEmail {
   received_at: string;
   created_at: string;
 }
+
+// ── AI Types ──
+
+export type AiGenerateAction = 'describe' | 'checklist' | 'classify' | 'title' | 'breakdown';
+
+export interface AiGenerateRequest {
+  action: AiGenerateAction;
+  boardTitle: string;
+  columnName?: string;
+  cardTitle: string;
+  cardDescription?: string;
+  existingChecklists?: string[];
+  availableLabels?: string[];
+  currentPriority?: string | null;
+}
+
+export interface AiDescribeResult { description: string }
+export interface AiChecklistResult { items: string[] }
+export interface AiClassifyResult { suggestedPriority: CardPriority; suggestedLabels: string[] }
+export interface AiTitleResult { title: string }
+export interface AiBreakdownResult { cards: { title: string; description: string }[] }

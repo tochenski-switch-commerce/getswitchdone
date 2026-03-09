@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 /* AUTH: Replace with your auth hook */
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
+import { useTeams } from '@/hooks/useTeams';
 import InboxPanel from '@/components/InboxPanel';
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
@@ -19,6 +20,7 @@ import {
   Globe,
   Lock,
   User,
+  Users,
   Edit3,
   X,
   Check,
@@ -47,12 +49,15 @@ function BoardsListPage() {
   const [newIcon, setNewIcon] = useState<BoardIconKey>('folder-kanban');
   const [newIconColor, setNewIconColor] = useState(DEFAULT_ICON_COLOR);
   const [newIconHex, setNewIconHex] = useState('');
+  const [newTeamId, setNewTeamId] = useState<string | ''>('');
   const overlayMouseDown = useRef<EventTarget | null>(null);
   const [creating, setCreating] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
+
+  const { teams, fetchTeams } = useTeams();
 
   const handlePullRefresh = useCallback(async () => {
     await Promise.all([fetchBoards(), fetchNotifications()]);
@@ -77,6 +82,7 @@ function BoardsListPage() {
     if (user) {
       fetchBoards();
       fetchNotifications();
+      fetchTeams();
     }
   }, [user]);
 
@@ -91,7 +97,7 @@ function BoardsListPage() {
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
     setCreating(true);
-    const board = await createBoard(newTitle, newDesc, newIcon, newIconColor);
+    const board = await createBoard(newTitle, newDesc, newIcon, newIconColor, newTeamId || undefined);
     setCreating(false);
     if (board) {
       setNewTitle('');
@@ -99,10 +105,73 @@ function BoardsListPage() {
       setNewIcon('folder-kanban');
       setNewIconColor(DEFAULT_ICON_COLOR);
       setNewIconHex('');
+      setNewTeamId('');
       setShowCreate(false);
       router.push(`/boards/${board.id}`);
     }
   };
+
+  const renderBoardCard = (board: typeof boards[0], teamName?: string) => (
+    <div
+      key={board.id}
+      className="kb-board-card"
+      onClick={() => { hapticLight(); router.push(`/boards/${board.id}`); }}
+    >
+      <div className="kb-board-card-header">
+        {React.createElement(getBoardIcon(board.icon), { size: 20, style: { color: board.icon_color || DEFAULT_ICON_COLOR } })}
+        <h3 className="kb-board-card-title">{board.title}</h3>
+        {board.is_public && (
+          <span className="kb-visibility-badge public"><Globe size={10} /> Public</span>
+        )}
+      </div>
+      {teamName && (
+        <div className="kb-shared-by"><Users size={11} /> {teamName}</div>
+      )}
+      {!teamName && board.user_id !== user?.id && (
+        <div className="kb-shared-by"><User size={11} /> Shared board</div>
+      )}
+      {board.description && (
+        <p className="kb-board-card-desc">{board.description}</p>
+      )}
+      <div className="kb-board-card-footer">
+        <span className="kb-board-card-date">
+          <Calendar size={12} />
+          {new Date(board.created_at).toLocaleDateString()}
+        </span>
+        {board.user_id === user?.id && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <button
+              className="kb-btn-icon"
+              onClick={async e => {
+                e.stopPropagation();
+                setDuplicatingId(board.id);
+                const dup = await duplicateBoard(board.id);
+                setDuplicatingId(null);
+                if (dup) router.push(`/boards/${dup.id}`);
+              }}
+              title="Duplicate board"
+              disabled={duplicatingId === board.id}
+              style={duplicatingId === board.id ? { opacity: 0.5 } : undefined}
+            >
+              <Copy size={14} />
+            </button>
+            <button
+              className="kb-btn-icon kb-btn-icon-danger"
+              onClick={e => {
+                e.stopPropagation();
+                if (confirm('Delete this board? This cannot be undone.')) {
+                  deleteBoard(board.id);
+                }
+              }}
+              title="Delete board"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="kb-root">
@@ -295,6 +364,20 @@ function BoardsListPage() {
                   rows={3}
                 />
               </div>
+              {teams.length > 0 && (
+                <div className="kb-form-group">
+                  <label className="kb-label">Team (optional)</label>
+                  <select
+                    className="kb-input"
+                    value={newTeamId}
+                    onChange={e => setNewTeamId(e.target.value)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <option value="">Personal Board</option>
+                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              )}
               {error && (
                 <p style={{ fontSize: '13px', color: '#ef4444', margin: '0 0 8px', padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>{error}</p>
               )}
@@ -326,66 +409,44 @@ function BoardsListPage() {
             </button>
           </div>
         ) : (
-          <div className="kb-board-grid">
-            {boards.map(board => (
-              <div
-                key={board.id}
-                className="kb-board-card"
-                onClick={() => { hapticLight(); router.push(`/boards/${board.id}`); }}
-              >
-                <div className="kb-board-card-header">
-                  {React.createElement(getBoardIcon(board.icon), { size: 20, style: { color: board.icon_color || DEFAULT_ICON_COLOR } })}
-                  <h3 className="kb-board-card-title">{board.title}</h3>
-                  {board.is_public && (
-                    <span className="kb-visibility-badge public"><Globe size={10} /> Public</span>
-                  )}
-                </div>
-                {board.user_id !== user?.id && (
-                  <div className="kb-shared-by"><User size={11} /> Shared board</div>
-                )}
-                {board.description && (
-                  <p className="kb-board-card-desc">{board.description}</p>
-                )}
-                <div className="kb-board-card-footer">
-                  <span className="kb-board-card-date">
-                    <Calendar size={12} />
-                    {new Date(board.created_at).toLocaleDateString()}
-                  </span>
-                  {board.user_id === user?.id && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <button
-                        className="kb-btn-icon"
-                        onClick={async e => {
-                          e.stopPropagation();
-                          setDuplicatingId(board.id);
-                          const dup = await duplicateBoard(board.id);
-                          setDuplicatingId(null);
-                          if (dup) router.push(`/boards/${dup.id}`);
-                        }}
-                        title="Duplicate board"
-                        disabled={duplicatingId === board.id}
-                        style={duplicatingId === board.id ? { opacity: 0.5 } : undefined}
-                      >
-                        <Copy size={14} />
-                      </button>
-                      <button
-                        className="kb-btn-icon kb-btn-icon-danger"
-                        onClick={e => {
-                          e.stopPropagation();
-                          if (confirm('Delete this board? This cannot be undone.')) {
-                            deleteBoard(board.id);
-                          }
-                        }}
-                        title="Delete board"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+          <>
+            {/* My Boards */}
+            {(() => {
+              const myBoards = boards.filter(b => !b.team_id);
+              const teamGroups = teams.map(t => ({ team: t, boards: boards.filter(b => b.team_id === t.id) })).filter(g => g.boards.length > 0);
+              // Boards belonging to teams I'm not in (e.g. public)
+              const knownTeamIds = new Set(teams.map(t => t.id));
+              const otherTeamBoards = boards.filter(b => b.team_id && !knownTeamIds.has(b.team_id));
+              return (
+                <>
+                  {myBoards.length > 0 && (
+                    <div style={{ marginBottom: 28 }}>
+                      <h2 className="kb-section-label">My Boards</h2>
+                      <div className="kb-board-grid">
+                        {myBoards.map(board => renderBoardCard(board))}
+                      </div>
                     </div>
                   )}
-                </div>
-              </div>
-            ))}
-          </div>
+                  {teamGroups.map(({ team, boards: tBoards }) => (
+                    <div key={team.id} style={{ marginBottom: 28 }}>
+                      <h2 className="kb-section-label"><Users size={14} style={{ verticalAlign: -2 }} /> {team.name}</h2>
+                      <div className="kb-board-grid">
+                        {tBoards.map(board => renderBoardCard(board, team.name))}
+                      </div>
+                    </div>
+                  ))}
+                  {otherTeamBoards.length > 0 && (
+                    <div style={{ marginBottom: 28 }}>
+                      <h2 className="kb-section-label">Other Shared</h2>
+                      <div className="kb-board-grid">
+                        {otherTeamBoards.map(board => renderBoardCard(board))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </>
         )}
       </div>
 
@@ -556,6 +617,17 @@ const boardsListStyles = `
     font-size: 11px;
     color: #818cf8;
     margin-bottom: 6px;
+  }
+  .kb-section-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 12px 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .kb-board-card-desc {
     font-size: 13px !important;

@@ -99,7 +99,7 @@ export function useProjectBoard() {
     }
   }, []);
 
-  const createBoard = useCallback(async (title: string, description?: string, icon?: string, icon_color?: string) => {
+  const createBoard = useCallback(async (title: string, description?: string, icon?: string, icon_color?: string, team_id?: string) => {
     setError(null);
     try {
       const user = await getCachedUser();
@@ -108,7 +108,7 @@ export function useProjectBoard() {
       // Create board
       const { data: boardData, error: boardErr } = await supabase
         .from('project_boards')
-        .insert([{ title: title.trim(), description: description?.trim() || null, icon: icon || null, icon_color: icon_color || null, user_id: user.id }])
+        .insert([{ title: title.trim(), description: description?.trim() || null, icon: icon || null, icon_color: icon_color || null, user_id: user.id, team_id: team_id || null }])
         .select()
         .single();
       if (boardErr) throw boardErr;
