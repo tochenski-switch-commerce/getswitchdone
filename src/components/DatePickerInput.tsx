@@ -68,24 +68,49 @@ export default function DatePickerInput({ value, onChange, className = '', style
   }, [open]);
 
   // Calculate dropdown position (fixed positioning to escape overflow:hidden parents)
-  useEffect(() => {
-    if (!open || !containerRef.current) return;
+  const reposition = useCallback(() => {
+    if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const up = spaceBelow < 320;
-    setDropUp(up);
+    const dropdownHeight = 310;
     const dropdownWidth = 260;
-    let left = rect.left;
-    // Keep dropdown within viewport
-    if (left + dropdownWidth > window.innerWidth - 8) {
-      left = window.innerWidth - dropdownWidth - 8;
+    const margin = 8;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    let top: number;
+    let isUp = false;
+
+    if (spaceBelow >= dropdownHeight) {
+      top = rect.bottom + 4;
+    } else if (spaceAbove >= dropdownHeight) {
+      top = rect.top - dropdownHeight - 4;
+      isUp = true;
+    } else {
+      // Doesn't fit either way — clamp so it stays in viewport
+      top = Math.max(margin, window.innerHeight - dropdownHeight - margin);
     }
-    if (left < 8) left = 8;
-    setDropdownPos({
-      top: up ? rect.top : rect.bottom + 4,
-      left,
-    });
-  }, [open]);
+
+    setDropUp(isUp);
+
+    let left = rect.left;
+    if (left + dropdownWidth > window.innerWidth - margin) {
+      left = window.innerWidth - dropdownWidth - margin;
+    }
+    if (left < margin) left = margin;
+    setDropdownPos({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    reposition();
+    // Recalculate on scroll (modal panels scroll) and resize
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [open, reposition]);
 
   const prevMonth = useCallback(() => {
     setViewMonth(m => {
@@ -154,7 +179,7 @@ export default function DatePickerInput({ value, onChange, className = '', style
         <div
           ref={dropdownRef}
           className={`dp-dropdown ${dropUp ? 'dp-dropdown-up' : ''}`}
-          style={{ top: dropUp ? undefined : dropdownPos.top, bottom: dropUp ? window.innerHeight - dropdownPos.top + 4 : undefined, left: dropdownPos.left }}
+          style={{ top: dropdownPos.top, left: dropdownPos.left }}
         >
           {/* Navigation header */}
           <div className="dp-header">
