@@ -250,7 +250,10 @@ function BoardPage() {
         c.title.toLowerCase().includes(q) ||
         c.description?.toLowerCase().includes(q) ||
         (c.assignees || []).some(a => a.toLowerCase().includes(q)) ||
-        (c.labels || []).some(l => l.name.toLowerCase().includes(q))
+        (c.labels || []).some(l => l.name.toLowerCase().includes(q)) ||
+        (c.comments || []).some(cm => cm.content.toLowerCase().includes(q)) ||
+        (c.checklists || []).some(cl => cl.title.toLowerCase().includes(q)) ||
+        (c.custom_field_values || []).some(cf => String(cf.value ?? '').toLowerCase().includes(q))
       );
     }
     if (filterPriority) {
