@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import type { BoardForm, ProjectBoard, BoardCustomField, CustomFieldType } from '@/types/board-types';
 import {
   FileText, Plus, Trash2, Edit3, Calendar, ExternalLink,
-  Eye, ToggleLeft, ToggleRight, FolderKanban, ArrowLeft,
+  Eye, ToggleLeft, ToggleRight, FolderKanban, ArrowLeft, ListBullet,
 } from '@/components/BoardIcons';
 
 export default function FormsListPage() {
@@ -357,6 +357,13 @@ export default function FormsListPage() {
                       title="Preview form"
                     >
                       <Eye size={14} />
+                    </button>
+                    <button
+                      className="kb-btn-icon"
+                      onClick={() => router.push(`/forms/${form.id}/edit?tab=submissions`)}
+                      title="View submissions"
+                    >
+                      <ListBullet size={14} />
                     </button>
                     <button
                       className="kb-btn-icon"

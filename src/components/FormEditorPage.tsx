@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import type { BoardForm, FormField, FormFieldType, BoardColumn, BoardCustomField } from '@/types/board-types';
+import type { BoardForm, FormField, FormFieldType, BoardColumn, BoardCustomField, FormSubmission } from '@/types/board-types';
 import {
   ArrowLeft, Plus, Trash2, GripHorizontal, ChevronDown,
-  Eye, ExternalLink, Check, X, FileText,
+  Eye, ExternalLink, Check, X, FileText, Download, Search,
 } from '@/components/BoardIcons';
 
 const FIELD_TYPES: { value: FormFieldType; label: string }[] = [
@@ -37,6 +37,7 @@ export default function FormEditorPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const formId = params.id as string;
 
   const [form, setForm] = useState<BoardForm | null>(null);
@@ -53,6 +54,11 @@ export default function FormEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'edit' | 'submissions'>(searchParams.get('tab') === 'submissions' ? 'submissions' : 'edit');
+  const [submissions, setSubmissions] = useState<FormSubmission[]>([]);
+  const [loadingSubs, setLoadingSubs] = useState(false);
+  const [expandedSub, setExpandedSub] = useState<string | null>(null);
+  const [subsSearch, setSubsSearch] = useState('');
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -104,6 +110,28 @@ export default function FormEditorPage() {
   useEffect(() => {
     if (user) fetchForm();
   }, [user, fetchForm]);
+
+  const fetchSubmissions = useCallback(async () => {
+    if (!formId) return;
+    setLoadingSubs(true);
+    try {
+      const { data, error: err } = await supabase
+        .from('form_submissions')
+        .select('*')
+        .eq('form_id', formId)
+        .order('submitted_at', { ascending: false });
+      if (err) throw err;
+      setSubmissions(data || []);
+    } catch (err: any) {
+      console.error('Failed to fetch submissions:', err.message);
+    } finally {
+      setLoadingSubs(false);
+    }
+  }, [formId]);
+
+  useEffect(() => {
+    if (user && activeTab === 'submissions') fetchSubmissions();
+  }, [user, activeTab, fetchSubmissions]);
 
   const handleSave = async () => {
     if (!form) return;
@@ -232,10 +260,146 @@ export default function FormEditorPage() {
           </div>
         </div>
 
+        {/* Tabs */}
+        <div className="kb-tabs">
+          <button
+            className={`kb-tab ${activeTab === 'edit' ? 'active' : ''}`}
+            onClick={() => setActiveTab('edit')}
+          >
+            Edit Form
+          </button>
+          <button
+            className={`kb-tab ${activeTab === 'submissions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('submissions')}
+          >
+            Submissions{submissions.length > 0 ? ` (${submissions.length})` : ''}
+          </button>
+        </div>
+
         {error && (
           <p style={{ fontSize: '13px', color: '#ef4444', margin: '0 0 16px', padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>{error}</p>
         )}
 
+        {activeTab === 'submissions' ? (
+          <div className="kb-subs-panel">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+              <h2 className="kb-section-title" style={{ margin: 0 }}>
+                {loadingSubs ? 'Loading…' : `${submissions.length} Submission${submissions.length !== 1 ? 's' : ''}`}
+              </h2>
+              <div style={{ flex: 1, minWidth: 180, maxWidth: 320, position: 'relative' }}>
+                <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
+                <input
+                  className="kb-input"
+                  value={subsSearch}
+                  onChange={e => setSubsSearch(e.target.value)}
+                  placeholder="Search submissions…"
+                  style={{ paddingLeft: 34, fontSize: 13 }}
+                />
+              </div>
+              <button
+                className="kb-btn kb-btn-ghost"
+                onClick={() => {
+                  if (!submissions.length || !fields.length) return;
+                  const headers = ['Submitted', ...fields.map(f => f.label)];
+                  const rows = submissions.map(sub => [
+                    new Date(sub.submitted_at).toLocaleString(),
+                    ...fields.map(f => (sub.data[f.id] || '').replace(/"/g, '""')),
+                  ]);
+                  const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${(form?.title || 'submissions').replace(/[^a-z0-9]/gi, '-')}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                style={{ fontSize: 12 }}
+              >
+                <Download size={14} /> Export CSV
+              </button>
+            </div>
+
+            {submissions.length === 0 && !loadingSubs ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#6b7280', fontSize: 14 }}>
+                <p style={{ margin: 0 }}>No submissions yet.</p>
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#4b5563' }}>Submissions will appear here when someone fills out the public form.</p>
+              </div>
+            ) : (
+              <div className="kb-subs-list">
+                {submissions.filter(sub => {
+                  if (!subsSearch.trim()) return true;
+                  const q = subsSearch.toLowerCase();
+                  return Object.values(sub.data).some(v => v && v.toLowerCase().includes(q))
+                    || new Date(sub.submitted_at).toLocaleString().toLowerCase().includes(q);
+                }).map(sub => (
+                  <div key={sub.id} className="kb-sub-item">
+                    <div
+                      className="kb-sub-header"
+                      onClick={() => setExpandedSub(expandedSub === sub.id ? null : sub.id)}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span className="kb-sub-title">
+                          {(() => {
+                            const titleField = fields.find(f => f.maps_to === 'title');
+                            return titleField && sub.data[titleField.id] ? sub.data[titleField.id] : 'Submission';
+                          })()}
+                        </span>
+                        <span className="kb-sub-date">
+                          {new Date(sub.submitted_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {' · '}
+                          {new Date(sub.submitted_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {sub.card_id && (
+                        <button
+                          className="kb-btn kb-btn-ghost"
+                          style={{ padding: '4px 10px', fontSize: 11 }}
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (form) router.push(`/boards/${form.board_id}?card=${sub.card_id}`);
+                          }}
+                        >
+                          View Card
+                        </button>
+                      )}
+                      <ChevronDown
+                        size={14}
+                        style={{
+                          color: '#6b7280',
+                          transition: 'transform 0.2s',
+                          transform: expandedSub === sub.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                          flexShrink: 0,
+                        }}
+                      />
+                    </div>
+                    {expandedSub === sub.id && (
+                      <div className="kb-sub-body">
+                        {fields.map(f => {
+                          const val = sub.data[f.id];
+                          if (!val) return null;
+                          return (
+                            <div key={f.id} className="kb-sub-field">
+                              <span className="kb-sub-field-label">{f.label}</span>
+                              <span className="kb-sub-field-value">{val}</span>
+                            </div>
+                          );
+                        })}
+                        {/* Show any data keys not matching current fields */}
+                        {Object.entries(sub.data).filter(([key]) => !fields.find(f => f.id === key)).map(([key, val]) => (
+                          <div key={key} className="kb-sub-field">
+                            <span className="kb-sub-field-label">{key}</span>
+                            <span className="kb-sub-field-value">{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="kb-editor-layout">
           {/* Settings panel */}
           <div className="kb-editor-settings">
@@ -474,6 +638,7 @@ export default function FormEditorPage() {
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );
@@ -660,6 +825,98 @@ const editorStyles = `
     text-overflow: ellipsis;
     white-space: nowrap;
     user-select: all;
+  }
+
+  /* Tabs */
+  .kb-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #2a2d3a;
+  }
+  .kb-tab {
+    padding: 10px 20px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .kb-tab:hover {
+    color: #e5e7eb;
+  }
+  .kb-tab.active {
+    color: #818cf8;
+    border-bottom-color: #6366f1;
+  }
+
+  /* Submissions */
+  .kb-subs-panel {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 14px;
+    padding: 20px;
+  }
+  .kb-subs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .kb-sub-item {
+    background: #0f1117;
+    border: 1px solid #2a2d3a;
+    border-radius: 10px;
+    transition: border-color 0.15s;
+  }
+  .kb-sub-item:hover {
+    border-color: #374151;
+  }
+  .kb-sub-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+  }
+  .kb-sub-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e5e7eb;
+    margin-right: 8px;
+  }
+  .kb-sub-date {
+    font-size: 12px;
+    color: #6b7280;
+  }
+  .kb-sub-body {
+    padding: 0 16px 16px;
+    border-top: 1px solid #2a2d3a;
+    padding-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .kb-sub-field {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+  }
+  .kb-sub-field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+  .kb-sub-field-value {
+    font-size: 14px;
+    color: #e5e7eb;
+    word-break: break-word;
   }
 
   /* Editor layout */

@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '@/contexts/AuthContext';
 
 import QuickActionHandler from '@/components/QuickActionHandler';
-import BiometricLockScreen from '@/components/BiometricLockScreen';
 import ErrorCatcher from '@/components/ErrorCatcher';
 
 export const metadata: Metadata = {
@@ -88,7 +87,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <ErrorCatcher />
           <QuickActionHandler />
-          <BiometricLockScreen />
           {children}
         </AuthProvider>
         <ServiceWorkerRegistration />
