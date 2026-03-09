@@ -3,9 +3,9 @@
 import type { BoardCard, CardPriority } from '@/types/board-types';
 import {
   MessageSquare, CheckSquare, CalendarDays,
-  User, Bell, Check, ChevronRight,
+  User, Bell, Check, ChevronRight, Repeat,
 } from '@/components/BoardIcons';
-import { PRIORITY_CONFIG } from './helpers';
+import { PRIORITY_CONFIG, formatRepeatSummary } from './helpers';
 
 export default function KanbanCard({
   card,
@@ -93,6 +93,14 @@ export default function KanbanCard({
             {card.due_date && (
               <span>{isOverdue ? 'Overdue' : isDueSoon ? (daysUntilDue === 0 ? 'Today' : daysUntilDue === 1 ? 'Tomorrow' : 'In 2 days') : new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
             )}
+          </span>
+        )}
+
+        {/* Repeat badge */}
+        {card.repeat_rule && (
+          <span className="kb-card-repeat-front">
+            <Repeat size={10} />
+            {formatRepeatSummary(card.repeat_rule)}
           </span>
         )}
 

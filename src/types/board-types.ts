@@ -58,7 +58,9 @@ export interface BoardCard {
   priority: CardPriority | null;
   start_date?: string;
   due_date?: string;
+  due_time?: string | null;
   assignee?: string;
+  assignees?: string[];
   created_by?: string;
   is_archived: boolean;
   created_at: string;

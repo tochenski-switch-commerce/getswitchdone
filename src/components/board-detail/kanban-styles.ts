@@ -2087,7 +2087,7 @@ export const kanbanStyles = `
   .kb-cf-multi-chip:hover { border-color: #6366f1; color: #c7d2fe; }
 
   /* ── Repeat Picker ── */
-  .kb-repeat-picker { display: flex; gap: 6px; }
+  .kb-repeat-picker { display: flex; gap: 4px; }
   .kb-repeat-option {
     flex: 1; padding: 6px 0; border-radius: 6px; font-size: 12px; font-weight: 500;
     text-align: center; cursor: pointer; border: 1px solid #3b3f54;
@@ -2095,7 +2095,35 @@ export const kanbanStyles = `
   }
   .kb-repeat-option:hover { border-color: #6366f1; color: #c7d2fe; }
   .kb-repeat-option.active { background: #2563eb; border-color: #2563eb; color: #fff; }
-  .kb-repeat-hint { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.4; }
+  .kb-repeat-days {
+    display: flex; gap: 4px; margin-top: 8px;
+  }
+  .kb-repeat-day {
+    width: 30px; height: 30px; border-radius: 50%; font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border: 1px solid #3b3f54;
+    background: #1a1d2e; color: #9ca3af; transition: all 0.15s;
+  }
+  .kb-repeat-day:hover { border-color: #6366f1; color: #c7d2fe; }
+  .kb-repeat-day.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .kb-repeat-monthly {
+    display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  }
+  .kb-repeat-monthly-label {
+    font-size: 12px; color: #94a3b8; white-space: nowrap;
+  }
+  .kb-repeat-summary {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 8px; padding: 6px 10px; border-radius: 6px;
+    background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2);
+  }
+  .kb-repeat-summary-text {
+    font-size: 12px; font-weight: 600; color: #a5b4fc;
+  }
+  .kb-repeat-next {
+    font-size: 11px; color: #818cf8;
+  }
+  .kb-repeat-end { margin-top: 6px; }
   .kb-cf-multi-chip.active { background: rgba(99,102,241,0.18); color: #a5b4fc; border-color: #6366f1; }
   .kb-cf-type-badge {
     display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 8px; margin-left: 8px;
@@ -2396,6 +2424,8 @@ export const kanbanStyles = `
     .kb-cf-field { overflow: hidden; }
     .kb-cf-section { overflow: hidden; }
     .kb-repeat-picker { overflow: hidden; }
+    .kb-repeat-days { gap: 3px; }
+    .kb-repeat-day { width: 26px; height: 26px; font-size: 10px; }
     .kb-form-group { overflow: hidden; max-width: 100%; }
 
     /* Custom fields mobile */
