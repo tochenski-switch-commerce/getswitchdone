@@ -2,6 +2,33 @@ export type CardPriority = 'low' | 'medium' | 'high' | 'urgent';
 
 export type RepeatInterval = 'daily' | 'weekly' | 'monthly';
 
+export interface Team {
+  id: string;
+  name: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface TeamMember {
+  team_id: string;
+  user_id: string;
+  role: 'owner' | 'editor' | 'viewer';
+  joined_at: string;
+  user_profiles?: { name: string };
+}
+
+export interface TeamInvite {
+  id: string;
+  team_id: string;
+  invite_code: string;
+  max_uses?: number | null;
+  use_count: number;
+  expires_at?: string | null;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+}
+
 export interface RepeatRule {
   interval: RepeatInterval;
   days: number[];       // weekly: 0–6 (Sun–Sat), monthly: 1–28, daily: []
