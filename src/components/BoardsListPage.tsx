@@ -164,7 +164,7 @@ function BoardsListPage() {
             <FolderKanban size={28} style={{ color: '#818cf8' }} />
             <h1 className="kb-page-title">Project Boards</h1>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
             <button className="kb-btn kb-btn-ghost" onClick={() => router.push('/forms')}>
               <FileText size={16} />
               Forms

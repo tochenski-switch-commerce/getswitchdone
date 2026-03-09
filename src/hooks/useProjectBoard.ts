@@ -62,6 +62,7 @@ export function useProjectBoard() {
   const [board, setBoard] = useState<FullBoard | null>(null);
   const [checklistTemplates, setChecklistTemplates] = useState<ChecklistTemplate[]>([]);
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
+  const [boardMembers, setBoardMembers] = useState<UserProfile[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [boardEmails, setBoardEmails] = useState<BoardEmail[]>([]);
   const [unroutedEmails, setUnroutedEmails] = useState<BoardEmail[]>([]);
@@ -231,6 +232,20 @@ export function useProjectBoard() {
 
       const fullBoard: FullBoard = { ...boardRes.data, columns, cards, labels, customFields, boardLinks, boardLinkStats };
       setBoard(fullBoard);
+
+      // Fetch board members for assignee filtering
+      if (fullBoard.team_id) {
+        const { data: memberRows } = await supabase
+          .from('team_members')
+          .select('user_id')
+          .eq('team_id', fullBoard.team_id);
+        const memberIds = (memberRows || []).map(m => m.user_id);
+        setBoardMembers(profiles.filter(p => memberIds.includes(p.id)));
+      } else {
+        // Personal board — only the board owner
+        setBoardMembers(profiles.filter(p => p.id === fullBoard.user_id));
+      }
+
       return fullBoard;
     } catch (err: any) {
       setError(err.message);
@@ -1434,7 +1449,7 @@ export function useProjectBoard() {
   }, []);
 
   return {
-    boards, board, loading, error, checklistTemplates, userProfiles, notifications,
+    boards, board, loading, error, checklistTemplates, userProfiles, boardMembers, notifications,
     boardEmails, unroutedEmails,
     fetchBoards, createBoard, fetchBoard, updateBoard, deleteBoard, duplicateBoard,
     addColumn, updateColumn, deleteColumn, reorderColumns,

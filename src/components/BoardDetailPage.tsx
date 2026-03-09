@@ -63,7 +63,7 @@ function BoardPage() {
     checklistTemplates,
     addLabel, updateLabel, deleteLabel,
     addCustomField, updateCustomField, deleteCustomField, setCardCustomFieldValue,
-    userProfiles, fetchUserProfiles,
+    userProfiles, boardMembers, fetchUserProfiles,
     notifications, fetchNotifications, createNotification, markNotificationRead, markCardNotificationsRead, markAllNotificationsRead, deleteNotification, clearAllNotifications,
     addCardLink, removeCardLink, searchCards,
     boardEmails, unroutedEmails, fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
@@ -1588,7 +1588,7 @@ function BoardPage() {
               }
             }
           }}
-          userProfiles={userProfiles}
+          userProfiles={boardMembers}
           onSetCustomFieldValue={setCardCustomFieldValue}
           onAddCardLink={async (targetCardId) => { await addCardLink(activeCard.id, targetCardId); }}
           onRemoveCardLink={async (linkId) => { await removeCardLink(linkId); }}
@@ -1627,7 +1627,7 @@ function BoardPage() {
               }
             }}
             onClose={() => setListActionsColId(null)}
-            userProfiles={userProfiles}
+            userProfiles={boardMembers}
           />
         );
       })()}
