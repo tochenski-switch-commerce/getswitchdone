@@ -72,9 +72,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-        // Called when the app was launched with an activity, including Universal Links.
-        // Feel free to add additional processing here, but if you want the App API to support
-        // tracking app url opens, make sure to keep this call
+        // Handle Universal Links — navigate the webview to the incoming URL path
+        if userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+           let url = userActivity.webpageURL,
+           let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           let path = components.path.isEmpty ? nil : components.path {
+            let route = components.query != nil ? "\(path)?\(components.query!)" : path
+            let js = "window.dispatchEvent(new CustomEvent('widgetDeepLink', { detail: { route: '\(route)' } }))"
+            if let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge {
+                bridge.webView?.evaluateJavaScript(js)
+                return true
+            }
+        }
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 

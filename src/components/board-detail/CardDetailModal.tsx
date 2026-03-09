@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { BoardCard, CardPriority, ChecklistTemplate, UserProfile, RepeatUnit, RepeatRule } from '@/types/board-types';
+import type { BoardCard, CardPriority, ChecklistTemplate, UserProfile, RepeatUnit, RepeatRule, RepeatMode } from '@/types/board-types';
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   Plus, Trash2, Edit3,
@@ -91,8 +91,11 @@ export default function CardDetailModal({
   // Repeat state
   const existingRule = card.repeat_rule;
   const [repeatEnabled, setRepeatEnabled] = useState(!!existingRule);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>(existingRule?.mode ?? 'interval');
   const [repeatEvery, setRepeatEvery] = useState(existingRule?.every ?? 1);
   const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>(existingRule?.unit ?? 'days');
+  const [repeatNth, setRepeatNth] = useState(existingRule?.nth ?? 1);
+  const [repeatWeekday, setRepeatWeekday] = useState(existingRule?.weekday ?? 1);
   const [repeatEndDate, setRepeatEndDate] = useState(existingRule?.endDate ?? '');
 
   const titleRef = useRef<HTMLInputElement>(null);
@@ -158,11 +161,23 @@ export default function CardDetailModal({
     let repeat_rule: RepeatRule | null = null;
     let repeat_series_id: string | null = card.repeat_series_id ?? null;
     if (repeatEnabled) {
-      repeat_rule = {
-        every: repeatEvery,
-        unit: repeatUnit,
-        ...(repeatEndDate ? { endDate: repeatEndDate } : {}),
-      };
+      if (repeatMode === 'monthly-weekday') {
+        repeat_rule = {
+          mode: 'monthly-weekday',
+          every: 1,
+          unit: 'months',
+          nth: repeatNth,
+          weekday: repeatWeekday,
+          ...(repeatEndDate ? { endDate: repeatEndDate } : {}),
+        };
+      } else {
+        repeat_rule = {
+          mode: 'interval',
+          every: repeatEvery,
+          unit: repeatUnit,
+          ...(repeatEndDate ? { endDate: repeatEndDate } : {}),
+        };
+      }
       if (!repeat_series_id) {
         repeat_series_id = crypto.randomUUID();
       }
@@ -784,42 +799,94 @@ export default function CardDetailModal({
 
               {repeatEnabled && (
                 <>
+                  {/* Mode toggle */}
                   <div className="kb-repeat-row">
-                    <span className="kb-repeat-label">Every</span>
                     <select
                       className="kb-input"
-                      value={repeatEvery}
-                      onChange={e => setRepeatEvery(parseInt(e.target.value))}
-                      style={{ width: 60 }}
+                      value={repeatMode}
+                      onChange={e => setRepeatMode(e.target.value as RepeatMode)}
                     >
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
-                        <option key={n} value={n}>{n}</option>
-                      ))}
-                    </select>
-                    <select
-                      className="kb-input"
-                      value={repeatUnit}
-                      onChange={e => setRepeatUnit(e.target.value as RepeatUnit)}
-                    >
-                      <option value="days">Days</option>
-                      <option value="weeks">Weeks</option>
-                      <option value="months">Months</option>
+                      <option value="interval">Every N days/weeks/months</option>
+                      <option value="monthly-weekday">Monthly on a specific day</option>
                     </select>
                   </div>
 
-                  {/* Start date warning */}
-                  {!editStartDate && (
+                  {repeatMode === 'interval' ? (
+                    <div className="kb-repeat-row">
+                      <span className="kb-repeat-label">Every</span>
+                      <select
+                        className="kb-input"
+                        value={repeatEvery}
+                        onChange={e => setRepeatEvery(parseInt(e.target.value))}
+                        style={{ width: 60 }}
+                      >
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                      <select
+                        className="kb-input"
+                        value={repeatUnit}
+                        onChange={e => setRepeatUnit(e.target.value as RepeatUnit)}
+                      >
+                        <option value="days">Days</option>
+                        <option value="weeks">Weeks</option>
+                        <option value="months">Months</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="kb-repeat-row">
+                      <span className="kb-repeat-label">The</span>
+                      <select
+                        className="kb-input"
+                        value={repeatNth}
+                        onChange={e => setRepeatNth(parseInt(e.target.value))}
+                        style={{ width: 64 }}
+                      >
+                        <option value={1}>1st</option>
+                        <option value={2}>2nd</option>
+                        <option value={3}>3rd</option>
+                        <option value={4}>4th</option>
+                        <option value={5}>5th</option>
+                      </select>
+                      <select
+                        className="kb-input"
+                        value={repeatWeekday}
+                        onChange={e => setRepeatWeekday(parseInt(e.target.value))}
+                      >
+                        <option value={0}>Sunday</option>
+                        <option value={1}>Monday</option>
+                        <option value={2}>Tuesday</option>
+                        <option value={3}>Wednesday</option>
+                        <option value={4}>Thursday</option>
+                        <option value={5}>Friday</option>
+                        <option value={6}>Saturday</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Start date warning (interval mode only) */}
+                  {repeatMode === 'interval' && !editStartDate && (
                     <div className="kb-repeat-warn">A start date is required to anchor the repeat schedule.</div>
                   )}
 
                   {/* Summary & next date preview */}
-                  {editStartDate && (
+                  {(repeatMode === 'monthly-weekday' || editStartDate) && (
                     <div className="kb-repeat-summary">
                       <span className="kb-repeat-summary-text">
-                        {formatRepeatSummary({ every: repeatEvery, unit: repeatUnit })}
+                        {formatRepeatSummary(
+                          repeatMode === 'monthly-weekday'
+                            ? { mode: 'monthly-weekday', every: 1, unit: 'months', nth: repeatNth, weekday: repeatWeekday }
+                            : { every: repeatEvery, unit: repeatUnit }
+                        )}
                       </span>
                       <span className="kb-repeat-next">
-                        Next: {formatNextDate({ every: repeatEvery, unit: repeatUnit, ...(repeatEndDate ? { endDate: repeatEndDate } : {}) }, editStartDate)}
+                        Next: {formatNextDate(
+                          repeatMode === 'monthly-weekday'
+                            ? { mode: 'monthly-weekday', every: 1, unit: 'months', nth: repeatNth, weekday: repeatWeekday, ...(repeatEndDate ? { endDate: repeatEndDate } : {}) }
+                            : { every: repeatEvery, unit: repeatUnit, ...(repeatEndDate ? { endDate: repeatEndDate } : {}) },
+                          editStartDate
+                        )}
                       </span>
                     </div>
                   )}

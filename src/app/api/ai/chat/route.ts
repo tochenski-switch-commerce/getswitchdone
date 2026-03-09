@@ -111,18 +111,9 @@ GUIDELINES:
 - When suggesting priorities or actions, be opinionated but explain your reasoning briefly.
 - Format responses in clean markdown. Use bold for emphasis.`;
 
-  // DEBUG: minimal test to isolate the issue
-  const testResult = streamText({
-    model: gsdModel,
-    prompt: 'Say hello in one sentence.',
-  });
-  try {
-    const testText = await testResult.text;
-    // If we get here, the basic model works — issue is with tools/config
-    // Now try with the full config
-  } catch (testErr) {
-    const tmsg = testErr instanceof Error ? testErr.message : String(testErr);
-    return new Response(`Basic model test failed: ${tmsg}\nThis likely means the OPENAI_API_KEY is not set or invalid in the Netlify environment.`, { status: 500 });
+  // Check API key is available
+  if (!process.env.OPENAI_API_KEY) {
+    return new Response('OPENAI_API_KEY is not configured in environment variables.', { status: 500 });
   }
 
   const result = streamText({
@@ -371,21 +362,31 @@ GUIDELINES:
     },
   });
 
-  // Collect the full AI response — await each step to catch errors properly
-  try {
-    const text = await result.text;
-    return new Response(text || '[No response generated]', {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    });
-  } catch (streamErr) {
-    const msg = streamErr instanceof Error ? streamErr.message : String(streamErr);
-    const stack = streamErr instanceof Error ? streamErr.stack : '';
-    return new Response(`AI Stream Error: ${msg}\n\nStack: ${stack}`, { status: 500 });
-  }
+  // Stream text-delta parts from fullStream (supports multi-step tool flows)
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const part of result.fullStream) {
+          if (part.type === 'text-delta') {
+            controller.enqueue(encoder.encode(part.text));
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        controller.enqueue(encoder.encode(`\n\n[Error: ${msg}]`));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(readable, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error ? err.stack : '';
-    return new Response(`AI Chat Error: ${msg}\n\nStack: ${stack}`, { status: 500 });
+    return new Response(`AI Chat Error: ${msg}`, { status: 500 });
   }
 }

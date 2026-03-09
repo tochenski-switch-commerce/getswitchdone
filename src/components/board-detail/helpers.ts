@@ -1,5 +1,5 @@
 import React from 'react';
-import type { CardPriority, CustomFieldType, RepeatRule, RepeatUnit } from '@/types/board-types';
+import type { CardPriority, CustomFieldType, RepeatRule, RepeatUnit, RepeatMode } from '@/types/board-types';
 
 /* ═══════════════════════════════════════════════════════════
    Regex patterns
@@ -191,13 +191,41 @@ function addUnits(date: Date, every: number, unit: RepeatUnit): Date {
   return d;
 }
 
-/** Compute the next occurrence date after today, anchored to startDate. */
+/** Get the Nth weekday of a given month (1-indexed).
+ *  Returns null if the Nth occurrence doesn't exist (e.g. 5th Monday). */
+export function getNthWeekdayOfMonth(year: number, month: number, weekday: number, nth: number): Date | null {
+  const first = new Date(year, month, 1);
+  let dow = first.getDay();
+  // Day of first occurrence of the target weekday
+  let day = 1 + ((weekday - dow + 7) % 7);
+  // Advance to the Nth occurrence
+  day += (nth - 1) * 7;
+  if (day > new Date(year, month + 1, 0).getDate()) return null; // doesn't exist
+  return new Date(year, month, day);
+}
+
+/** Compute the next occurrence date after today. */
 export function getNextRepeatDate(rule: RepeatRule, startDate: string): Date {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
-  const anchor = new Date(startDate + 'T00:00:00');
 
-  // Step forward from anchor by (every * unit) until we're past today
+  if (rule.mode === 'monthly-weekday' && rule.nth != null && rule.weekday != null) {
+    // Monthly-weekday mode: find next Nth weekday of the month
+    let year = now.getFullYear();
+    let month = now.getMonth();
+    // Look at this month and up to 13 months forward
+    for (let i = 0; i < 14; i++) {
+      const d = getNthWeekdayOfMonth(year, month, rule.weekday, rule.nth);
+      if (d && d > now) return d;
+      month++;
+      if (month > 11) { month = 0; year++; }
+    }
+    // Fallback (shouldn't happen)
+    return new Date(now.getTime() + 86400000);
+  }
+
+  // Interval mode (default)
+  const anchor = new Date(startDate + 'T00:00:00');
   let next = new Date(anchor);
   while (next <= now) {
     next = addUnits(next, rule.every, rule.unit);
@@ -207,7 +235,7 @@ export function getNextRepeatDate(rule: RepeatRule, startDate: string): Date {
 
 /** Format the next repeat date as a friendly string. */
 export function formatNextDate(rule: RepeatRule, startDate: string): string {
-  if (!startDate) return 'Set a start date';
+  if (rule.mode !== 'monthly-weekday' && !startDate) return 'Set a start date';
   const next = getNextRepeatDate(rule, startDate);
   if (rule.endDate) {
     const end = new Date(rule.endDate + 'T00:00:00');
@@ -222,8 +250,14 @@ const UNIT_LABELS: Record<RepeatUnit, [string, string]> = {
   months: ['month', 'months'],
 };
 
-/** Human-readable repeat summary, e.g. "Every 2 weeks" or "Every day". */
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const NTH_LABELS = ['1st', '2nd', '3rd', '4th', '5th'];
+
+/** Human-readable repeat summary. */
 export function formatRepeatSummary(rule: RepeatRule): string {
+  if (rule.mode === 'monthly-weekday' && rule.nth != null && rule.weekday != null) {
+    return `${NTH_LABELS[rule.nth - 1]} ${WEEKDAY_NAMES[rule.weekday]}`;
+  }
   const [singular, plural] = UNIT_LABELS[rule.unit];
   if (rule.every === 1) return `Every ${singular}`;
   return `Every ${rule.every} ${plural}`;

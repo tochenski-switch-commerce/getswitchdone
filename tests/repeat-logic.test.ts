@@ -5,18 +5,24 @@
  *
  * Tests:
  *   A. addUnits – date arithmetic (days, weeks, months)
- *   B. getNextRepeatDate – anchor-based next occurrence
- *   C. formatRepeatSummary – human-readable summaries
+ *   B. getNextRepeatDate – anchor-based next occurrence (interval + monthly-weekday)
+ *   C. formatRepeatSummary – human-readable summaries (both modes)
  *   D. formatNextDate – friendly date string / edge cases
  *   E. isRepeatDueToday – cron-level check (anchored stepping)
+ *   F. getNthWeekdayOfMonth – Nth weekday date math
+ *   G. isMonthlyWeekdayDueToday – cron-level check for monthly-weekday mode
  */
 
 /* ── helpers copied locally so we can run without React/Next imports ─── */
 
 type RepeatUnit = 'days' | 'weeks' | 'months';
+type RepeatMode = 'interval' | 'monthly-weekday';
 interface RepeatRule {
+  mode?: RepeatMode;
   every: number;
   unit: RepeatUnit;
+  nth?: number;
+  weekday?: number;
   endDate?: string;
 }
 
@@ -31,6 +37,19 @@ function addUnits(date: Date, every: number, unit: RepeatUnit): Date {
 function getNextRepeatDate(rule: RepeatRule, startDate: string): Date {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
+
+  if (rule.mode === 'monthly-weekday' && rule.nth != null && rule.weekday != null) {
+    let year = now.getFullYear();
+    let month = now.getMonth();
+    for (let i = 0; i < 14; i++) {
+      const d = getNthWeekdayOfMonth(year, month, rule.weekday, rule.nth);
+      if (d && d > now) return d;
+      month++;
+      if (month > 11) { month = 0; year++; }
+    }
+    return new Date(now.getTime() + 86400000);
+  }
+
   const anchor = new Date(startDate + 'T00:00:00');
   let next = new Date(anchor);
   while (next <= now) {
@@ -39,8 +58,24 @@ function getNextRepeatDate(rule: RepeatRule, startDate: string): Date {
   return next;
 }
 
+function getNthWeekdayOfMonth(year: number, month: number, weekday: number, nth: number): Date | null {
+  const first = new Date(year, month, 1);
+  let dow = first.getDay();
+  let day = 1 + ((weekday - dow + 7) % 7);
+  day += (nth - 1) * 7;
+  if (day > new Date(year, month + 1, 0).getDate()) return null;
+  return new Date(year, month, day);
+}
+
+function isMonthlyWeekdayDueToday(nth: number, weekday: number): boolean {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const target = getNthWeekdayOfMonth(now.getFullYear(), now.getMonth(), weekday, nth);
+  return target !== null && target.getTime() === now.getTime();
+}
+
 function formatNextDate(rule: RepeatRule, startDate: string): string {
-  if (!startDate) return 'Set a start date';
+  if (rule.mode !== 'monthly-weekday' && !startDate) return 'Set a start date';
   const next = getNextRepeatDate(rule, startDate);
   if (rule.endDate) {
     const end = new Date(rule.endDate + 'T00:00:00');
@@ -55,7 +90,13 @@ const UNIT_LABELS: Record<RepeatUnit, [string, string]> = {
   months: ['month', 'months'],
 };
 
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const NTH_LABELS = ['1st', '2nd', '3rd', '4th', '5th'];
+
 function formatRepeatSummary(rule: RepeatRule): string {
+  if (rule.mode === 'monthly-weekday' && rule.nth != null && rule.weekday != null) {
+    return `${NTH_LABELS[rule.nth - 1]} ${WEEKDAY_NAMES[rule.weekday]}`;
+  }
   const [singular, plural] = UNIT_LABELS[rule.unit];
   if (rule.every === 1) return `Every ${singular}`;
   return `Every ${rule.every} ${plural}`;
@@ -331,6 +372,76 @@ assert(!isRepeatDueToday(todayStr, 1, 'days'), 'start=today, every 1 day → not
   const future = new Date(TODAY);
   future.setDate(future.getDate() + 30);
   assert(!isRepeatDueToday(toDateStr(future), 1, 'days'), 'future start → NOT due today');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   F. getNthWeekdayOfMonth
+   ═══════════════════════════════════════════════════════════ */
+console.log('\n🔹 F. getNthWeekdayOfMonth');
+
+// March 2026: 1st Sunday is March 1
+assertEqual(toDateStr(getNthWeekdayOfMonth(2026, 2, 0, 1)!), '2026-03-01', '1st Sunday of March 2026');
+
+// March 2026: 3rd Tuesday → March 17
+assertEqual(toDateStr(getNthWeekdayOfMonth(2026, 2, 2, 3)!), '2026-03-17', '3rd Tuesday of March 2026');
+
+// March 2026: 1st Monday → March 2
+assertEqual(toDateStr(getNthWeekdayOfMonth(2026, 2, 1, 1)!), '2026-03-02', '1st Monday of March 2026');
+
+// March 2026: 4th Friday → March 27
+assertEqual(toDateStr(getNthWeekdayOfMonth(2026, 2, 5, 4)!), '2026-03-27', '4th Friday of March 2026');
+
+// February 2026: 5th Monday → doesn't exist (Feb has only 4 Mondays)
+assertEqual(getNthWeekdayOfMonth(2026, 1, 1, 5), null, '5th Monday of Feb 2026 → null');
+
+// January 2026: 5th Thursday → Jan 29
+assertEqual(toDateStr(getNthWeekdayOfMonth(2026, 0, 4, 5)!), '2026-01-29', '5th Thursday of Jan 2026');
+
+/* ═══════════════════════════════════════════════════════════
+   G. isMonthlyWeekdayDueToday / formatRepeatSummary (monthly-weekday)
+   ═══════════════════════════════════════════════════════════ */
+console.log('\n🔹 G. monthly-weekday mode');
+
+// Check if today matches its own Nth weekday
+{
+  const todayDow = TODAY.getDay();
+  // Figure out which Nth occurrence today is
+  const dayOfMonth = TODAY.getDate();
+  const nth = Math.ceil(dayOfMonth / 7);
+  assert(isMonthlyWeekdayDueToday(nth, todayDow), `today is the ${NTH_LABELS[nth - 1]} ${WEEKDAY_NAMES[todayDow]} → due`);
+}
+
+// Wrong weekday → not due
+{
+  const wrongDow = (TODAY.getDay() + 3) % 7;
+  assert(!isMonthlyWeekdayDueToday(1, wrongDow), `1st ${WEEKDAY_NAMES[wrongDow]} → NOT due today`);
+}
+
+// formatRepeatSummary for monthly-weekday
+assertEqual(
+  formatRepeatSummary({ mode: 'monthly-weekday', every: 1, unit: 'months', nth: 3, weekday: 2 }),
+  '3rd Tuesday',
+  'summary: 3rd Tuesday'
+);
+assertEqual(
+  formatRepeatSummary({ mode: 'monthly-weekday', every: 1, unit: 'months', nth: 1, weekday: 0 }),
+  '1st Sunday',
+  'summary: 1st Sunday'
+);
+assertEqual(
+  formatRepeatSummary({ mode: 'monthly-weekday', every: 1, unit: 'months', nth: 5, weekday: 5 }),
+  '5th Friday',
+  'summary: 5th Friday'
+);
+
+// getNextRepeatDate for monthly-weekday
+{
+  const rule: RepeatRule = { mode: 'monthly-weekday', every: 1, unit: 'months', nth: 1, weekday: 1 };
+  const next = getNextRepeatDate(rule, todayStr);
+  // Should be a Monday and the 1st Monday of its month
+  assertEqual(next.getDay(), 1, 'next 1st Monday → is a Monday');
+  assert(next.getDate() <= 7, 'next 1st Monday → day is 1–7');
+  assert(next > TODAY, 'next 1st Monday → is in the future');
 }
 
 /* ═══════════════════════════════════════════════════════════

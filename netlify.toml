@@ -1,2 +1,8 @@
 [functions]
   directory = "netlify/functions"
+
+[[headers]]
+  for = "/.well-known/apple-app-site-association"
+  [headers.values]
+    Content-Type = "application/json"
+    Cache-Control = "max-age=86400"

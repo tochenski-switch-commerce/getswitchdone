@@ -12,7 +12,25 @@ function addUnits(date: Date, every: number, unit: string): Date {
   return d;
 }
 
-/** Check if today is a repeat day, anchored to start_date. */
+/** Get the Nth weekday (0=Sun..6=Sat) of a given month. Returns null if it doesn't exist. */
+function getNthWeekdayOfMonth(year: number, month: number, weekday: number, nth: number): Date | null {
+  const first = new Date(year, month, 1);
+  let dow = first.getDay();
+  let day = 1 + ((weekday - dow + 7) % 7);
+  day += (nth - 1) * 7;
+  if (day > new Date(year, month + 1, 0).getDate()) return null;
+  return new Date(year, month, day);
+}
+
+/** Check if today is a repeat day for the monthly-weekday mode. */
+function isMonthlyWeekdayDueToday(nth: number, weekday: number): boolean {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const target = getNthWeekdayOfMonth(now.getFullYear(), now.getMonth(), weekday, nth);
+  return target !== null && target.getTime() === now.getTime();
+}
+
+/** Check if today is a repeat day, anchored to start_date (interval mode). */
 function isRepeatDueToday(startDate: string, every: number, unit: string): boolean {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -79,15 +97,23 @@ export async function GET(request: Request) {
   const cardsToRepeat: typeof repeatCards = [];
 
   for (const card of seriesMap.values()) {
-    const rule = card.repeat_rule as { every: number; unit: string; endDate?: string };
-    if (!rule?.every || !rule?.unit) continue;
-    if (!card.start_date) continue;
+    const rule = card.repeat_rule as { mode?: string; every: number; unit: string; nth?: number; weekday?: number; endDate?: string };
+    if (!rule) continue;
 
     // Check end date
     if (rule.endDate && todayStr > rule.endDate) continue;
 
-    if (isRepeatDueToday(card.start_date, rule.every, rule.unit)) {
-      cardsToRepeat.push(card);
+    if (rule.mode === 'monthly-weekday') {
+      if (rule.nth != null && rule.weekday != null && isMonthlyWeekdayDueToday(rule.nth, rule.weekday)) {
+        cardsToRepeat.push(card);
+      }
+    } else {
+      // Interval mode (default)
+      if (!rule.every || !rule.unit) continue;
+      if (!card.start_date) continue;
+      if (isRepeatDueToday(card.start_date, rule.every, rule.unit)) {
+        cardsToRepeat.push(card);
+      }
     }
   }
 
