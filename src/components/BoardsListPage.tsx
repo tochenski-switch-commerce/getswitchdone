@@ -1,14 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 /* AUTH: Replace with your auth hook */
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
 import { useTeams } from '@/hooks/useTeams';
 
-const InboxPanel = dynamic(() => import('@/components/InboxPanel'), { ssr: false });
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { hapticLight } from '@/lib/haptics';
@@ -23,11 +21,7 @@ import {
   Lock,
   User,
   Users,
-  Edit3,
-  X,
-  Check,
   FileText,
-  Bell,
   Copy,
   getBoardIcon,
   BOARD_ICONS,
@@ -37,15 +31,12 @@ import {
 import type { BoardIconKey } from '@/components/BoardIcons';
 
 function BoardsListPage() {
-  const { user, loading: authLoading, profile, signOut, updateProfileName } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { boards, fetchBoards, createBoard, deleteBoard, duplicateBoard, loading, error,
-    notifications, fetchNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, clearAllNotifications,
-  } = useProjectBoard();
+  const { boards, fetchBoards, createBoard, deleteBoard, duplicateBoard, loading, error } = useProjectBoard();
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [showInbox, setShowInbox] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newIcon, setNewIcon] = useState<BoardIconKey>('folder-kanban');
@@ -54,25 +45,14 @@ function BoardsListPage() {
   const [newTeamId, setNewTeamId] = useState<string | ''>('');
   const overlayMouseDown = useRef<EventTarget | null>(null);
   const [creating, setCreating] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState('');
-  const [savingName, setSavingName] = useState(false);
+
 
   const { teams, fetchTeams } = useTeams();
 
   const handlePullRefresh = useCallback(async () => {
-    await Promise.all([fetchBoards(), fetchNotifications()]);
-  }, [fetchBoards, fetchNotifications]);
+    await fetchBoards();
+  }, [fetchBoards]);
   const { pulling, pullDistance, refreshing } = usePullToRefresh(handlePullRefresh);
-
-  const handleSaveName = async () => {
-    if (!nameInput.trim()) return;
-    setSavingName(true);
-    await updateProfileName(nameInput);
-    setSavingName(false);
-    setEditingName(false);
-  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -83,18 +63,12 @@ function BoardsListPage() {
   useEffect(() => {
     if (user) {
       fetchBoards();
-      fetchNotifications();
       fetchTeams();
     }
-  }, [user, fetchBoards, fetchNotifications, fetchTeams]);
+  }, [user, fetchBoards, fetchTeams]);
 
-  // Auto-open inbox from quick action deep link
+  // Widget "Add Card" deep link: navigate to most recent board with addCard flag
   useEffect(() => {
-    if (searchParams.get('inbox') === '1') {
-      setShowInbox(true);
-      router.replace('/boards');
-    }
-    // Widget "Add Card" deep link: navigate to most recent board with addCard flag
     if (searchParams.get('addCard') === '1' && boards.length > 0) {
       router.replace(`/boards/${boards[0].id}?addCard=1`);
     }
@@ -199,80 +173,7 @@ function BoardsListPage() {
               <Plus size={16} />
               New Board
             </button>
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ position: 'relative' }}>
-              <button
-                className="kb-btn-icon"
-                onClick={() => setShowInbox(!showInbox)}
-                title="Inbox"
-                style={{ position: 'relative' }}
-              >
-                <Bell size={18} />
-                {notifications.filter(n => !n.is_read).length > 0 && (
-                  <span style={{
-                    position: 'absolute', top: 0, right: 0, width: 8, height: 8,
-                    borderRadius: '50%', background: '#ef4444',
-                  }} />
-                )}
-              </button>
-            </div>
-            <div style={{ position: 'relative' }}>
-              <button
-                className="kb-user-avatar-btn"
-                onClick={() => { setShowUserMenu(!showUserMenu); if (!showUserMenu && profile) setNameInput(profile.name); }}
-                title={profile?.name || user?.email || 'Account'}
-              >
-                {profile?.name ? profile.name.charAt(0).toUpperCase() : <User size={16} />}
-              </button>
-              {showUserMenu && (
-                <>
-                  <div className="kb-click-away" onClick={() => { setShowUserMenu(false); setEditingName(false); }} />
-                  <div className="kb-user-dropdown">
-                    <div className="kb-user-dropdown-header">
-                      <div className="kb-user-dropdown-email">{user?.email}</div>
-                    </div>
-                    <div className="kb-user-dropdown-section">
-                      <div className="kb-user-dropdown-label">Display Name (@handle)</div>
-                      {editingName ? (
-                        <div className="kb-user-name-edit">
-                          <input
-                            className="kb-input"
-                            value={nameInput}
-                            onChange={e => setNameInput(e.target.value)}
-                            placeholder="Your display name"
-                            autoFocus
-                            maxLength={40}
-                            onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setEditingName(false); }}
-                            style={{ fontSize: 13, padding: '7px 10px' }}
-                          />
-                          <button className="kb-btn kb-btn-primary" onClick={handleSaveName} disabled={savingName || !nameInput.trim()} style={{ padding: '6px 12px', fontSize: 12 }}>
-                            <Check size={12} /> Save
-                          </button>
-                          <button className="kb-btn kb-btn-ghost" onClick={() => setEditingName(false)} style={{ padding: '6px 10px', fontSize: 12 }}>
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="kb-user-name-display">
-                          <span className="kb-user-name-value">{profile?.name || <span style={{ color: '#6b7280', fontStyle: 'italic' }}>Not set</span>}</span>
-                          <button className="kb-btn-icon" onClick={() => { setEditingName(true); setNameInput(profile?.name || ''); }} title="Edit name">
-                            <Edit3 size={13} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="kb-user-dropdown-divider" />
-                    <button
-                      className="kb-user-dropdown-item danger"
-                      onClick={async () => { await signOut(); router.replace('/auth'); }}
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-            </div>
+
           </div>
         </div>
 
@@ -456,17 +357,6 @@ function BoardsListPage() {
         )}
       </div>
 
-      {showInbox && (
-        <InboxPanel
-          notifications={notifications}
-          onClose={() => setShowInbox(false)}
-          onMarkRead={markNotificationRead}
-          onMarkAllRead={markAllNotificationsRead}
-          onDelete={deleteNotification}
-          onClearAll={clearAllNotifications}
-          onNavigate={(boardId, cardId) => router.push(`/boards/${boardId}${cardId ? `?card=${cardId}` : ''}`)}
-        />
-      )}
     </div>
   );
 }
