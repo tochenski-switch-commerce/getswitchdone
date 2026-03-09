@@ -2409,6 +2409,8 @@ export const kanbanStyles = `
     .kb-input, .kb-textarea { font-size: 16px !important; }
     .kb-cf-field { overflow: hidden; }
     .kb-cf-section { overflow: hidden; }
+    .kb-repeat-row { flex-wrap: wrap; }
+    .kb-repeat-unit { font-size: 10px; }
     .kb-form-group { overflow: hidden; max-width: 100%; }
 
     /* Custom fields mobile */
