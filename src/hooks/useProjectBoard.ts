@@ -143,7 +143,7 @@ export function useProjectBoard() {
         supabase.from('board_labels').select('*').eq('board_id', boardId),
         supabase.from('board_custom_fields').select('*').eq('board_id', boardId).order('position'),
         supabase.from('board_links').select('*, target_board:project_boards!target_board_id(id, title, icon, icon_color, is_public)').eq('board_id', boardId).order('position'),
-        supabase.from('user_profiles').select('id, name'),
+        supabase.from('user_profiles').select('id, name, updated_at'),
       ]);
 
       if (boardRes.error) throw boardRes.error;
