@@ -746,17 +746,15 @@ export default function CardDetailModal({
                         <option key={n} value={n}>{n}</option>
                       ))}
                     </select>
-                    <div className="kb-repeat-unit-picker">
-                      {(['days', 'weeks', 'months'] as const).map(u => (
-                        <button
-                          key={u}
-                          className={`kb-repeat-unit ${repeatUnit === u ? 'active' : ''}`}
-                          onClick={() => setRepeatUnit(u)}
-                        >
-                          {u.charAt(0).toUpperCase() + u.slice(1)}
-                        </button>
-                      ))}
-                    </div>
+                    <select
+                      className="kb-input"
+                      value={repeatUnit}
+                      onChange={e => setRepeatUnit(e.target.value as RepeatUnit)}
+                    >
+                      <option value="days">Days</option>
+                      <option value="weeks">Weeks</option>
+                      <option value="months">Months</option>
+                    </select>
                   </div>
 
                   {/* Start date warning */}

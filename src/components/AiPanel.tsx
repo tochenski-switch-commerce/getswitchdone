@@ -16,12 +16,14 @@ export default function AiPanel({
   accessToken,
   onClose,
   onBoardChanged,
+  initialPrompt,
 }: {
   boardId: string;
   boardTitle: string;
   accessToken: string;
   onClose: () => void;
   onBoardChanged?: () => void;
+  initialPrompt?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -29,6 +31,7 @@ export default function AiPanel({
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const initialPromptSent = useRef(false);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -38,6 +41,14 @@ export default function AiPanel({
 
   useEffect(scrollToBottom, [messages, scrollToBottom]);
   useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Auto-send initial prompt from autopilot actions
+  useEffect(() => {
+    if (initialPrompt && !initialPromptSent.current && !streaming) {
+      initialPromptSent.current = true;
+      sendMessage(initialPrompt);
+    }
+  }, [initialPrompt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMessage = async (text?: string) => {
     const msg = (text ?? input).trim();

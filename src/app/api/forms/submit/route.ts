@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
     let cardTitle = 'Form submission';
     let cardDescription = '';
     let cardPriority = 'medium';
+    let priorityExplicitlyMapped = false;
     let cardDueDate: string | null = null;
     let cardAssignee: string | null = null;
     const descParts: string[] = [];
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
       } else if (field.maps_to === 'priority') {
         if (['low', 'medium', 'high', 'urgent'].includes(value)) {
           cardPriority = value;
+          priorityExplicitlyMapped = true;
         }
       } else if (field.maps_to === 'due_date') {
         cardDueDate = value;
@@ -132,6 +134,25 @@ export async function POST(request: NextRequest) {
         data,
         card_id: card.id,
       }]);
+
+    // ── AI auto-triage: classify priority if not explicitly mapped ──
+    if (!priorityExplicitlyMapped) {
+      try {
+        const { triageContent } = await import('@/lib/ai');
+        const triage = await triageContent({
+          title: cardTitle,
+          body: cardDescription,
+        });
+        if (triage && triage.priority !== cardPriority) {
+          await supabase
+            .from('board_cards')
+            .update({ priority: triage.priority })
+            .eq('id', card.id);
+        }
+      } catch (err) {
+        console.error('[form-submit] AI triage failed (non-critical):', err);
+      }
+    }
 
     return NextResponse.json({ success: true, cardId: card.id });
   } catch {

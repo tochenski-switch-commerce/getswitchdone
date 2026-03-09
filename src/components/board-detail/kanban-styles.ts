@@ -2095,14 +2095,6 @@ export const kanbanStyles = `
     display: flex; align-items: center; gap: 8px; margin-top: 8px;
   }
   .kb-repeat-label { font-size: 12px; color: #94a3b8; white-space: nowrap; }
-  .kb-repeat-unit-picker { display: flex; gap: 3px; flex: 1; }
-  .kb-repeat-unit {
-    flex: 1; padding: 5px 0; border-radius: 6px; font-size: 11px; font-weight: 500;
-    text-align: center; cursor: pointer; border: 1px solid #3b3f54;
-    background: #1a1d2e; color: #9ca3af; transition: all 0.15s;
-  }
-  .kb-repeat-unit:hover { border-color: #6366f1; color: #c7d2fe; }
-  .kb-repeat-unit.active { background: #2563eb; border-color: #2563eb; color: #fff; }
   .kb-repeat-warn {
     font-size: 11px; color: #f59e0b; margin-top: 6px; line-height: 1.4;
   }
@@ -2417,8 +2409,6 @@ export const kanbanStyles = `
     .kb-input, .kb-textarea { font-size: 16px !important; }
     .kb-cf-field { overflow: hidden; }
     .kb-cf-section { overflow: hidden; }
-    .kb-repeat-row { flex-wrap: wrap; }
-    .kb-repeat-unit { font-size: 10px; }
     .kb-form-group { overflow: hidden; max-width: 100%; }
 
     /* Custom fields mobile */

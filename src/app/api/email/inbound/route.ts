@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
     console.log('[inbound] matched board:', matched?.title || 'NONE');
 
     // Insert the email
-    const { error: insertErr } = await supabase
+    const { data: insertedEmail, error: insertErr } = await supabase
       .from('board_emails')
       .insert([{
         board_id: matched?.id || null,
@@ -226,13 +226,44 @@ export async function POST(request: NextRequest) {
         body_text: bodyText || null,
         body_html: bodyHtml || null,
         headers: headers,
-      }]);
+      }])
+      .select('id')
+      .single();
 
     if (insertErr) {
       console.error('[inbound] Failed to insert email:', insertErr);
       return NextResponse.json({ error: 'Failed to store email', detail: insertErr.message }, { status: 500 });
     }
     console.log('[inbound] email inserted successfully');
+
+    // ── AI auto-triage (non-blocking) ──
+    if (matched && insertedEmail) {
+      // Fire-and-forget: triage the email and update the record
+      (async () => {
+        try {
+          const { triageContent } = await import('@/lib/ai');
+          const { data: cols } = await supabase
+            .from('board_columns')
+            .select('title')
+            .eq('board_id', matched.id)
+            .order('position');
+          const triage = await triageContent({
+            title: subject || '(no subject)',
+            body: bodyText || '',
+            boardColumns: cols?.map(c => c.title) || [],
+          });
+          if (triage) {
+            await supabase
+              .from('board_emails')
+              .update({ ai_triage: triage })
+              .eq('id', insertedEmail.id);
+            console.log('[inbound] AI triage saved:', triage.priority, triage.summary);
+          }
+        } catch (err) {
+          console.error('[inbound] AI triage failed (non-critical):', err);
+        }
+      })();
+    }
 
     // If unrouted, notify all users
     if (!matched) {

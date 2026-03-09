@@ -12,7 +12,7 @@ import {
   Tag, X, ChevronLeft, ChevronRight, User, Users,
   FolderKanban, Check, Globe, Lock, StickyNote, Copy,
   Zap, Bold, Italic, Underline, Strikethrough,
-  LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, Bell, FileText, Mail, Clock,
+  LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, FileText, Mail, Clock,
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
   BotMessageSquare,
 } from '@/components/BoardIcons';
@@ -20,8 +20,8 @@ import dynamic from 'next/dynamic';
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
-const InboxPanel = dynamic(() => import('@/components/InboxPanel'), { ssr: false });
 const AiPanel = dynamic(() => import('@/components/AiPanel'), { ssr: false });
+const AutopilotBanner = dynamic(() => import('@/components/AutopilotBanner'), { ssr: false });
 const DatePickerInput = dynamic(() => import('@/components/DatePickerInput'), { ssr: false });
 
 import { PRIORITY_CONFIG, PRIORITY_WEIGHT, sanitizeEmailHtml, emailTimeAgo } from './board-detail/helpers';
@@ -89,8 +89,8 @@ function BoardPage() {
   const [showNotePanel, setShowNotePanel] = useState(false);
   const [showBoardIconPicker, setShowBoardIconPicker] = useState(false);
   const [iconColorHex, setIconColorHex] = useState('');
-  const [showInbox, setShowInbox] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiInitialPrompt, setAiInitialPrompt] = useState<string | undefined>();
   const [showEmailPanel, setShowEmailPanel] = useState(false);
   const [emailView, setEmailView] = useState<'board' | 'unrouted'>('board');
   const [emailSearch, setEmailSearch] = useState('');
@@ -823,22 +823,6 @@ function BoardPage() {
             )}
           </button>
 
-          {/* Inbox bell */}
-          <button
-            className="kb-btn-icon"
-            onClick={() => setShowInbox(!showInbox)}
-            title="Inbox"
-            style={{ position: 'relative' }}
-          >
-            <Bell size={16} />
-            {notifications.filter(n => !n.is_read).length > 0 && (
-              <span style={{
-                position: 'absolute', top: 2, right: 2, width: 7, height: 7,
-                borderRadius: '50%', background: '#ef4444',
-              }} />
-            )}
-          </button>
-
           {/* GSD AI */}
           <button
             className={`kb-btn-icon ${showAiPanel ? 'kb-btn-icon-active' : ''}`}
@@ -1041,6 +1025,20 @@ function BoardPage() {
       )}
 
 
+
+      {/* ── Autopilot banner ── */}
+      <AutopilotBanner
+        boardId={boardId}
+        accessToken={session?.access_token || ''}
+        onOpenChat={(prompt) => {
+          setAiInitialPrompt(prompt);
+          setShowAiPanel(true);
+        }}
+        onNavigateToCard={(cardId) => {
+          const card = board?.cards.find(c => c.id === cardId);
+          if (card) setSelectedCard(card);
+        }}
+      />
 
       {/* ── Kanban columns ── */}
       <div className="kb-columns-scroll">
@@ -1799,35 +1797,15 @@ function BoardPage() {
         )}
       </div>
 
-      {/* ── Inbox panel ── */}
-      {showInbox && (
-        <InboxPanel
-          notifications={notifications}
-          onClose={() => setShowInbox(false)}
-          onMarkRead={markNotificationRead}
-          onMarkAllRead={markAllNotificationsRead}
-          onDelete={deleteNotification}
-          onClearAll={clearAllNotifications}
-          onNavigate={(navBoardId, cardId) => {
-            setShowInbox(false);
-            if (navBoardId === boardId) {
-              const card = board?.cards.find(c => c.id === cardId);
-              if (card) setSelectedCard(card);
-            } else {
-              router.push(`/boards/${navBoardId}?card=${cardId}`);
-            }
-          }}
-        />
-      )}
-
       {/* ── AI panel ── */}
       {showAiPanel && (
         <AiPanel
           boardId={boardId}
           boardTitle={board?.title || ''}
           accessToken={session?.access_token || ''}
-          onClose={() => setShowAiPanel(false)}
+          onClose={() => { setShowAiPanel(false); setAiInitialPrompt(undefined); }}
           onBoardChanged={() => fetchBoard(boardId)}
+          initialPrompt={aiInitialPrompt}
         />
       )}
     </div>
