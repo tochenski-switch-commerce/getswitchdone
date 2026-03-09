@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS board_cards (
   priority      text DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
   start_date    date,
   due_date      date,
+  due_time      text,
   assignee      text,
   created_by    uuid REFERENCES auth.users(id),
   is_archived   boolean DEFAULT false,

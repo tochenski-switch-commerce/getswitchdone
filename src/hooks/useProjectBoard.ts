@@ -472,6 +472,7 @@ export function useProjectBoard() {
     priority?: CardPriority | null;
     start_date?: string;
     due_date?: string;
+    due_time?: string | null;
     assignee?: string;
     assignees?: string[];
     label_ids?: string[];
@@ -514,13 +515,13 @@ export function useProjectBoard() {
     }
   }, [board?.cards, board?.labels]);
 
-  const updateCard = useCallback(async (boardId: string, cardId: string, updates: any) => {
+  const updateCard = useCallback(async (boardId: string, cardId: string, updates: Record<string, unknown> & { label_ids?: string[] }) => {
     setError(null);
     try {
       const { label_ids, ...cardUpdates } = updates;
 
       // Update card fields if any
-      let cardData: any = {};
+      let cardData: Record<string, unknown> = {};
       if (Object.keys(cardUpdates).length > 0) {
         const { data, error: err } = await supabase
           .from('board_cards')

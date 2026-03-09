@@ -8,6 +8,14 @@ import {
 } from '@/components/BoardIcons';
 import { PRIORITY_CONFIG } from './helpers';
 
+function formatTime12Short(val: string): string {
+  if (!val) return '';
+  const [h, m] = val.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`;
+}
+
 function KanbanCard({
   card,
   onClick,
@@ -90,7 +98,7 @@ function KanbanCard({
             )}
             {card.start_date && card.due_date && <span className="kb-card-date-sep">→</span>}
             {card.due_date && (
-              <span>{isOverdue ? 'Overdue' : isDueSoon ? (daysUntilDue === 0 ? 'Today' : daysUntilDue === 1 ? 'Tomorrow' : 'In 2 days') : new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+              <span>{isOverdue ? 'Overdue' : isDueSoon ? (daysUntilDue === 0 ? 'Today' : daysUntilDue === 1 ? 'Tomorrow' : 'In 2 days') : new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}{card.due_time ? ` ${formatTime12Short(card.due_time)}` : ''}</span>
             )}
           </span>
         )}

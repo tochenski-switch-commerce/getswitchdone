@@ -63,7 +63,7 @@ function BoardPage() {
     notifications, fetchNotifications, createNotification, markNotificationRead, markCardNotificationsRead, markAllNotificationsRead, deleteNotification, clearAllNotifications,
     addCardLink, removeCardLink, searchCards,
     boardEmails, unroutedEmails, fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
-    loading, setBoard,
+    loading, error: boardError, setBoard,
   } = useProjectBoard();
 
   const { teams, fetchTeams } = useTeams();
@@ -188,6 +188,13 @@ function BoardPage() {
     noteSaveTimer.current = setTimeout(saveNoteNow, 1500);
   }, [saveNoteNow]);
 
+  // Clean up note autosave timer on unmount
+  useEffect(() => {
+    return () => {
+      if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
+    };
+  }, []);
+
   const execNoteCmd = (cmd: string, value?: string) => {
     document.execCommand(cmd, false, value);
     noteRef.current?.focus();
@@ -195,7 +202,13 @@ function BoardPage() {
 
   const insertNoteLink = () => {
     const url = prompt('Enter URL:');
-    if (url) document.execCommand('createLink', false, url);
+    if (url) {
+      try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return;
+        document.execCommand('createLink', false, parsed.href);
+      } catch { /* invalid URL — ignore */ }
+    }
     noteRef.current?.focus();
   };
 
@@ -482,6 +495,7 @@ function BoardPage() {
           priority: card.priority,
           start_date: card.start_date || undefined,
           due_date: card.due_date || undefined,
+          due_time: card.due_time || undefined,
           assignee: card.assignees?.[0] || card.assignee || undefined,
           assignees: card.assignees || (card.assignee ? [card.assignee] : []),
           label_ids: (card.labels || []).map(l => l.id),
@@ -563,6 +577,16 @@ function BoardPage() {
               <button className="kb-toast-dismiss" onClick={() => dismissToast(t.id)}>&times;</button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Error toast ── */}
+      {boardError && (
+        <div className="kb-toast-container">
+          <div className="kb-toast" style={{ borderColor: '#ef4444' }}>
+            <span className="kb-toast-dot" style={{ background: '#ef4444' }} />
+            <span className="kb-toast-msg">{boardError}</span>
+          </div>
         </div>
       )}
 
@@ -1439,6 +1463,7 @@ function BoardPage() {
               priority: activeCard.priority,
               start_date: activeCard.start_date || undefined,
               due_date: activeCard.due_date || undefined,
+              due_time: activeCard.due_time || undefined,
               assignee: activeCard.assignees?.[0] || activeCard.assignee || undefined,
               assignees: activeCard.assignees || (activeCard.assignee ? [activeCard.assignee] : []),
               label_ids: (activeCard.labels || []).map(l => l.id),

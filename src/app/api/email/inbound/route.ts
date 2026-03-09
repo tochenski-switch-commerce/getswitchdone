@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ── Fuzzy matching helpers ──
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing from address' }, { status: 400 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Dedup check by message_id
     if (messageId) {

@@ -33,7 +33,6 @@ function AuthForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState(inviteParam);
-  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [biometricReady, setBiometricReady] = useState(false);
@@ -126,13 +125,6 @@ function AuthForm() {
     }
 
     // Sign-in mode
-    // Set session persistence based on Remember Me
-    if (!rememberMe) {
-      window.addEventListener('beforeunload', () => {
-        supabase.auth.signOut();
-      }, { once: true });
-    }
-
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     setSubmitting(false);
 
@@ -314,17 +306,6 @@ function AuthForm() {
                   placeholder="Paste invite code to join a team"
                 />
               </div>
-            )}
-            {mode === 'signin' && (
-              <label className="kb-remember-me">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={e => setRememberMe(e.target.checked)}
-                  className="kb-checkbox"
-                />
-                <span>Remember me</span>
-              </label>
             )}
             {error && <p className="kb-auth-error">{error}</p>}
             <button

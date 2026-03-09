@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import DOMPurify from 'isomorphic-dompurify';
 import { BotMessageSquare, Send, X, Sparkles, Loader, BarChart3, Trash2 } from '@/components/BoardIcons';
 import { hapticLight } from '@/lib/haptics';
 
@@ -95,10 +96,8 @@ export default function AiPanel({
         }
       }
 
-      // If the AI performed tool calls that mutated the board, refresh
-      if (accumulated.includes('✅') || accumulated.includes('success') || accumulated.includes('added') || accumulated.includes('moved')) {
-        onBoardChanged?.();
-      }
+      // Refresh board after AI response — tool calls may have mutated data
+      onBoardChanged?.();
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
       setMessages(prev => {
@@ -194,7 +193,7 @@ export default function AiPanel({
                       <span className="kb-ai-typing-dot" />
                     </div>
                   ) : (
-                    <div className="kb-ai-msg-content" dangerouslySetInnerHTML={{ __html: formatMarkdown(m.content) }} />
+                    <div className="kb-ai-msg-content" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(formatMarkdown(m.content)) }} />
                   )}
                 </div>
               </div>

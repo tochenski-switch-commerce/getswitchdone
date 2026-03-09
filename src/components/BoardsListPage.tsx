@@ -84,7 +84,7 @@ function BoardsListPage() {
       fetchNotifications();
       fetchTeams();
     }
-  }, [user]);
+  }, [user, fetchBoards, fetchNotifications, fetchTeams]);
 
   // Auto-open inbox from quick action deep link
   useEffect(() => {

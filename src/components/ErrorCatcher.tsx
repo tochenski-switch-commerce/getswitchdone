@@ -9,6 +9,9 @@ import { useEffect, useState } from 'react';
 export default function ErrorCatcher() {
   const [error, setError] = useState<string | null>(null);
 
+  // Only active in development — never show stack traces in production
+  if (process.env.NODE_ENV === 'production') return null;
+
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
       setError(`ERROR: ${event.message}\n\nFile: ${event.filename}:${event.lineno}:${event.colno}\n\nStack: ${event.error?.stack || 'N/A'}`);

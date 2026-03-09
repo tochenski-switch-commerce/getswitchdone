@@ -2375,4 +2375,69 @@ export const kanbanStyles = `
     display: flex;
     gap: 6px;
   }
+
+  /* Due time picker */
+  .kb-due-time-add {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: none;
+    border: 1px dashed #374151;
+    border-radius: 6px;
+    color: #9ca3af;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 5px 10px;
+    margin-top: 6px;
+    transition: all 0.15s;
+  }
+  .kb-due-time-add:hover {
+    border-color: #6366f1;
+    color: #a5b4fc;
+  }
+  .kb-due-time-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .kb-due-time-select {
+    background: #1e2035;
+    color: #e5e7eb;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 13px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    text-align: center;
+    min-width: 44px;
+  }
+  .kb-due-time-select:focus {
+    outline: none;
+    border-color: #6366f1;
+  }
+  .kb-due-time-period {
+    min-width: 48px;
+  }
+  .kb-due-time-colon {
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .kb-due-time-clear {
+    background: none;
+    border: none;
+    color: #6b7280;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    line-height: 1;
+    margin-left: 2px;
+  }
+  .kb-due-time-clear:hover {
+    color: #ef4444;
+  }
 `;

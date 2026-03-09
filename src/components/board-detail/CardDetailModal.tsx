@@ -17,6 +17,84 @@ import { PRIORITY_CONFIG, linkifyText, renderCommentText, sanitizeRichText } fro
 import { hapticLight, hapticHeavy, hapticSuccess } from '@/lib/haptics';
 import { useAuth } from '@/contexts/AuthContext';
 
+function parseTime12(val: string): { hour: number; minute: number; period: 'AM' | 'PM' } {
+  // val = "HH:mm" 24h format
+  if (!val) return { hour: 12, minute: 0, period: 'AM' };
+  const [h, m] = val.split(':').map(Number);
+  const period: 'AM' | 'PM' = h >= 12 ? 'PM' : 'AM';
+  const hour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return { hour, minute: m || 0, period };
+}
+
+function formatTime24(hour: number, minute: number, period: 'AM' | 'PM'): string {
+  let h = hour;
+  if (period === 'AM' && h === 12) h = 0;
+  else if (period === 'PM' && h !== 12) h += 12;
+  return `${String(h).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function formatTime12(val: string): string {
+  if (!val) return '';
+  const { hour, minute, period } = parseTime12(val);
+  return `${hour}:${String(minute).padStart(2, '0')} ${period}`;
+}
+
+function DueTimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { hour, minute, period } = value ? parseTime12(value) : { hour: 12, minute: 0, period: 'AM' as const };
+
+  const setTime = (h: number, m: number, p: 'AM' | 'PM') => {
+    onChange(formatTime24(h, m, p));
+  };
+
+  if (!value) {
+    return (
+      <button
+        className="kb-due-time-add"
+        onClick={() => onChange(formatTime24(9, 0, 'AM'))}
+      >
+        <Clock size={12} /> Add time
+      </button>
+    );
+  }
+
+  return (
+    <div className="kb-due-time-row">
+      <select
+        className="kb-due-time-select"
+        value={hour}
+        onChange={e => setTime(Number(e.target.value), minute, period)}
+      >
+        {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+          <option key={h} value={h}>{h}</option>
+        ))}
+      </select>
+      <span className="kb-due-time-colon">:</span>
+      <select
+        className="kb-due-time-select"
+        value={minute}
+        onChange={e => setTime(hour, Number(e.target.value), period)}
+      >
+        {Array.from({ length: 12 }, (_, i) => i * 5).map(m => (
+          <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+        ))}
+      </select>
+      <select
+        className="kb-due-time-select kb-due-time-period"
+        value={period}
+        onChange={e => setTime(hour, minute, e.target.value as 'AM' | 'PM')}
+      >
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+      <button
+        className="kb-due-time-clear"
+        onClick={() => onChange('')}
+        title="Remove time"
+      >×</button>
+    </div>
+  );
+}
+
 export default function CardDetailModal({
   card,
   board,
@@ -73,6 +151,7 @@ export default function CardDetailModal({
   const [editPriority, setEditPriority] = useState<CardPriority | null>(card.priority);
   const [editStartDate, setEditStartDate] = useState(card.start_date || '');
   const [editDueDate, setEditDueDate] = useState(card.due_date || '');
+  const [editDueTime, setEditDueTime] = useState(card.due_time || '');
   const [editAssignees, setEditAssignees] = useState<string[]>(card.assignees?.length ? card.assignees : card.assignee ? [card.assignee] : []);
   const [showAssigneePicker, setShowAssigneePicker] = useState(false);
   const [editLabels, setEditLabels] = useState<string[]>((card.labels || []).map(l => l.id));
@@ -98,6 +177,7 @@ export default function CardDetailModal({
   const descRef = useRef<HTMLDivElement>(null);
   const commentAddRef = useRef<HTMLDivElement>(null);
   const commentEditRef = useRef<HTMLDivElement>(null);
+  const overlayMouseDown = useRef<EventTarget | null>(null);
 
   // AI state
   const { session } = useAuth();
@@ -178,7 +258,13 @@ export default function CardDetailModal({
 
   const insertLink = useCallback((ref: React.RefObject<HTMLDivElement | null>) => {
     const url = prompt('Enter URL:');
-    if (url) document.execCommand('createLink', false, url);
+    if (url) {
+      try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return;
+        document.execCommand('createLink', false, parsed.href);
+      } catch { /* invalid URL — ignore */ }
+    }
     ref.current?.focus();
   }, []);
 
@@ -203,6 +289,7 @@ export default function CardDetailModal({
         priority: editPriority || null,
         start_date: editStartDate || null,
         due_date: editDueDate || null,
+        due_time: editDueDate && editDueTime ? editDueTime : null,
         assignee: editAssignees.length > 0 ? editAssignees[0] : null,
         assignees: editAssignees,
         label_ids: editLabels,
@@ -215,7 +302,7 @@ export default function CardDetailModal({
       setAutoSaveStatus('idle');
       setSaveError(err.message || 'Failed to save card. Please try again.');
     }
-  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editAssignees, editLabels, editingDesc, onUpdate]);
+  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editDueTime, editAssignees, editLabels, editingDesc, onUpdate]);
 
   // Track pending changes (save happens on close, not while editing)
   useEffect(() => {
@@ -224,7 +311,7 @@ export default function CardDetailModal({
       return;
     }
     pendingChangesRef.current = true;
-  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editAssignees, editLabels]);
+  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editDueTime, editAssignees, editLabels]);
 
   const handleAddComment = async () => {
     const html = commentAddRef.current?.innerHTML || '';
@@ -272,7 +359,10 @@ export default function CardDetailModal({
   const completedCount = checklists.filter(c => c.is_completed).length;
 
   return (
-    <div className="kb-modal-overlay" onMouseDown={async () => {
+    <div className="kb-modal-overlay" onMouseDown={e => {
+            overlayMouseDown.current = e.target;
+          }} onClick={async (e) => {
+            if (overlayMouseDown.current !== e.target) return;
             if (pendingChangesRef.current) {
               await doSave();
             }
@@ -853,9 +943,12 @@ export default function CardDetailModal({
               <DatePickerInput
                 className="kb-input"
                 value={editDueDate}
-                onChange={setEditDueDate}
+                onChange={(v) => { setEditDueDate(v); if (!v) setEditDueTime(''); }}
                 placeholder="Select due date…"
               />
+              {editDueDate && (
+                <DueTimePicker value={editDueTime} onChange={setEditDueTime} />
+              )}
             </div>
 
             {/* Move to column */}

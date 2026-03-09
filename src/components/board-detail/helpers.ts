@@ -1,4 +1,5 @@
 import React from 'react';
+import DOMPurify from 'isomorphic-dompurify';
 import type { CardPriority, CustomFieldType } from '@/types/board-types';
 
 /* ═══════════════════════════════════════════════════════════
@@ -77,24 +78,20 @@ export function renderRichText(text: string): React.ReactNode[] {
 /* ═══════════════════════════════════════════════════════════
    Rich text sanitization
    ═══════════════════════════════════════════════════════════ */
+const RICH_TEXT_PURIFY_CONFIG = {
+  ALLOWED_TAGS: ['b', 'i', 'u', 's', 'a', 'p', 'br', 'ul', 'ol', 'li', 'h3', 'h4', 'pre', 'code', 'strong', 'em', 'span', 'div'],
+  ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+};
+
 export function sanitizeRichText(html: string): string {
   if (!html) return '';
-  // If plain text (no HTML tags), convert newlines to <br>
+  // If plain text (no HTML tags), convert newlines to <br> and add @mention spans
   if (!/<[a-z][\s\S]*>/i.test(html)) {
-    return html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
-      .replace(/@&quot;([^&]+)&quot;|@"([^"]+)"|@(\w+)/g, '<span class="kb-mention">$&</span>');
+    const escaped = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    return escaped.replace(/@&quot;([^&]+)&quot;|@"([^"]+)"|@(\w+)/g, '<span class="kb-mention">$&</span>');
   }
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    .replace(/<object[\s\S]*?<\/object>/gi, '')
-    .replace(/<embed[\s\S]*?\/?>|<\/embed>/gi, '')
-    .replace(/<form[\s\S]*?<\/form>/gi, '')
-    .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/\son\w+\s*=\s*\S+/gi, '')
-    .replace(/javascript\s*:/gi, 'blocked:')
-    .replace(/data\s*:/gi, 'blocked:')
-    .replace(/@&quot;([^&]+)&quot;|@"([^"]+)"|@(\w+)/g, '<span class="kb-mention">$&</span>');
+  const clean = DOMPurify.sanitize(html, RICH_TEXT_PURIFY_CONFIG);
+  return clean.replace(/@&quot;([^&]+)&quot;|@"([^"]+)"|@(\w+)/g, '<span class="kb-mention">$&</span>');
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -130,17 +127,13 @@ export const FIELD_TYPES: { value: CustomFieldType; label: string }[] = [
 /* ═══════════════════════════════════════════════════════════
    Email helpers
    ═══════════════════════════════════════════════════════════ */
+const EMAIL_PURIFY_CONFIG = {
+  ALLOWED_TAGS: ['b', 'i', 'u', 's', 'a', 'p', 'br', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'code', 'strong', 'em', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'img', 'blockquote', 'hr'],
+  ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style', 'src', 'alt', 'width', 'height', 'colspan', 'rowspan'],
+};
+
 export function sanitizeEmailHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    .replace(/<object[\s\S]*?<\/object>/gi, '')
-    .replace(/<embed[\s\S]*?\/?>|<\/embed>/gi, '')
-    .replace(/<form[\s\S]*?<\/form>/gi, '')
-    .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/\son\w+\s*=\s*\S+/gi, '')
-    .replace(/javascript\s*:/gi, 'blocked:')
-    .replace(/data\s*:/gi, 'blocked:');
+  return DOMPurify.sanitize(html, EMAIL_PURIFY_CONFIG);
 }
 
 export function emailTimeAgo(dateStr: string): string {
