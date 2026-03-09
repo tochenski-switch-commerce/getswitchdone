@@ -281,7 +281,7 @@ export default function PublicFormPage() {
 
 const publicFormStyles = `
   .pf-root {
-    min-height: 100vh;
+    height: 100vh;
     background: #0f1117 !important;
     color: #e5e7eb !important;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
@@ -289,6 +289,8 @@ const publicFormStyles = `
     align-items: flex-start;
     justify-content: center;
     padding: 40px 16px 80px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .pf-container {
     width: 100%;

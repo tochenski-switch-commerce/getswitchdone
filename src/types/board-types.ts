@@ -16,8 +16,40 @@ export interface ProjectBoard {
   icon_color?: string;
   is_archived: boolean;
   is_public: boolean;
+  team_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+// ── Teams ──
+
+export type TeamRole = 'owner' | 'member';
+
+export interface Team {
+  id: string;
+  name: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface TeamMember {
+  team_id: string;
+  user_id: string;
+  role: TeamRole;
+  joined_at: string;
+  user_profiles?: { name: string };
+}
+
+export interface TeamInvite {
+  id: string;
+  team_id: string;
+  invite_code: string;
+  max_uses: number | null;
+  use_count: number;
+  expires_at: string | null;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
 }
 
 export type ColumnType = 'normal' | 'board_links';

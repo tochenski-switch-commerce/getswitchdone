@@ -26,9 +26,12 @@ function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get('returnTo') || '/boards';
-  const { user, loading } = useAuth();
+  const inviteParam = searchParams.get('invite') || '';
+  const { user, loading, createUser } = useAuth();
+  const [mode, setMode] = useState<'signin' | 'signup'>(inviteParam ? 'signup' : 'signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState(inviteParam);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -98,6 +101,27 @@ function AuthForm() {
     setSubmitting(true);
     setHoldRedirect(true);
 
+    if (mode === 'signup') {
+      const { error: signUpErr } = await createUser(email, password, inviteCode || undefined);
+      setSubmitting(false);
+      if (signUpErr) {
+        setError(signUpErr.message);
+        setHoldRedirect(false);
+        return;
+      }
+      // After sign-up, auto-sign in
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInErr) {
+        setError(signInErr.message);
+        setHoldRedirect(false);
+        return;
+      }
+      setHoldRedirect(false);
+      router.push(returnTo);
+      return;
+    }
+
+    // Sign-in mode
     // Set session persistence based on Remember Me
     if (!rememberMe) {
       window.addEventListener('beforeunload', () => {
@@ -204,7 +228,12 @@ function AuthForm() {
       <div className="kb-auth-container">
         <div className="kb-auth-card">
           <h1 className="kb-auth-title">GSD Boards</h1>
-          <p className="kb-auth-subtitle">Sign in to your account</p>
+          <p className="kb-auth-subtitle">{mode === 'signin' ? 'Sign in to your account' : 'Create your account'}</p>
+
+          <div className="kb-auth-toggle">
+            <button className={`kb-auth-toggle-btn${mode === 'signin' ? ' active' : ''}`} onClick={() => setMode('signin')} type="button">Sign In</button>
+            <button className={`kb-auth-toggle-btn${mode === 'signup' ? ' active' : ''}`} onClick={() => setMode('signup')} type="button">Sign Up</button>
+          </div>
 
           {biometricReady && (
             <>
@@ -255,22 +284,36 @@ function AuthForm() {
                 minLength={6}
               />
             </div>
-            <label className="kb-remember-me">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={e => setRememberMe(e.target.checked)}
-                className="kb-checkbox"
-              />
-              <span>Remember me</span>
-            </label>
+            {mode === 'signup' && (
+              <div className="kb-form-group">
+                <label className="kb-label">Invite Code (optional)</label>
+                <input
+                  className="kb-input"
+                  type="text"
+                  value={inviteCode}
+                  onChange={e => setInviteCode(e.target.value)}
+                  placeholder="Paste invite code to join a team"
+                />
+              </div>
+            )}
+            {mode === 'signin' && (
+              <label className="kb-remember-me">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  className="kb-checkbox"
+                />
+                <span>Remember me</span>
+              </label>
+            )}
             {error && <p className="kb-auth-error">{error}</p>}
             <button
               className="kb-btn kb-btn-primary kb-auth-submit"
               type="submit"
               disabled={submitting}
             >
-              {submitting ? 'Signing in...' : 'Sign In'}
+              {submitting ? (mode === 'signin' ? 'Signing in...' : 'Creating account...') : (mode === 'signin' ? 'Sign In' : 'Create Account')}
             </button>
           </form>
         </div>
@@ -454,5 +497,19 @@ const authStyles = `
     .kb-auth-card { padding: 24px 20px; }
     .kb-auth-title { font-size: 20px; }
     .kb-input { font-size: 16px; }
+  }
+  .kb-remember-me {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #9ca3af;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .kb-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: #6366f1;
   }
 `;

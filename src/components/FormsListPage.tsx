@@ -392,10 +392,12 @@ export default function FormsListPage() {
 
 const formsListStyles = `
   .kb-root {
-    min-height: 100vh;
+    height: 100vh;
     background: #0f1117 !important;
     color: #e5e7eb !important;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .kb-filter-bar {
     display: flex;

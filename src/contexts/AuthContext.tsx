@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
-import { isAuthorizedEmail } from '@/lib/authorized-users';
 import { registerPushNotifications, unregisterPushNotifications } from '@/lib/push-notifications';
 import { deleteLoginCredentials } from '@/lib/biometric';
 import type { User, Session } from '@supabase/supabase-js';
@@ -12,12 +11,11 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  isAuthorized: boolean;
   profile: UserProfile | null;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
-  createUser: (email: string, password: string) => Promise<{ error: Error | null }>;
+  createUser: (email: string, password: string, inviteCode?: string) => Promise<{ error: Error | null; teamId?: string }>;
   updateProfileName: (name: string) => Promise<{ error: Error | null }>;
 }
 
@@ -29,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
-  const isAuthorized = isAuthorizedEmail(user?.email);
+
 
   const fetchProfile = useCallback(async (userId: string) => {
     const { data } = await supabase
@@ -76,9 +74,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
-    if (!isAuthorizedEmail(email)) {
-      return { error: new Error('Access denied. Your email is not authorized.') };
-    }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error as Error | null };
   };
@@ -94,16 +89,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error as Error | null };
   };
 
-  const createUser = async (email: string, password: string) => {
-    if (!isAuthorizedEmail(email)) {
-      return { error: new Error('This email is not in the authorized users list.') };
-    }
-    const { error } = await supabase.auth.signUp({
+  const createUser = async (email: string, password: string, inviteCode?: string) => {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { emailRedirectTo: undefined },
     });
-    return { error: error as Error | null };
+    if (error) return { error: error as Error | null };
+
+    // If an invite code was provided, join the team
+    let teamId: string | undefined;
+    if (inviteCode && data.user) {
+      const { data: tid, error: joinErr } = await supabase.rpc('use_team_invite', { code: inviteCode });
+      if (joinErr) {
+        return { error: new Error(`Account created but failed to join team: ${joinErr.message}`) };
+      }
+      teamId = tid as string;
+    }
+    return { error: null, teamId };
   };
 
   const updateProfileName = async (name: string) => {
@@ -120,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, isAuthorized, profile, signIn, signOut, updatePassword, createUser, updateProfileName }}>
+    <AuthContext.Provider value={{ user, session, loading, profile, signIn, signOut, updatePassword, createUser, updateProfileName }}>
       {children}
     </AuthContext.Provider>
   );
