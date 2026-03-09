@@ -1,5 +1,5 @@
 import React from 'react';
-import type { CardPriority, CustomFieldType, RepeatRule } from '@/types/board-types';
+import type { CardPriority, CustomFieldType, RepeatRule, RepeatUnit } from '@/types/board-types';
 
 /* ═══════════════════════════════════════════════════════════
    Regex patterns
@@ -182,60 +182,33 @@ export const LABEL_COLORS: { hex: string; name: string }[] = [
 /* ═══════════════════════════════════════════════════════════
    Repeat helpers
    ═══════════════════════════════════════════════════════════ */
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const DAY_NAMES_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-function ordinal(n: number): string {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+function addUnits(date: Date, every: number, unit: RepeatUnit): Date {
+  const d = new Date(date);
+  if (unit === 'days') d.setDate(d.getDate() + every);
+  else if (unit === 'weeks') d.setDate(d.getDate() + every * 7);
+  else if (unit === 'months') d.setMonth(d.getMonth() + every);
+  return d;
 }
 
-/** Compute the next occurrence date from today for a given repeat rule. */
-export function getNextRepeatDate(rule: RepeatRule): Date {
+/** Compute the next occurrence date after today, anchored to startDate. */
+export function getNextRepeatDate(rule: RepeatRule, startDate: string): Date {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
+  const anchor = new Date(startDate + 'T00:00:00');
 
-  if (rule.interval === 'daily') {
-    const next = new Date(now);
-    next.setDate(next.getDate() + 1);
-    return next;
+  // Step forward from anchor by (every * unit) until we're past today
+  let next = new Date(anchor);
+  while (next <= now) {
+    next = addUnits(next, rule.every, rule.unit);
   }
-
-  if (rule.interval === 'weekly' && rule.days.length > 0) {
-    const today = now.getDay();
-    const sorted = [...rule.days].sort((a, b) => a - b);
-    // Find the next day >= today (but not today itself)
-    for (const d of sorted) {
-      if (d > today) {
-        const next = new Date(now);
-        next.setDate(next.getDate() + (d - today));
-        return next;
-      }
-    }
-    // Wrap to next week
-    const next = new Date(now);
-    next.setDate(next.getDate() + (7 - today + sorted[0]));
-    return next;
-  }
-
-  if (rule.interval === 'monthly' && rule.days.length > 0) {
-    const dayOfMonth = rule.days[0];
-    const thisMonth = new Date(now.getFullYear(), now.getMonth(), dayOfMonth);
-    if (thisMonth > now) return thisMonth;
-    // Next month
-    return new Date(now.getFullYear(), now.getMonth() + 1, dayOfMonth);
-  }
-
-  // Fallback
-  const next = new Date(now);
-  next.setDate(next.getDate() + 1);
   return next;
 }
 
 /** Format the next repeat date as a friendly string. */
-export function formatNextDate(rule: RepeatRule): string {
-  const next = getNextRepeatDate(rule);
+export function formatNextDate(rule: RepeatRule, startDate: string): string {
+  if (!startDate) return 'Set a start date';
+  const next = getNextRepeatDate(rule, startDate);
   if (rule.endDate) {
     const end = new Date(rule.endDate + 'T00:00:00');
     if (next > end) return 'Series ended';
@@ -243,21 +216,15 @@ export function formatNextDate(rule: RepeatRule): string {
   return next.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-/** Human-readable repeat summary, e.g. "Every Monday" or "Daily". */
+const UNIT_LABELS: Record<RepeatUnit, [string, string]> = {
+  days: ['day', 'days'],
+  weeks: ['week', 'weeks'],
+  months: ['month', 'months'],
+};
+
+/** Human-readable repeat summary, e.g. "Every 2 weeks" or "Every day". */
 export function formatRepeatSummary(rule: RepeatRule): string {
-  if (rule.interval === 'daily') return 'Daily';
-  if (rule.interval === 'weekly') {
-    if (rule.days.length === 0) return 'Weekly';
-    if (rule.days.length === 7) return 'Every day';
-    if (rule.days.length === 5 && [1,2,3,4,5].every(d => rule.days.includes(d))) return 'Weekdays';
-    if (rule.days.length === 2 && [0,6].every(d => rule.days.includes(d))) return 'Weekends';
-    const names = [...rule.days].sort((a, b) => a - b).map(d => DAY_NAMES[d]);
-    if (names.length === 1) return `Every ${DAY_NAMES_FULL[rule.days[0]]}`;
-    return `Every ${names.join(', ')}`;
-  }
-  if (rule.interval === 'monthly') {
-    if (rule.days.length === 0) return 'Monthly';
-    return `Monthly on the ${ordinal(rule.days[0])}`;
-  }
-  return 'Repeating';
+  const [singular, plural] = UNIT_LABELS[rule.unit];
+  if (rule.every === 1) return `Every ${singular}`;
+  return `Every ${rule.every} ${plural}`;
 }

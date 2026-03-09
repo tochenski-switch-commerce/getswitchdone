@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { BoardCard, CardPriority, ChecklistTemplate, UserProfile, RepeatInterval, RepeatRule } from '@/types/board-types';
+import type { BoardCard, CardPriority, ChecklistTemplate, UserProfile, RepeatUnit, RepeatRule } from '@/types/board-types';
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   Plus, Trash2, Edit3,
@@ -89,8 +89,9 @@ export default function CardDetailModal({
 
   // Repeat state
   const existingRule = card.repeat_rule;
-  const [repeatInterval, setRepeatInterval] = useState<RepeatInterval | null>(existingRule?.interval ?? null);
-  const [repeatDays, setRepeatDays] = useState<number[]>(existingRule?.days ?? []);
+  const [repeatEnabled, setRepeatEnabled] = useState(!!existingRule);
+  const [repeatEvery, setRepeatEvery] = useState(existingRule?.every ?? 1);
+  const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>(existingRule?.unit ?? 'days');
   const [repeatEndDate, setRepeatEndDate] = useState(existingRule?.endDate ?? '');
 
   const titleRef = useRef<HTMLInputElement>(null);
@@ -155,13 +156,12 @@ export default function CardDetailModal({
     // Build repeat_rule
     let repeat_rule: RepeatRule | null = null;
     let repeat_series_id: string | null = card.repeat_series_id ?? null;
-    if (repeatInterval) {
+    if (repeatEnabled) {
       repeat_rule = {
-        interval: repeatInterval,
-        days: repeatDays,
+        every: repeatEvery,
+        unit: repeatUnit,
         ...(repeatEndDate ? { endDate: repeatEndDate } : {}),
       };
-      // Generate series id if new
       if (!repeat_series_id) {
         repeat_series_id = crypto.randomUUID();
       }
@@ -718,94 +718,74 @@ export default function CardDetailModal({
             {/* Repeat */}
             <div className="kb-form-group">
               <div className="kb-detail-section-label"><Repeat size={13} /> Repeat</div>
-              <div className="kb-repeat-picker">
-                {(['off', 'daily', 'weekly', 'monthly'] as const).map(opt => (
-                  <button
-                    key={opt}
-                    className={`kb-repeat-option ${(opt === 'off' ? !repeatInterval : repeatInterval === opt) ? 'active' : ''}`}
-                    onClick={() => {
-                      if (opt === 'off') {
-                        setRepeatInterval(null);
-                        setRepeatDays([]);
-                      } else {
-                        setRepeatInterval(opt);
-                        if (opt === 'daily') setRepeatDays([]);
-                        if (opt === 'weekly' && repeatInterval !== 'weekly') {
-                          // Default to today's day of week
-                          setRepeatDays([new Date().getDay()]);
-                        }
-                        if (opt === 'monthly' && repeatInterval !== 'monthly') {
-                          // Default to today's day of month (capped at 28)
-                          setRepeatDays([Math.min(new Date().getDate(), 28)]);
-                        }
-                      }
-                    }}
-                  >
-                    {opt === 'off' ? 'Off' : opt.charAt(0).toUpperCase() + opt.slice(1)}
-                  </button>
-                ))}
-              </div>
+              <label className="kb-repeat-toggle">
+                <input
+                  type="checkbox"
+                  checked={repeatEnabled}
+                  onChange={e => {
+                    setRepeatEnabled(e.target.checked);
+                    if (e.target.checked && !editStartDate) {
+                      setEditStartDate(new Date().toISOString().slice(0, 10));
+                    }
+                  }}
+                />
+                <span>Enable repeat</span>
+              </label>
 
-              {/* Weekly day picker */}
-              {repeatInterval === 'weekly' && (
-                <div className="kb-repeat-days">
-                  {['S','M','T','W','T','F','S'].map((label, idx) => (
-                    <button
-                      key={idx}
-                      className={`kb-repeat-day ${repeatDays.includes(idx) ? 'active' : ''}`}
-                      onClick={() => {
-                        setRepeatDays(prev =>
-                          prev.includes(idx)
-                            ? prev.filter(d => d !== idx)
-                            : [...prev, idx]
-                        );
-                      }}
+              {repeatEnabled && (
+                <>
+                  <div className="kb-repeat-row">
+                    <span className="kb-repeat-label">Every</span>
+                    <select
+                      className="kb-input"
+                      value={repeatEvery}
+                      onChange={e => setRepeatEvery(parseInt(e.target.value))}
+                      style={{ width: 60 }}
                     >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                    <div className="kb-repeat-unit-picker">
+                      {(['days', 'weeks', 'months'] as const).map(u => (
+                        <button
+                          key={u}
+                          className={`kb-repeat-unit ${repeatUnit === u ? 'active' : ''}`}
+                          onClick={() => setRepeatUnit(u)}
+                        >
+                          {u.charAt(0).toUpperCase() + u.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              {/* Monthly day picker */}
-              {repeatInterval === 'monthly' && (
-                <div className="kb-repeat-monthly">
-                  <span className="kb-repeat-monthly-label">Day of month</span>
-                  <select
-                    className="kb-input"
-                    value={repeatDays[0] ?? 1}
-                    onChange={e => setRepeatDays([parseInt(e.target.value)])}
-                    style={{ width: 72 }}
-                  >
-                    {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+                  {/* Start date warning */}
+                  {!editStartDate && (
+                    <div className="kb-repeat-warn">A start date is required to anchor the repeat schedule.</div>
+                  )}
 
-              {/* Summary & next date preview */}
-              {repeatInterval && (
-                <div className="kb-repeat-summary">
-                  <span className="kb-repeat-summary-text">
-                    {formatRepeatSummary({ interval: repeatInterval, days: repeatDays })}
-                  </span>
-                  <span className="kb-repeat-next">
-                    Next: {formatNextDate({ interval: repeatInterval, days: repeatDays, ...(repeatEndDate ? { endDate: repeatEndDate } : {}) })}
-                  </span>
-                </div>
-              )}
+                  {/* Summary & next date preview */}
+                  {editStartDate && (
+                    <div className="kb-repeat-summary">
+                      <span className="kb-repeat-summary-text">
+                        {formatRepeatSummary({ every: repeatEvery, unit: repeatUnit })}
+                      </span>
+                      <span className="kb-repeat-next">
+                        Next: {formatNextDate({ every: repeatEvery, unit: repeatUnit, ...(repeatEndDate ? { endDate: repeatEndDate } : {}) }, editStartDate)}
+                      </span>
+                    </div>
+                  )}
 
-              {/* Optional end date */}
-              {repeatInterval && (
-                <div className="kb-repeat-end">
-                  <DatePickerInput
-                    className="kb-input"
-                    value={repeatEndDate}
-                    onChange={setRepeatEndDate}
-                    placeholder="End date (optional)…"
-                  />
-                </div>
+                  {/* Optional end date */}
+                  <div className="kb-repeat-end">
+                    <DatePickerInput
+                      className="kb-input"
+                      value={repeatEndDate}
+                      onChange={setRepeatEndDate}
+                      placeholder="End date (optional)…"
+                    />
+                  </div>
+                </>
               )}
             </div>
 

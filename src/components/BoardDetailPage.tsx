@@ -97,7 +97,21 @@ function BoardPage() {
   const [emailSearchResults, setEmailSearchResults] = useState<BoardEmail[] | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<BoardEmail | null>(null);
   const [routeTarget, setRouteTarget] = useState<Record<string, string>>({});
-  const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
+  const [collapsedCols, setCollapsedCols] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined' || !boardId) return new Set();
+    try {
+      const stored = localStorage.getItem(`collapsed-cols-${boardId}`);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
+  useEffect(() => {
+    if (!boardId) return;
+    if (collapsedCols.size === 0) {
+      localStorage.removeItem(`collapsed-cols-${boardId}`);
+    } else {
+      localStorage.setItem(`collapsed-cols-${boardId}`, JSON.stringify([...collapsedCols]));
+    }
+  }, [collapsedCols, boardId]);
   const [dragExpandedCol, setDragExpandedCol] = useState<string | null>(null);
   const [linkPickerColId, setLinkPickerColId] = useState<string | null>(null);
   const [linkPickerSearch, setLinkPickerSearch] = useState('');

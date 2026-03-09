@@ -4,8 +4,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeams } from '@/hooks/useTeams';
-import { ArrowLeft, Users, Trash2, Edit3, Check, X, Copy, UserMinus, LogOut } from '@/components/BoardIcons';
-import type { Team, TeamMember, TeamInvite } from '@/types/board-types';
+import { supabase } from '@/lib/supabase';
+import { ArrowLeft, Users, Trash2, Edit3, Check, X, Copy, UserMinus, LogOut, Calendar, getBoardIcon, DEFAULT_ICON_COLOR } from '@/components/BoardIcons';
+import type { Team, TeamMember, TeamInvite, ProjectBoard } from '@/types/board-types';
 
 export default function TeamDetailPage() {
   const params = useParams();
@@ -23,6 +24,7 @@ export default function TeamDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+  const [teamBoards, setTeamBoards] = useState<ProjectBoard[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -30,14 +32,25 @@ export default function TeamDetailPage() {
     }
   }, [authLoading, user, router, teamId]);
 
+  const fetchTeamBoards = useCallback(async () => {
+    const { data } = await supabase
+      .from('project_boards')
+      .select('*')
+      .eq('team_id', teamId)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: false });
+    if (data) setTeamBoards(data);
+  }, [teamId]);
+
   useEffect(() => {
     if (user && teamId) {
       fetchTeams();
       fetchMembers(teamId);
       fetchInvites(teamId);
+      fetchTeamBoards();
       getMyRole(teamId).then(setMyRole);
     }
-  }, [user, teamId, fetchTeams, fetchMembers, fetchInvites, getMyRole]);
+  }, [user, teamId, fetchTeams, fetchMembers, fetchInvites, fetchTeamBoards, getMyRole]);
 
   useEffect(() => {
     const t = teams.find(t => t.id === teamId);
@@ -152,6 +165,41 @@ export default function TeamDetailPage() {
             </button>
           </section>
         )}
+
+        {/* Team Boards */}
+        <section className="kb-section">
+          <h2 className="kb-section-title">Boards ({teamBoards.length})</h2>
+          {teamBoards.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#6b7280' }}>No boards in this team yet.</p>
+          ) : (
+            <div className="kb-board-grid">
+              {teamBoards.map(board => {
+                const Icon = getBoardIcon(board.icon);
+                return (
+                  <div
+                    key={board.id}
+                    className="kb-board-card"
+                    onClick={() => router.push(`/boards/${board.id}`)}
+                  >
+                    <div className="kb-board-card-header">
+                      <Icon size={20} style={{ color: board.icon_color || DEFAULT_ICON_COLOR }} />
+                      <h3 className="kb-board-card-title">{board.title}</h3>
+                    </div>
+                    {board.description && (
+                      <p className="kb-board-card-desc">{board.description}</p>
+                    )}
+                    <div className="kb-board-card-footer">
+                      <span className="kb-board-card-date">
+                        <Calendar size={12} />
+                        {new Date(board.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {/* Members Section */}
         <section className="kb-section">
@@ -376,6 +424,62 @@ const detailStyles = `
   .kb-copy-link-btn:hover { background: rgba(99, 102, 241, 0.15); border-color: #6366f1; }
   .kb-copy-link-btn:active { transform: scale(0.98); }
   .kb-copy-link-btn.copied { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.35); color: #22c55e; }
+
+  .kb-board-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+  }
+  .kb-board-card {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 12px;
+    padding: 18px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .kb-board-card:hover {
+    border-color: #6366f1;
+    background: #1e2130;
+    transform: translateY(-1px);
+  }
+  .kb-board-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .kb-board-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f9fafb;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .kb-board-card-desc {
+    font-size: 12px;
+    color: #6b7280;
+    margin: 0 0 10px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .kb-board-card-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .kb-board-card-date {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: #4b5563;
+    font-weight: 500;
+  }
 
   /* ── Mobile ── */
   @media (max-width: 480px) {

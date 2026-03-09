@@ -1,6 +1,6 @@
 export type CardPriority = 'low' | 'medium' | 'high' | 'urgent';
 
-export type RepeatInterval = 'daily' | 'weekly' | 'monthly';
+export type RepeatUnit = 'days' | 'weeks' | 'months';
 
 export interface Team {
   id: string;
@@ -30,9 +30,9 @@ export interface TeamInvite {
 }
 
 export interface RepeatRule {
-  interval: RepeatInterval;
-  days: number[];       // weekly: 0–6 (Sun–Sat), monthly: 1–28, daily: []
-  endDate?: string;     // YYYY-MM-DD optional end date
+  every: number;          // 1–12
+  unit: RepeatUnit;       // 'days' | 'weeks' | 'months'
+  endDate?: string;       // YYYY-MM-DD optional end date
 }
 
 export interface UserProfile {
