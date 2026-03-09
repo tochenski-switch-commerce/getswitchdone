@@ -70,6 +70,7 @@ export default function CardDetailModal({
   const [editPriority, setEditPriority] = useState<CardPriority | null>(card.priority);
   const [editStartDate, setEditStartDate] = useState(card.start_date || '');
   const [editDueDate, setEditDueDate] = useState(card.due_date || '');
+  const [editDueTime, setEditDueTime] = useState(card.due_time || '');
   const [editAssignee, setEditAssignee] = useState(card.assignee || '');
   const [editLabels, setEditLabels] = useState<string[]>((card.labels || []).map(l => l.id));
   const [commentText, setCommentText] = useState('');
@@ -173,6 +174,7 @@ export default function CardDetailModal({
       priority: editPriority || null,
       start_date: editStartDate || null,
       due_date: editDueDate || null,
+      due_time: editDueTime || null,
       assignee: editAssignee || null,
       label_ids: editLabels,
       repeat_rule,
@@ -719,6 +721,48 @@ export default function CardDetailModal({
                 onChange={setEditDueDate}
                 placeholder="Select due date…"
               />
+              {editDueDate && (() => {
+                // Parse existing time
+                const parseTime12 = (t: string) => {
+                  const [h24, m] = t.split(':').map(Number);
+                  const period = h24 >= 12 ? 'PM' : 'AM';
+                  const h = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+                  return { hour: h, minute: m, period };
+                };
+                const formatTime24 = (h: number, m: number, period: string) => {
+                  let h24 = h;
+                  if (period === 'AM' && h === 12) h24 = 0;
+                  else if (period === 'PM' && h !== 12) h24 = h + 12;
+                  return `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                };
+                if (!editDueTime) {
+                  return (
+                    <button className="kb-due-time-add" onClick={() => setEditDueTime('09:00')}>
+                      <Clock size={12} /> Add time
+                    </button>
+                  );
+                }
+                const parsed = parseTime12(editDueTime);
+                return (
+                  <div className="kb-due-time-row">
+                    <select className="kb-due-time-select" value={parsed.hour}
+                      onChange={e => setEditDueTime(formatTime24(Number(e.target.value), parsed.minute, parsed.period))}>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                    <span className="kb-due-time-colon">:</span>
+                    <select className="kb-due-time-select" value={parsed.minute}
+                      onChange={e => setEditDueTime(formatTime24(parsed.hour, Number(e.target.value), parsed.period))}>
+                      {Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{String(m).padStart(2, '0')}</option>)}
+                    </select>
+                    <select className="kb-due-time-period kb-due-time-select" value={parsed.period}
+                      onChange={e => setEditDueTime(formatTime24(parsed.hour, parsed.minute, e.target.value))}>
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                    <button className="kb-due-time-clear" onClick={() => setEditDueTime('')}><X size={12} /></button>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Repeat */}
