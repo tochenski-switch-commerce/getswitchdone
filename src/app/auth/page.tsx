@@ -38,13 +38,14 @@ function AuthForm() {
   // Post-login Face ID opt-in prompt
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
   const [pendingCredentials, setPendingCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [holdRedirect, setHoldRedirect] = useState(false);
 
-  // Redirect if already signed in
+  // Redirect if already signed in (but not when showing biometric prompt)
   useEffect(() => {
-    if (!loading && user) {
+    if (!loading && user && !showBiometricPrompt && !holdRedirect) {
       router.replace(returnTo);
     }
-  }, [loading, user, router, returnTo]);
+  }, [loading, user, router, returnTo, showBiometricPrompt, holdRedirect]);
 
   // Check if stored biometric credentials exist (show Face ID button, but don't auto-trigger)
   useEffect(() => {
@@ -63,7 +64,7 @@ function AuthForm() {
     return () => { canceled = true; };
   }, [loading, user]);
 
-  if (!loading && user) {
+  if (!loading && user && !showBiometricPrompt && !holdRedirect) {
     return null;
   }
 
@@ -95,6 +96,7 @@ function AuthForm() {
     e.preventDefault();
     setError('');
     setSubmitting(true);
+    setHoldRedirect(true);
 
     // Set session persistence based on Remember Me
     if (!rememberMe) {
@@ -108,6 +110,7 @@ function AuthForm() {
 
     if (signInError) {
       setError(signInError.message);
+      setHoldRedirect(false);
       return;
     }
 
@@ -123,6 +126,7 @@ function AuthForm() {
     }
 
     // If already enrolled or not available, just go
+    setHoldRedirect(false);
     router.push(returnTo);
   };
 
@@ -131,11 +135,13 @@ function AuthForm() {
       await storeLoginCredentials(pendingCredentials.email, pendingCredentials.password);
     }
     setShowBiometricPrompt(false);
+    setHoldRedirect(false);
     router.push(returnTo);
   };
 
   const handleSkipBiometric = () => {
     setShowBiometricPrompt(false);
+    setHoldRedirect(false);
     router.push(returnTo);
   };
 
