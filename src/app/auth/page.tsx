@@ -28,7 +28,8 @@ function AuthForm() {
   const returnTo = searchParams.get('returnTo') || '/boards';
   const inviteParam = searchParams.get('invite') || '';
   const { user, loading, createUser } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>(inviteParam ? 'signup' : 'signin');
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const joinFlowActive = returnTo.startsWith('/join/');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState(inviteParam);
@@ -102,7 +103,9 @@ function AuthForm() {
     setHoldRedirect(true);
 
     if (mode === 'signup') {
-      const { error: signUpErr } = await createUser(email, password, inviteCode || undefined);
+      // If returnTo points to /join/, skip invite in createUser — the join page handles it
+      const codeForSignup = joinFlowActive ? undefined : (inviteCode || undefined);
+      const { error: signUpErr, teamId } = await createUser(email, password, codeForSignup);
       setSubmitting(false);
       if (signUpErr) {
         setError(signUpErr.message);
@@ -117,7 +120,8 @@ function AuthForm() {
         return;
       }
       setHoldRedirect(false);
-      router.push(returnTo);
+      // If joined via createUser (manual invite code), go to team page; otherwise use returnTo
+      router.push(teamId ? `/teams/${teamId}` : returnTo);
       return;
     }
 
@@ -229,6 +233,21 @@ function AuthForm() {
         <div className="kb-auth-card">
           <h1 className="kb-auth-title">GSD Boards</h1>
           <p className="kb-auth-subtitle">{mode === 'signin' ? 'Sign in to your account' : 'Create your account'}</p>
+
+          {inviteParam && (
+            <div className="kb-invite-banner">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <line x1="19" y1="8" x2="19" y2="14" />
+                <line x1="22" y1="11" x2="16" y2="11" />
+              </svg>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#e5e7eb' }}>You&apos;ve been invited to a team</div>
+                <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>Sign in or create an account to join</div>
+              </div>
+            </div>
+          )}
 
           <div className="kb-auth-toggle">
             <button className={`kb-auth-toggle-btn${mode === 'signin' ? ' active' : ''}`} onClick={() => setMode('signin')} type="button">Sign In</button>
@@ -511,5 +530,15 @@ const authStyles = `
     width: 16px;
     height: 16px;
     accent-color: #6366f1;
+  }
+  .kb-invite-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 10px;
+    margin-bottom: 20px;
   }
 `;

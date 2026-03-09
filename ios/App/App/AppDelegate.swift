@@ -22,6 +22,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             bridge.registerPluginInstance(BadgeManager())
             bridge.registerPluginInstance(WidgetBridge())
             pluginsRegistered = true
+            NSLog("[WidgetBridge] plugins registered")
         }
     }
 
@@ -334,14 +335,17 @@ public class WidgetBridge: CAPPlugin, CAPBridgedPlugin {
     private static let appGroupID = "group.com.getswitchdone.boards"
 
     @objc func setSession(_ call: CAPPluginCall) {
+        NSLog("[WidgetBridge] setSession called")
         guard let accessToken = call.getString("accessToken"),
               let userId = call.getString("userId") else {
+            NSLog("[WidgetBridge] setSession missing params")
             call.reject("Missing accessToken or userId")
             return
         }
         let refreshToken = call.getString("refreshToken")
 
         guard let defaults = UserDefaults(suiteName: WidgetBridge.appGroupID) else {
+            NSLog("[WidgetBridge] cannot access App Group")
             call.reject("Cannot access App Group")
             return
         }
@@ -352,6 +356,8 @@ public class WidgetBridge: CAPPlugin, CAPBridgedPlugin {
             defaults.set(rt, forKey: "supabase_refresh_token")
         }
         defaults.synchronize()
+
+        NSLog("[WidgetBridge] session saved for user %@", userId)
 
         // Reload all widgets so they pick up the new session
         WidgetCenter.shared.reloadAllTimelines()

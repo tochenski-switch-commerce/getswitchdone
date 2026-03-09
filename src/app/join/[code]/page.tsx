@@ -17,8 +17,8 @@ export default function JoinPage() {
     if (authLoading) return;
 
     if (!user) {
-      // Not logged in — redirect to auth with invite code
-      router.replace(`/auth?invite=${encodeURIComponent(code)}`);
+      // Not logged in — redirect to auth with returnTo so they come back here after sign-in
+      router.replace(`/auth?returnTo=/join/${encodeURIComponent(code)}&invite=${encodeURIComponent(code)}`);
       return;
     }
 

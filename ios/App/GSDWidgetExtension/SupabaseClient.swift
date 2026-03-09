@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.getswitchdone.boards.widget", category: "SupabaseClient")
 
 /// Lightweight Supabase REST client for the widget extension.
 /// Uses URLSession directly — no third-party dependencies.
@@ -6,19 +9,71 @@ actor SupabaseClient {
     private let baseURL: String
     private let anonKey: String
     private var accessToken: String?
+    private var refreshToken: String?
 
     init() {
         self.baseURL = GSDShared.supabaseURL
         self.anonKey = GSDShared.supabaseAnonKey
 
-        // Read the current access token from App Group storage
+        // Read the current tokens from App Group storage
         if let defaults = UserDefaults(suiteName: GSDShared.appGroupID) {
             self.accessToken = defaults.string(forKey: GSDShared.accessTokenKey)
+            self.refreshToken = defaults.string(forKey: GSDShared.refreshTokenKey)
+            let hasAccess = self.accessToken != nil
+            let hasRefresh = self.refreshToken != nil
+            logger.info("Token loaded: \(hasAccess ? "yes" : "no"), refresh: \(hasRefresh ? "yes" : "no")")
+        } else {
+            logger.error("Cannot access App Group UserDefaults")
         }
     }
 
     var isAuthenticated: Bool {
         accessToken != nil
+    }
+
+    // MARK: - Token refresh
+
+    /// Try to refresh the Supabase session using the stored refresh token.
+    private func refreshSession() async -> Bool {
+        guard let rt = refreshToken else {
+            logger.warning("No refresh token available")
+            return false
+        }
+
+        guard let url = URL(string: "\(baseURL)/auth/v1/token?grant_type=refresh_token") else { return false }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(anonKey, forHTTPHeaderField: "apikey")
+        req.httpBody = try? JSONEncoder().encode(["refresh_token": rt])
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse else { return false }
+            logger.info("Refresh token response: \(http.statusCode)")
+            guard http.statusCode == 200 else { return false }
+
+            struct TokenResponse: Codable {
+                let access_token: String
+                let refresh_token: String
+            }
+            let tokens = try JSONDecoder().decode(TokenResponse.self, from: data)
+            self.accessToken = tokens.access_token
+            self.refreshToken = tokens.refresh_token
+
+            // Persist the new tokens
+            if let defaults = UserDefaults(suiteName: GSDShared.appGroupID) {
+                defaults.set(tokens.access_token, forKey: GSDShared.accessTokenKey)
+                defaults.set(tokens.refresh_token, forKey: GSDShared.refreshTokenKey)
+                defaults.synchronize()
+            }
+            logger.info("Token refreshed successfully")
+            return true
+        } catch {
+            logger.error("Token refresh failed: \(error.localizedDescription)")
+            return false
+        }
     }
 
     // MARK: - Generic query
@@ -43,7 +98,28 @@ actor SupabaseClient {
         }
 
         let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+        guard let http = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+
+        // If 401, try refreshing the token and retry once
+        if http.statusCode == 401 {
+            logger.warning("Got 401 for \(table), attempting token refresh")
+            if await refreshSession() {
+                // Retry with new token
+                req.setValue("Bearer \(self.accessToken!)", forHTTPHeaderField: "Authorization")
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: req)
+                guard let retryHttp = retryResponse as? HTTPURLResponse, (200...299).contains(retryHttp.statusCode) else {
+                    logger.error("Retry after refresh failed for \(table)")
+                    throw URLError(.userAuthenticationRequired)
+                }
+                return retryData
+            }
+            throw URLError(.userAuthenticationRequired)
+        }
+
+        guard (200...299).contains(http.statusCode) else {
+            logger.error("\(table) returned \(http.statusCode)")
             throw URLError(.badServerResponse)
         }
         return data
@@ -125,33 +201,39 @@ actor SupabaseClient {
 
     func fetchWidgetData() async -> WidgetData {
         guard isAuthenticated else {
-            return WidgetData.empty
+            logger.warning("Not authenticated — no access token in App Group")
+            return WidgetData(
+                unreadCount: 0, notifications: [], dueCards: [], boards: [],
+                isLoggedIn: false, debugError: "No token in App Group"
+            )
         }
 
-        async let notificationsTask = fetchNotifications()
-        async let dueCardsTask = fetchDueCards()
-        async let boardsTask = fetchBoards()
+        logger.info("Fetching widget data...")
 
         do {
-            let (unread, notifications) = try await notificationsTask
-            let dueCards = try await dueCardsTask
-            let boards = try await boardsTask
+            // Fetch sequentially to isolate failures
+            let (unread, notifications) = try await fetchNotifications()
+            logger.info("Notifications: \(unread) unread, \(notifications.count) items")
+
+            let dueCards = try await fetchDueCards()
+            logger.info("Due cards: \(dueCards.count)")
+
+            let boards = try await fetchBoards()
+            logger.info("Boards: \(boards.count)")
 
             return WidgetData(
                 unreadCount: unread,
                 notifications: notifications,
                 dueCards: dueCards,
                 boards: boards,
-                isLoggedIn: true
+                isLoggedIn: true,
+                debugError: nil
             )
         } catch {
-            // Return partial data if some queries fail
+            logger.error("fetchWidgetData failed: \(error.localizedDescription)")
             return WidgetData(
-                unreadCount: 0,
-                notifications: [],
-                dueCards: [],
-                boards: [],
-                isLoggedIn: true
+                unreadCount: 0, notifications: [], dueCards: [], boards: [],
+                isLoggedIn: true, debugError: error.localizedDescription
             )
         }
     }

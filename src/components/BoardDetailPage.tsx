@@ -652,18 +652,22 @@ function BoardPage() {
               </>
             )}
           </div>
-          <InlineEdit
-            value={board.title}
-            onSave={title => updateBoard(boardId, { title })}
-            className="kb-board-title"
-          />
-          {board.is_public && (
-            <span className="kb-public-badge"><Globe size={11} /> Public</span>
-          )}
-          {board.team_id && (() => {
-            const t = teams.find(t => t.id === board.team_id);
-            return t ? <span className="kb-team-badge"><Users size={11} /> {t.name}</span> : null;
-          })()}
+          <div className="kb-title-group">
+            <div className="kb-title-row">
+              <InlineEdit
+                value={board.title}
+                onSave={title => updateBoard(boardId, { title })}
+                className="kb-board-title"
+              />
+              {board.is_public && (
+                <span className="kb-public-badge"><Globe size={11} /> Public</span>
+              )}
+            </div>
+            {board.team_id && (() => {
+              const t = teams.find(t => t.id === board.team_id);
+              return t ? <span className="kb-team-badge"><Users size={11} /> {t.name}</span> : null;
+            })()}
+          </div>
         </div>
 
         <div className="kb-topbar-right">

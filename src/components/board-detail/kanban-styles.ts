@@ -27,6 +27,18 @@ export const kanbanStyles = `
     gap: 10px;
     min-width: 0;
   }
+  .kb-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .kb-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
   .kb-topbar-right {
     display: flex;
     align-items: center;

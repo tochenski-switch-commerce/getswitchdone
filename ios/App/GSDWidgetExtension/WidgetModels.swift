@@ -72,13 +72,15 @@ struct WidgetData {
     var dueCards: [WidgetCard]
     var boards: [WidgetBoard]
     var isLoggedIn: Bool
+    var debugError: String?
 
     static let empty = WidgetData(
         unreadCount: 0,
         notifications: [],
         dueCards: [],
         boards: [],
-        isLoggedIn: false
+        isLoggedIn: false,
+        debugError: nil
     )
 
     static let placeholder = WidgetData(
@@ -96,6 +98,7 @@ struct WidgetData {
             WidgetBoard(id: "1", title: "Product Launch", icon: "rocket"),
             WidgetBoard(id: "2", title: "Bug Tracker", icon: "target"),
         ],
-        isLoggedIn: true
+        isLoggedIn: true,
+        debugError: nil
     )
 }
