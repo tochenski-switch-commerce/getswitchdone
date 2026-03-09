@@ -81,7 +81,6 @@ export default function CardDetailModal({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstRender = useRef(true);
   const pendingChangesRef = useRef(false);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
@@ -168,28 +167,14 @@ export default function CardDetailModal({
     }
   }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editAssignees, editLabels, editingDesc, onUpdate]);
 
-  // Debounced auto-save
+  // Track pending changes (save happens on close, not while editing)
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
     pendingChangesRef.current = true;
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    autoSaveTimerRef.current = setTimeout(() => {
-      doSave();
-    }, 800);
-    return () => {
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    };
-  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editAssignees, editLabels, doSave]);
-
-  // Flush auto-save on unmount
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    };
-  }, []);
+  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editAssignees, editLabels]);
 
   const handleAddComment = async () => {
     const html = commentAddRef.current?.innerHTML || '';
@@ -238,10 +223,6 @@ export default function CardDetailModal({
 
   return (
     <div className="kb-modal-overlay" onMouseDown={async () => {
-            if (autoSaveTimerRef.current) {
-              clearTimeout(autoSaveTimerRef.current);
-              autoSaveTimerRef.current = null;
-            }
             if (pendingChangesRef.current) {
               await doSave();
             }
@@ -263,10 +244,6 @@ export default function CardDetailModal({
             )}
           </div>
           <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={async () => {
-            if (autoSaveTimerRef.current) {
-              clearTimeout(autoSaveTimerRef.current);
-              autoSaveTimerRef.current = null;
-            }
             if (pendingChangesRef.current) {
               await doSave();
             }
