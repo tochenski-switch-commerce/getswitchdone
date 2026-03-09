@@ -23,7 +23,7 @@ export interface ProjectBoard {
 
 // ── Teams ──
 
-export type TeamRole = 'owner' | 'member';
+export type TeamRole = 'owner' | 'editor' | 'viewer';
 
 export interface Team {
   id: string;

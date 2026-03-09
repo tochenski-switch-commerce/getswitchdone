@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeams } from '@/hooks/useTeams';
-import { ArrowLeft, Users, Plus, Trash2, Edit3, Check, X, Copy, UserMinus, LogOut } from '@/components/BoardIcons';
+import { ArrowLeft, Users, Trash2, Edit3, Check, X, Copy, UserMinus, LogOut } from '@/components/BoardIcons';
 import type { Team, TeamMember, TeamInvite } from '@/types/board-types';
 
 export default function TeamDetailPage() {
@@ -15,14 +15,14 @@ export default function TeamDetailPage() {
   const {
     teams, members, invites, loading, error,
     fetchTeams, fetchMembers, fetchInvites,
-    createInvite, revokeInvite, removeMember, leaveTeam, deleteTeam, renameTeam, getMyRole,
+    createInvite, revokeInvite, removeMember, updateMemberRole, leaveTeam, deleteTeam, renameTeam, getMyRole,
   } = useTeams();
 
   const [team, setTeam] = useState<Team | null>(null);
-  const [myRole, setMyRole] = useState<'owner' | 'member' | null>(null);
+  const [myRole, setMyRole] = useState<'owner' | 'editor' | 'viewer' | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -50,21 +50,22 @@ export default function TeamDetailPage() {
     setEditingName(false);
   };
 
-  const handleGenerateInvite = async () => {
-    await createInvite(teamId);
+  const handleCopyInviteLink = async () => {
+    // Re-use an existing active invite, or create one on the fly
+    let activeInvite = invites.find(i => i.is_active);
+    if (!activeInvite) {
+      const created = await createInvite(teamId);
+      if (!created) return;
+      activeInvite = created;
+    }
+    const url = `${window.location.origin}/join/${activeInvite.invite_code}`;
+    await navigator.clipboard.writeText(url);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   };
 
-  const handleCopyInviteCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  const handleCopyInviteLink = (code: string) => {
-    const url = `${window.location.origin}/join/${code}`;
-    navigator.clipboard.writeText(url);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
+  const handleRoleChange = async (userId: string, role: 'editor' | 'viewer') => {
+    await updateMemberRole(teamId, userId, role);
   };
 
   const handleRemoveMember = async (userId: string) => {
@@ -106,7 +107,7 @@ export default function TeamDetailPage() {
                   onChange={e => setNameInput(e.target.value)}
                   autoFocus
                   onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setEditingName(false); }}
-                  style={{ fontSize: 18, padding: '6px 12px', maxWidth: 300 }}
+                  style={{ fontSize: 16, padding: '8px 12px', flex: 1, minWidth: 0 }}
                 />
                 <button className="kb-btn kb-btn-primary" onClick={handleRename} style={{ padding: '6px 12px' }}><Check size={14} /></button>
                 <button className="kb-btn kb-btn-ghost" onClick={() => setEditingName(false)} style={{ padding: '6px 12px' }}><X size={14} /></button>
@@ -139,78 +140,62 @@ export default function TeamDetailPage() {
 
         {error && <p className="kb-error">{error}</p>}
 
+        {/* Invite Link */}
+        {isOwner && (
+          <section className="kb-section">
+            <button
+              className={`kb-copy-link-btn${linkCopied ? ' copied' : ''}`}
+              onClick={handleCopyInviteLink}
+            >
+              <Copy size={16} />
+              <span>{linkCopied ? 'Link Copied!' : 'Copy Invite Link'}</span>
+            </button>
+          </section>
+        )}
+
         {/* Members Section */}
         <section className="kb-section">
           <h2 className="kb-section-title">Members ({members.length})</h2>
           <div className="kb-member-list">
-            {members.map(m => (
-              <div key={m.user_id} className="kb-member-row">
-                <div className="kb-member-avatar">
-                  {(m.user_profiles?.name || '?').charAt(0).toUpperCase()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="kb-member-name">{m.user_profiles?.name || 'Unnamed'}</div>
-                  <span className={`kb-role-badge ${m.role}`}>{m.role}</span>
-                </div>
-                {isOwner && m.user_id !== user.id && (
-                  <button className="kb-btn-icon kb-btn-icon-danger" onClick={() => handleRemoveMember(m.user_id)} title="Remove member">
-                    <UserMinus size={15} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
+            {members.map(m => {
+              const isMe = m.user_id === user.id;
+              const isMemberOwner = m.role === 'owner';
 
-        {/* Invites Section (owner only) */}
-        {isOwner && (
-          <section className="kb-section">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <h2 className="kb-section-title" style={{ margin: 0 }}>Invite Links</h2>
-              <button className="kb-btn kb-btn-primary" onClick={handleGenerateInvite} style={{ padding: '6px 14px', fontSize: 12 }}>
-                <Plus size={14} /> Generate Link
-              </button>
-            </div>
-            {invites.length === 0 ? (
-              <p style={{ color: '#6b7280', fontSize: 13 }}>No invite links yet. Generate one to share with others.</p>
-            ) : (
-              <div className="kb-invite-list">
-                {invites.map(inv => (
-                  <div key={inv.id} className={`kb-invite-row${!inv.is_active ? ' revoked' : ''}`}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <code className="kb-invite-code">{inv.invite_code}</code>
-                      <div className="kb-invite-meta">
-                        Used {inv.use_count}{inv.max_uses ? ` / ${inv.max_uses}` : ''} times
-                        {inv.expires_at && ` · Expires ${new Date(inv.expires_at).toLocaleDateString()}`}
-                        {!inv.is_active && ' · Revoked'}
-                      </div>
+              return (
+                <div key={m.user_id} className="kb-member-row">
+                  <div className="kb-member-avatar">
+                    {(m.user_profiles?.name || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="kb-member-name">
+                      {m.user_profiles?.name || 'Unnamed'}
+                      {isMe && <span style={{ color: '#6b7280', fontWeight: 400 }}> (you)</span>}
                     </div>
-                    {inv.is_active && (
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          className="kb-btn kb-btn-ghost"
-                          onClick={() => handleCopyInviteLink(inv.invite_code)}
-                          title="Copy invite link"
-                          style={{ padding: '5px 10px', fontSize: 11 }}
-                        >
-                          <Copy size={12} /> {copiedCode === inv.invite_code ? 'Copied!' : 'Copy Link'}
-                        </button>
-                        <button
-                          className="kb-btn kb-btn-ghost kb-btn-danger"
-                          onClick={() => revokeInvite(inv.id)}
-                          title="Revoke invite"
-                          style={{ padding: '5px 10px', fontSize: 11 }}
-                        >
-                          <X size={12} /> Revoke
-                        </button>
-                      </div>
+                    {isMemberOwner ? (
+                      <span className="kb-role-badge owner">owner</span>
+                    ) : isOwner && !isMe ? (
+                      <select
+                        className="kb-role-select"
+                        value={m.role}
+                        onChange={e => handleRoleChange(m.user_id, e.target.value as 'editor' | 'viewer')}
+                      >
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    ) : (
+                      <span className={`kb-role-badge ${m.role}`}>{m.role}</span>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
+                  {isOwner && !isMe && !isMemberOwner && (
+                    <button className="kb-btn-icon kb-btn-icon-danger" onClick={() => handleRemoveMember(m.user_id)} title="Remove member">
+                      <UserMinus size={15} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -244,8 +229,8 @@ const detailStyles = `
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    width: 40px;
+    height: 40px;
     border-radius: 8px;
     border: none;
     background: transparent;
@@ -253,6 +238,7 @@ const detailStyles = `
     cursor: pointer;
     transition: all 0.15s ease;
     flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
   }
   .kb-btn-icon:hover { background: rgba(255,255,255,0.08); color: #e5e7eb; }
   .kb-btn-icon-danger:hover { background: rgba(239,68,68,0.15); color: #ef4444; }
@@ -283,7 +269,7 @@ const detailStyles = `
     border: 1px solid #374151;
     border-radius: 10px;
     padding: 10px 14px;
-    font-size: 14px;
+    font-size: 16px;
     color: #e5e7eb;
     outline: none;
     box-sizing: border-box;
@@ -352,34 +338,54 @@ const detailStyles = `
     letter-spacing: 0.04em;
   }
   .kb-role-badge.owner { background: rgba(234,179,8,0.15); color: #eab308; }
-  .kb-role-badge.member { background: rgba(99,102,241,0.15); color: #818cf8; }
-  .kb-invite-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  .kb-role-badge.editor { background: rgba(99,102,241,0.15); color: #818cf8; }
+  .kb-role-badge.viewer { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .kb-role-select {
+    appearance: none;
+    background: #0f1117 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239ca3af' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 6px 28px 6px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #e5e7eb;
+    cursor: pointer;
+    outline: none;
+    min-height: 32px;
+    transition: border-color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
   }
-  .kb-invite-row {
+  .kb-role-select:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
+  .kb-role-select option { background: #1a1d27; color: #e5e7eb; }
+  .kb-copy-link-btn {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: #1a1d27;
-    border: 1px solid #2a2d3a;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px 20px;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px dashed rgba(99, 102, 241, 0.35);
     border-radius: 10px;
-    flex-wrap: wrap;
-  }
-  .kb-invite-row.revoked { opacity: 0.5; }
-  .kb-invite-code {
-    font-family: 'SF Mono', SFMono-Regular, Menlo, monospace;
-    font-size: 13px;
     color: #818cf8;
-    background: rgba(99,102,241,0.1);
-    padding: 2px 8px;
-    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
   }
-  .kb-invite-meta {
-    font-size: 12px;
-    color: #6b7280;
-    margin-top: 4px;
+  .kb-copy-link-btn:hover { background: rgba(99, 102, 241, 0.15); border-color: #6366f1; }
+  .kb-copy-link-btn:active { transform: scale(0.98); }
+  .kb-copy-link-btn.copied { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.35); color: #22c55e; }
+
+  /* ── Mobile ── */
+  @media (max-width: 480px) {
+    .kb-container { padding: 16px 12px 80px; }
+    .kb-page-title { font-size: 18px; }
+    .kb-header { gap: 8px; margin-bottom: 24px; }
+    .kb-member-row { padding: 10px 12px; gap: 10px; }
+    .kb-member-avatar { width: 32px; height: 32px; font-size: 13px; }
+    .kb-member-name { font-size: 13px; }
+    .kb-copy-link-btn { padding: 12px 16px; font-size: 13px; }
+    .kb-btn { padding: 8px 12px; font-size: 12px; }
   }
 `;

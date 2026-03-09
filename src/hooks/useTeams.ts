@@ -121,6 +121,24 @@ export function useTeams() {
     }
   }, []);
 
+  // ─── Update member role (owner action) ────────────────────
+  const updateMemberRole = useCallback(async (teamId: string, userId: string, role: 'editor' | 'viewer') => {
+    setError(null);
+    try {
+      const { error: err } = await supabase
+        .from('team_members')
+        .update({ role })
+        .eq('team_id', teamId)
+        .eq('user_id', userId);
+      if (err) throw err;
+      setMembers(prev => prev.map(m =>
+        m.team_id === teamId && m.user_id === userId ? { ...m, role } : m
+      ));
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
   // ─── Remove member (owner action or self-leave) ──────────
   const removeMember = useCallback(async (teamId: string, userId: string) => {
     setError(null);
@@ -239,13 +257,13 @@ export function useTeams() {
       .eq('team_id', teamId)
       .eq('user_id', user.id)
       .single();
-    return data?.role as 'owner' | 'member' | null;
+    return data?.role as 'owner' | 'editor' | 'viewer' | null;
   }, []);
 
   return {
     teams, members, invites, loading, error,
     fetchTeams, createTeam, deleteTeam, renameTeam,
-    fetchMembers, removeMember, leaveTeam,
+    fetchMembers, updateMemberRole, removeMember, leaveTeam,
     fetchInvites, createInvite, revokeInvite,
     joinTeam, fetchTeamMemberCounts, getMyRole,
   };
