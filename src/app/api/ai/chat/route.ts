@@ -357,15 +357,21 @@ GUIDELINES:
     },
   });
 
-  // Collect the full AI response (including multi-step tool call results)
-  // and return it as a plain text response.
-  const text = await result.text;
-  return new Response(text || '[No response generated]', {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-  });
+  // Collect the full AI response — await each step to catch errors properly
+  try {
+    const text = await result.text;
+    return new Response(text || '[No response generated]', {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  } catch (streamErr) {
+    const msg = streamErr instanceof Error ? streamErr.message : String(streamErr);
+    const stack = streamErr instanceof Error ? streamErr.stack : '';
+    return new Response(`AI Stream Error: ${msg}\n\nStack: ${stack}`, { status: 500 });
+  }
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return new Response(`AI Chat Error: ${msg}`, { status: 500 });
+    const stack = err instanceof Error ? err.stack : '';
+    return new Response(`AI Chat Error: ${msg}\n\nStack: ${stack}`, { status: 500 });
   }
 }
