@@ -25,6 +25,7 @@ export interface ProjectBoard {
   is_archived: boolean;
   is_public: boolean;
   timezone?: string;
+  team_id?: string | null;
   created_at: string;
   updated_at: string;
 }
