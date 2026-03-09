@@ -18,8 +18,9 @@ function isRepeatDueToday(startDate: string, every: number, unit: string): boole
   now.setHours(0, 0, 0, 0);
   const anchor = new Date(startDate + 'T00:00:00');
 
-  let cursor = new Date(anchor);
-  // Step forward from anchor until we reach or pass today
+  // First occurrence is one interval after the anchor (not the anchor itself)
+  let cursor = addUnits(new Date(anchor), every, unit);
+  // Step forward until we reach or pass today
   while (cursor < now) {
     cursor = addUnits(cursor, every, unit);
   }
