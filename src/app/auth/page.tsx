@@ -35,6 +35,9 @@ function AuthForm() {
   const [biometricReady, setBiometricReady] = useState(false);
   const [biometryType, setBiometryType] = useState('');
   const [biometricLoading, setBiometricLoading] = useState(false);
+  // Post-login Face ID opt-in prompt
+  const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
+  const [pendingCredentials, setPendingCredentials] = useState<{ email: string; password: string } | null>(null);
 
   // Redirect if already signed in
   useEffect(() => {
@@ -43,7 +46,7 @@ function AuthForm() {
     }
   }, [loading, user, router, returnTo]);
 
-  // Check for stored biometric credentials and auto-trigger
+  // Check if stored biometric credentials exist (show Face ID button, but don't auto-trigger)
   useEffect(() => {
     if (loading || user) return;
     let canceled = false;
@@ -56,26 +59,6 @@ function AuthForm() {
       if (canceled) return;
       setBiometryType(type);
       setBiometricReady(true);
-      // Auto-trigger biometric prompt
-      setBiometricLoading(true);
-      try {
-        const creds = await getLoginCredentials();
-        if (canceled) return;
-        if (creds) {
-          const { error: err } = await supabase.auth.signInWithPassword({
-            email: creds.username,
-            password: creds.password,
-          });
-          if (!canceled && err) {
-            setError(err.message);
-            if (err.message.toLowerCase().includes('invalid')) {
-              await deleteLoginCredentials();
-              setBiometricReady(false);
-            }
-          }
-        }
-      } catch { /* user canceled */ }
-      if (!canceled) setBiometricLoading(false);
     })();
     return () => { canceled = true; };
   }, [loading, user]);
@@ -115,8 +98,6 @@ function AuthForm() {
 
     // Set session persistence based on Remember Me
     if (!rememberMe) {
-      // When not remembering, we still sign in but the session won't persist across browser closes
-      // Supabase stores tokens in localStorage by default; we clear on window close
       window.addEventListener('beforeunload', () => {
         supabase.auth.signOut();
       }, { once: true });
@@ -127,11 +108,86 @@ function AuthForm() {
 
     if (signInError) {
       setError(signInError.message);
-    } else {
-      storeLoginCredentials(email, password);
-      router.push(returnTo);
+      return;
     }
+
+    // After successful login, check if we should offer Face ID enrollment
+    const available = await isBiometricAvailable();
+    const hasCreds = await hasLoginCredentials();
+    if (available && !hasCreds) {
+      const type = await getBiometryType();
+      setBiometryType(type);
+      setPendingCredentials({ email, password });
+      setShowBiometricPrompt(true);
+      return; // don't navigate yet — wait for user choice
+    }
+
+    // If already enrolled or not available, just go
+    router.push(returnTo);
   };
+
+  const handleEnableBiometric = async () => {
+    if (pendingCredentials) {
+      await storeLoginCredentials(pendingCredentials.email, pendingCredentials.password);
+    }
+    setShowBiometricPrompt(false);
+    router.push(returnTo);
+  };
+
+  const handleSkipBiometric = () => {
+    setShowBiometricPrompt(false);
+    router.push(returnTo);
+  };
+
+  // ── Face ID enrollment prompt (shown after successful password login) ──
+  if (showBiometricPrompt) {
+    return (
+      <div className="kb-root">
+        <style>{authStyles}</style>
+        <div className="kb-auth-container">
+          <div className="kb-auth-card" style={{ textAlign: 'center' }}>
+            <div style={{
+              width: 72, height: 72, borderRadius: 18,
+              background: 'rgba(99, 102, 241, 0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 20px',
+            }}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 3H5a2 2 0 0 0-2 2v2" />
+                <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                <path d="M17 21h2a2 2 0 0 0 2-2v-2" />
+                <path d="M9 9.5v1" strokeWidth="2" />
+                <path d="M15 9.5v1" strokeWidth="2" />
+                <path d="M12 9.5v3.5l-1.5 1.5" />
+                <path d="M8 17c1.33.67 2.67 1 4 1s2.67-.33 4-1" />
+              </svg>
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f9fafb', margin: '0 0 8px' }}>
+              Enable {biometryLabel(biometryType)}?
+            </h2>
+            <p style={{ fontSize: 14, color: '#9ca3af', margin: '0 0 28px', lineHeight: 1.5 }}>
+              Sign in faster next time using {biometryLabel(biometryType)} instead of your password.
+            </p>
+            <button
+              className="kb-btn kb-btn-primary"
+              onClick={handleEnableBiometric}
+              style={{ width: '100%', padding: 12, fontSize: 15, marginBottom: 12 }}
+            >
+              Enable {biometryLabel(biometryType)}
+            </button>
+            <button
+              className="kb-btn"
+              onClick={handleSkipBiometric}
+              style={{ width: '100%', padding: 12, fontSize: 14, color: '#9ca3af', background: 'transparent' }}
+            >
+              Not Now
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="kb-root">
