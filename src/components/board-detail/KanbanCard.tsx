@@ -36,11 +36,19 @@ function KanbanCard({
   const completedCount = checklists.filter(c => c.is_completed).length;
 
   const now = new Date();
-  now.setHours(0, 0, 0, 0);
+  const nowMidnight = new Date(now);
+  nowMidnight.setHours(0, 0, 0, 0);
   const dueDate = card.due_date ? new Date(card.due_date + 'T00:00:00') : null;
-  const daysUntilDue = dueDate ? Math.ceil((dueDate.getTime() - now.getTime()) / 86400000) : null;
-  const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
-  const isDueSoon = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 2;
+  const daysUntilDue = dueDate ? Math.ceil((dueDate.getTime() - nowMidnight.getTime()) / 86400000) : null;
+  // Time-aware overdue: if due today with a time, check if the time has passed
+  const isOverdue = daysUntilDue !== null && (
+    daysUntilDue < 0 ||
+    (daysUntilDue === 0 && card.due_time && (() => {
+      const [h, m] = card.due_time!.split(':').map(Number);
+      return h * 60 + m <= now.getHours() * 60 + now.getMinutes();
+    })())
+  );
+  const isDueSoon = !isOverdue && daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 2;
 
   return (
     <div

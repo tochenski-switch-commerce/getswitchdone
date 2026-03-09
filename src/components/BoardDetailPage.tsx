@@ -195,6 +195,53 @@ function BoardPage() {
     };
   }, []);
 
+  // ── Due date/time notification checker ──
+  // Runs every 60s and on board load. Creates 'overdue' notifications for cards past their due date+time.
+  const notifiedCardsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!board?.cards || !user?.id) return;
+
+    const checkOverdue = () => {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      for (const card of board.cards) {
+        if (card.is_archived || !card.due_date) continue;
+        if (notifiedCardsRef.current.has(card.id)) continue;
+
+        let isOverdue = false;
+        if (card.due_date < todayStr) {
+          isOverdue = true;
+        } else if (card.due_date === todayStr && card.due_time) {
+          const [h, m] = card.due_time.split(':').map(Number);
+          if (h * 60 + m <= currentMinutes) {
+            isOverdue = true;
+          }
+        }
+
+        if (isOverdue) {
+          notifiedCardsRef.current.add(card.id);
+          const timeStr = card.due_time
+            ? (() => { const [h, m] = card.due_time!.split(':').map(Number); const p = h >= 12 ? 'PM' : 'AM'; const hr = h === 0 ? 12 : h > 12 ? h - 12 : h; return ` at ${hr}:${String(m).padStart(2, '0')} ${p}`; })()
+            : '';
+          createNotification({
+            user_id: user!.id,
+            board_id: boardId,
+            card_id: card.id,
+            type: 'overdue',
+            title: `"${card.title}" is overdue`,
+            body: `Due ${new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${timeStr}`,
+          });
+        }
+      }
+    };
+
+    checkOverdue();
+    const interval = setInterval(checkOverdue, 60_000);
+    return () => clearInterval(interval);
+  }, [board?.cards, user?.id, boardId, createNotification]);
+
   const execNoteCmd = (cmd: string, value?: string) => {
     document.execCommand(cmd, false, value);
     noteRef.current?.focus();
@@ -295,9 +342,19 @@ function BoardPage() {
       const endOfWeekStr = endOfWeek.toISOString().split('T')[0];
       const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       const endOfMonthStr = endOfMonth.toISOString().split('T')[0];
+      const nowDate = new Date();
+      const currentMinutes = nowDate.getHours() * 60 + nowDate.getMinutes();
       cards = cards.filter(c => {
         switch (filterDate) {
-          case 'overdue': return c.due_date && c.due_date < todayStr;
+          case 'overdue': {
+            if (!c.due_date) return false;
+            if (c.due_date < todayStr) return true;
+            if (c.due_date === todayStr && c.due_time) {
+              const [h, m] = c.due_time.split(':').map(Number);
+              return h * 60 + m <= currentMinutes;
+            }
+            return false;
+          }
           case 'today': return c.due_date === todayStr;
           case 'week': return c.due_date && c.due_date >= todayStr && c.due_date <= endOfWeekStr;
           case 'month': return c.due_date && c.due_date >= todayStr && c.due_date <= endOfMonthStr;
