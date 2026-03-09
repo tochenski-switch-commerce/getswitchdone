@@ -83,11 +83,12 @@ GSD Boards Feature Guide:
 `;
 
 export async function POST(req: NextRequest) {
-  const user = await verifyAuth(req);
-  if (!user) return new Response('Unauthorized', { status: 401 });
+  try {
+    const user = await verifyAuth(req);
+    if (!user) return new Response('Unauthorized', { status: 401 });
 
-  const { messages, boardId } = await req.json();
-  if (!boardId) return new Response('boardId required', { status: 400 });
+    const { messages, boardId } = await req.json();
+    if (!boardId) return new Response('boardId required', { status: 400 });
 
   const { board, columns, cards, labels, profiles, systemContext } = await buildBoardContext(boardId);
   if (!board) return new Response('Board not found', { status: 404 });
@@ -368,7 +369,8 @@ GUIDELINES:
           }
         }
       } catch (err) {
-        console.error('[AI CHAT] stream error:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        controller.enqueue(encoder.encode(`\n\n[Stream error: ${msg}]`));
       } finally {
         controller.close();
       }
@@ -378,4 +380,9 @@ GUIDELINES:
   return new Response(readable, {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
   });
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return new Response(`AI Chat Error: ${msg}`, { status: 500 });
+  }
 }
