@@ -1,6 +1,5 @@
 import React from 'react';
-import DOMPurify from 'isomorphic-dompurify';
-import type { CardPriority, CustomFieldType } from '@/types/board-types';
+import type { CardPriority, CustomFieldType, RepeatRule } from '@/types/board-types';
 
 /* ═══════════════════════════════════════════════════════════
    Regex patterns
@@ -78,20 +77,22 @@ export function renderRichText(text: string): React.ReactNode[] {
 /* ═══════════════════════════════════════════════════════════
    Rich text sanitization
    ═══════════════════════════════════════════════════════════ */
-const RICH_TEXT_PURIFY_CONFIG = {
-  ALLOWED_TAGS: ['b', 'i', 'u', 's', 'a', 'p', 'br', 'ul', 'ol', 'li', 'h3', 'h4', 'pre', 'code', 'strong', 'em', 'span', 'div'],
-  ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
-};
-
 export function sanitizeRichText(html: string): string {
   if (!html) return '';
-  // If plain text (no HTML tags), convert newlines to <br> and add @mention spans
+  // If plain text (no HTML tags), convert newlines to <br>
   if (!/<[a-z][\s\S]*>/i.test(html)) {
-    const escaped = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-    return escaped.replace(/@&quot;([^&]+)&quot;|@"([^"]+)"|@(\w+)/g, '<span class="kb-mention">$&</span>');
+    return html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
   }
-  const clean = DOMPurify.sanitize(html, RICH_TEXT_PURIFY_CONFIG);
-  return clean.replace(/@&quot;([^&]+)&quot;|@"([^"]+)"|@(\w+)/g, '<span class="kb-mention">$&</span>');
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?\/?>|<\/embed>/gi, '')
+    .replace(/<form[\s\S]*?<\/form>/gi, '')
+    .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/\son\w+\s*=\s*\S+/gi, '')
+    .replace(/javascript\s*:/gi, 'blocked:')
+    .replace(/data\s*:/gi, 'blocked:');
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -127,13 +128,17 @@ export const FIELD_TYPES: { value: CustomFieldType; label: string }[] = [
 /* ═══════════════════════════════════════════════════════════
    Email helpers
    ═══════════════════════════════════════════════════════════ */
-const EMAIL_PURIFY_CONFIG = {
-  ALLOWED_TAGS: ['b', 'i', 'u', 's', 'a', 'p', 'br', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'code', 'strong', 'em', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'img', 'blockquote', 'hr'],
-  ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style', 'src', 'alt', 'width', 'height', 'colspan', 'rowspan'],
-};
-
 export function sanitizeEmailHtml(html: string): string {
-  return DOMPurify.sanitize(html, EMAIL_PURIFY_CONFIG);
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?\/?>|<\/embed>/gi, '')
+    .replace(/<form[\s\S]*?<\/form>/gi, '')
+    .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/\son\w+\s*=\s*\S+/gi, '')
+    .replace(/javascript\s*:/gi, 'blocked:')
+    .replace(/data\s*:/gi, 'blocked:');
 }
 
 export function emailTimeAgo(dateStr: string): string {
@@ -173,3 +178,86 @@ export const LABEL_COLORS: { hex: string; name: string }[] = [
   { hex: '#78716c', name: 'Stone' },
   { hex: '#64748b', name: 'Slate' },
 ];
+
+/* ═══════════════════════════════════════════════════════════
+   Repeat helpers
+   ═══════════════════════════════════════════════════════════ */
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_NAMES_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+/** Compute the next occurrence date from today for a given repeat rule. */
+export function getNextRepeatDate(rule: RepeatRule): Date {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  if (rule.interval === 'daily') {
+    const next = new Date(now);
+    next.setDate(next.getDate() + 1);
+    return next;
+  }
+
+  if (rule.interval === 'weekly' && rule.days.length > 0) {
+    const today = now.getDay();
+    const sorted = [...rule.days].sort((a, b) => a - b);
+    // Find the next day >= today (but not today itself)
+    for (const d of sorted) {
+      if (d > today) {
+        const next = new Date(now);
+        next.setDate(next.getDate() + (d - today));
+        return next;
+      }
+    }
+    // Wrap to next week
+    const next = new Date(now);
+    next.setDate(next.getDate() + (7 - today + sorted[0]));
+    return next;
+  }
+
+  if (rule.interval === 'monthly' && rule.days.length > 0) {
+    const dayOfMonth = rule.days[0];
+    const thisMonth = new Date(now.getFullYear(), now.getMonth(), dayOfMonth);
+    if (thisMonth > now) return thisMonth;
+    // Next month
+    return new Date(now.getFullYear(), now.getMonth() + 1, dayOfMonth);
+  }
+
+  // Fallback
+  const next = new Date(now);
+  next.setDate(next.getDate() + 1);
+  return next;
+}
+
+/** Format the next repeat date as a friendly string. */
+export function formatNextDate(rule: RepeatRule): string {
+  const next = getNextRepeatDate(rule);
+  if (rule.endDate) {
+    const end = new Date(rule.endDate + 'T00:00:00');
+    if (next > end) return 'Series ended';
+  }
+  return next.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+/** Human-readable repeat summary, e.g. "Every Monday" or "Daily". */
+export function formatRepeatSummary(rule: RepeatRule): string {
+  if (rule.interval === 'daily') return 'Daily';
+  if (rule.interval === 'weekly') {
+    if (rule.days.length === 0) return 'Weekly';
+    if (rule.days.length === 7) return 'Every day';
+    if (rule.days.length === 5 && [1,2,3,4,5].every(d => rule.days.includes(d))) return 'Weekdays';
+    if (rule.days.length === 2 && [0,6].every(d => rule.days.includes(d))) return 'Weekends';
+    const names = [...rule.days].sort((a, b) => a - b).map(d => DAY_NAMES[d]);
+    if (names.length === 1) return `Every ${DAY_NAMES_FULL[rule.days[0]]}`;
+    return `Every ${names.join(', ')}`;
+  }
+  if (rule.interval === 'monthly') {
+    if (rule.days.length === 0) return 'Monthly';
+    return `Monthly on the ${ordinal(rule.days[0])}`;
+  }
+  return 'Repeating';
+}

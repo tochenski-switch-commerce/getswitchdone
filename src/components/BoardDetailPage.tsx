@@ -12,7 +12,7 @@ import {
   Tag, X, ChevronLeft, ChevronRight, User, Users,
   FolderKanban, Check, Globe, Lock, StickyNote, Copy,
   Zap, Bold, Italic, Underline, Strikethrough,
-  LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, Bell, FileText, Mail,
+  LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, Bell, FileText, Mail, Clock,
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
   BotMessageSquare,
 } from '@/components/BoardIcons';
@@ -856,6 +856,39 @@ function BoardPage() {
                     <FileText size={14} /> Forms
                   </button>
 
+                  {/* Timezone picker */}
+                  <div className="kb-dropdown-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6, cursor: 'default' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={14} /> Timezone</span>
+                    <select
+                      style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid var(--kb-border)', background: 'var(--kb-bg)', color: 'var(--kb-text)', fontSize: 13 }}
+                      value={board.timezone || ''}
+                      onChange={async (e) => {
+                        const val = e.target.value || null;
+                        await updateBoard(boardId, { timezone: val as any });
+                      }}
+                    >
+                      <option value="">Device default</option>
+                      <optgroup label="US">
+                        <option value="America/New_York">Eastern</option>
+                        <option value="America/Chicago">Central</option>
+                        <option value="America/Denver">Mountain</option>
+                        <option value="America/Los_Angeles">Pacific</option>
+                        <option value="America/Anchorage">Alaska</option>
+                        <option value="Pacific/Honolulu">Hawaii</option>
+                      </optgroup>
+                      <optgroup label="World">
+                        <option value="Europe/London">London (GMT)</option>
+                        <option value="Europe/Paris">Paris (CET)</option>
+                        <option value="Europe/Berlin">Berlin (CET)</option>
+                        <option value="Asia/Tokyo">Tokyo (JST)</option>
+                        <option value="Asia/Shanghai">Shanghai (CST)</option>
+                        <option value="Asia/Kolkata">India (IST)</option>
+                        <option value="Australia/Sydney">Sydney (AEST)</option>
+                        <option value="America/Sao_Paulo">São Paulo (BRT)</option>
+                      </optgroup>
+                    </select>
+                  </div>
+
                   {board.user_id === user?.id && (
                     <button
                       className="kb-dropdown-item"
@@ -1257,6 +1290,14 @@ function BoardPage() {
                               markCardUpdated(card.id);
                               await updateCard(boardId, card.id, { priority: p });
                             }}
+                            onMoveToNext={(() => {
+                              const colIdx = columns.indexOf(col);
+                              const nextCol = columns.slice(colIdx + 1).find(c => c.column_type !== 'board_links');
+                              if (!nextCol) return undefined;
+                              return async () => {
+                                await moveCard(boardId, card.id, nextCol.id, 0);
+                              };
+                            })()}
                           />
                         </div>
                       ))}

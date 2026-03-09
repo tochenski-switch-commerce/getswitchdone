@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS project_boards (
   notes         text,
   is_archived   boolean DEFAULT false,
   is_public     boolean DEFAULT false,
+  timezone      text,
   created_at    timestamptz DEFAULT now(),
   updated_at    timestamptz DEFAULT now()
 );

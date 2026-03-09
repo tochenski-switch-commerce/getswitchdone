@@ -1,99 +1,18 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { BoardCard, CardPriority, ChecklistTemplate, UserProfile } from '@/types/board-types';
+import type { BoardCard, CardPriority, ChecklistTemplate, UserProfile, RepeatInterval, RepeatRule } from '@/types/board-types';
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   Plus, Trash2, Edit3,
   MessageSquare, CheckSquare, CalendarDays, Tag,
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, Pencil,
-  Check, Copy, LinkIcon, SlidersHorizontal,
+  Check, Copy, LinkIcon, SlidersHorizontal, Repeat,
   Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered,
-  Sparkles, Loader,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import CustomFieldInput from './CustomFieldInput';
-import { PRIORITY_CONFIG, linkifyText, renderCommentText, sanitizeRichText } from './helpers';
-import { hapticLight, hapticHeavy, hapticSuccess } from '@/lib/haptics';
-import { useAuth } from '@/contexts/AuthContext';
-
-function parseTime12(val: string): { hour: number; minute: number; period: 'AM' | 'PM' } {
-  // val = "HH:mm" 24h format
-  if (!val) return { hour: 12, minute: 0, period: 'AM' };
-  const [h, m] = val.split(':').map(Number);
-  const period: 'AM' | 'PM' = h >= 12 ? 'PM' : 'AM';
-  const hour = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return { hour, minute: m || 0, period };
-}
-
-function formatTime24(hour: number, minute: number, period: 'AM' | 'PM'): string {
-  let h = hour;
-  if (period === 'AM' && h === 12) h = 0;
-  else if (period === 'PM' && h !== 12) h += 12;
-  return `${String(h).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-}
-
-function formatTime12(val: string): string {
-  if (!val) return '';
-  const { hour, minute, period } = parseTime12(val);
-  return `${hour}:${String(minute).padStart(2, '0')} ${period}`;
-}
-
-function DueTimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { hour, minute, period } = value ? parseTime12(value) : { hour: 12, minute: 0, period: 'AM' as const };
-
-  const setTime = (h: number, m: number, p: 'AM' | 'PM') => {
-    onChange(formatTime24(h, m, p));
-  };
-
-  if (!value) {
-    return (
-      <button
-        className="kb-due-time-add"
-        onClick={() => onChange(formatTime24(9, 0, 'AM'))}
-      >
-        <Clock size={12} /> Add time
-      </button>
-    );
-  }
-
-  return (
-    <div className="kb-due-time-row">
-      <select
-        className="kb-due-time-select"
-        value={hour}
-        onChange={e => setTime(Number(e.target.value), minute, period)}
-      >
-        {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
-          <option key={h} value={h}>{h}</option>
-        ))}
-      </select>
-      <span className="kb-due-time-colon">:</span>
-      <select
-        className="kb-due-time-select"
-        value={minute}
-        onChange={e => setTime(hour, Number(e.target.value), period)}
-      >
-        {Array.from({ length: 12 }, (_, i) => i * 5).map(m => (
-          <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-        ))}
-      </select>
-      <select
-        className="kb-due-time-select kb-due-time-period"
-        value={period}
-        onChange={e => setTime(hour, minute, e.target.value as 'AM' | 'PM')}
-      >
-        <option value="AM">AM</option>
-        <option value="PM">PM</option>
-      </select>
-      <button
-        className="kb-due-time-clear"
-        onClick={() => onChange('')}
-        title="Remove time"
-      >×</button>
-    </div>
-  );
-}
+import { PRIORITY_CONFIG, linkifyText, renderCommentText, sanitizeRichText, formatRepeatSummary, formatNextDate } from './helpers';
 
 export default function CardDetailModal({
   card,
@@ -151,19 +70,13 @@ export default function CardDetailModal({
   const [editPriority, setEditPriority] = useState<CardPriority | null>(card.priority);
   const [editStartDate, setEditStartDate] = useState(card.start_date || '');
   const [editDueDate, setEditDueDate] = useState(card.due_date || '');
-  const [editDueTime, setEditDueTime] = useState(card.due_time || '');
-  const [editAssignees, setEditAssignees] = useState<string[]>(card.assignees?.length ? card.assignees : card.assignee ? [card.assignee] : []);
-  const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+  const [editAssignee, setEditAssignee] = useState(card.assignee || '');
   const [editLabels, setEditLabels] = useState<string[]>((card.labels || []).map(l => l.id));
   const [commentText, setCommentText] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [checklistText, setChecklistText] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const isFirstRender = useRef(true);
-  const pendingChangesRef = useRef(false);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -173,59 +86,17 @@ export default function CardDetailModal({
   const [cardLinkResults, setCardLinkResults] = useState<{ id: string; title: string; board_id: string; column_id: string; is_archived: boolean }[]>([]);
   const [cardLinkSearching, setCardLinkSearching] = useState(false);
   const cardLinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Repeat state
+  const existingRule = card.repeat_rule;
+  const [repeatInterval, setRepeatInterval] = useState<RepeatInterval | null>(existingRule?.interval ?? null);
+  const [repeatDays, setRepeatDays] = useState<number[]>(existingRule?.days ?? []);
+  const [repeatEndDate, setRepeatEndDate] = useState(existingRule?.endDate ?? '');
+
   const titleRef = useRef<HTMLInputElement>(null);
   const descRef = useRef<HTMLDivElement>(null);
   const commentAddRef = useRef<HTMLDivElement>(null);
   const commentEditRef = useRef<HTMLDivElement>(null);
-  const overlayMouseDown = useRef<EventTarget | null>(null);
-
-  // AI state
-  const { session } = useAuth();
-  const [aiDescLoading, setAiDescLoading] = useState(false);
-  const [aiDescPreview, setAiDescPreview] = useState<string | null>(null);
-  const [aiChecklistLoading, setAiChecklistLoading] = useState(false);
-  const [aiChecklistSuggestions, setAiChecklistSuggestions] = useState<{ title: string; selected: boolean }[]>([]);
-
-  const aiGenerate = useCallback(async (action: string, extra?: Record<string, any>) => {
-    const token = session?.access_token;
-    if (!token) return null;
-    const res = await fetch('/api/ai/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        action,
-        card: { title: card.title, description: editDesc || undefined },
-        boardContext: {
-          boardTitle: board.title,
-          columns: board.columns.map(c => c.title),
-          labels: board.labels?.map(l => l.name),
-        },
-        ...extra,
-      }),
-    });
-    if (!res.ok) return null;
-    return res.json();
-  }, [session, card.title, editDesc, board]);
-
-  const handleAiDescribe = useCallback(async () => {
-    setAiDescLoading(true);
-    try {
-      const result = await aiGenerate('describe');
-      if (result?.description) setAiDescPreview(result.description);
-    } finally {
-      setAiDescLoading(false);
-    }
-  }, [aiGenerate]);
-
-  const handleAiChecklist = useCallback(async () => {
-    setAiChecklistLoading(true);
-    try {
-      const result = await aiGenerate('checklist');
-      if (result?.items) setAiChecklistSuggestions(result.items.map((t: string) => ({ title: t, selected: true })));
-    } finally {
-      setAiChecklistLoading(false);
-    }
-  }, [aiGenerate]);
 
   useEffect(() => {
     if (editingDesc && descRef.current) {
@@ -258,13 +129,7 @@ export default function CardDetailModal({
 
   const insertLink = useCallback((ref: React.RefObject<HTMLDivElement | null>) => {
     const url = prompt('Enter URL:');
-    if (url) {
-      try {
-        const parsed = new URL(url);
-        if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return;
-        document.execCommand('createLink', false, parsed.href);
-      } catch { /* invalid URL — ignore */ }
-    }
+    if (url) document.execCommand('createLink', false, url);
     ref.current?.focus();
   }, []);
 
@@ -277,41 +142,45 @@ export default function CardDetailModal({
     }
   }, []);
 
-  const doSave = useCallback(async () => {
-    if (!editTitle.trim()) return;
-    setSaveError(null);
-    setAutoSaveStatus('saving');
-    try {
-      const descHtml = descRef.current?.innerHTML || editDesc;
-      await onUpdate({
-        title: editTitle,
-        description: editingDesc ? descHtml : editDesc,
-        priority: editPriority || null,
-        start_date: editStartDate || null,
-        due_date: editDueDate || null,
-        due_time: editDueDate && editDueTime ? editDueTime : null,
-        assignee: editAssignees.length > 0 ? editAssignees[0] : null,
-        assignees: editAssignees,
-        label_ids: editLabels,
-      });
-      pendingChangesRef.current = false;
-      setAutoSaveStatus('saved');
-      setTimeout(() => setAutoSaveStatus(s => s === 'saved' ? 'idle' : s), 2000);
-    } catch (err: any) {
-      console.error('[autoSave] failed:', err);
-      setAutoSaveStatus('idle');
-      setSaveError(err.message || 'Failed to save card. Please try again.');
+  const handleSave = async () => {
+    setSaving(true);
+    const pendingComment = commentAddRef.current?.innerHTML || '';
+    if (pendingComment && pendingComment !== '<br>') {
+      await onAddComment(pendingComment);
+      setCommentText('');
+      if (commentAddRef.current) commentAddRef.current.innerHTML = '';
     }
-  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editDueTime, editAssignees, editLabels, editingDesc, onUpdate]);
+    const descHtml = descRef.current?.innerHTML || editDesc;
 
-  // Track pending changes (save happens on close, not while editing)
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
+    // Build repeat_rule
+    let repeat_rule: RepeatRule | null = null;
+    let repeat_series_id: string | null = card.repeat_series_id ?? null;
+    if (repeatInterval) {
+      repeat_rule = {
+        interval: repeatInterval,
+        days: repeatDays,
+        ...(repeatEndDate ? { endDate: repeatEndDate } : {}),
+      };
+      // Generate series id if new
+      if (!repeat_series_id) {
+        repeat_series_id = crypto.randomUUID();
+      }
     }
-    pendingChangesRef.current = true;
-  }, [editTitle, editDesc, editPriority, editStartDate, editDueDate, editDueTime, editAssignees, editLabels]);
+
+    await onUpdate({
+      title: editTitle,
+      description: editingDesc ? descHtml : editDesc,
+      priority: editPriority || null,
+      start_date: editStartDate || null,
+      due_date: editDueDate || null,
+      assignee: editAssignee || null,
+      label_ids: editLabels,
+      repeat_rule,
+      repeat_series_id: repeat_rule ? repeat_series_id : null,
+    });
+    setSaving(false);
+    onClose();
+  };
 
   const handleAddComment = async () => {
     const html = commentAddRef.current?.innerHTML || '';
@@ -359,15 +228,7 @@ export default function CardDetailModal({
   const completedCount = checklists.filter(c => c.is_completed).length;
 
   return (
-    <div className="kb-modal-overlay" onMouseDown={e => {
-            overlayMouseDown.current = e.target;
-          }} onClick={async (e) => {
-            if (overlayMouseDown.current !== e.target) return;
-            if (pendingChangesRef.current) {
-              await doSave();
-            }
-            onClose();
-          }}>
+    <div className="kb-modal-overlay" onMouseDown={onClose}>
       <div className="kb-detail-modal" onMouseDown={e => e.stopPropagation()}>
         {/* Close + Nav */}
         <div className="kb-detail-header-actions">
@@ -383,12 +244,7 @@ export default function CardDetailModal({
               </button>
             )}
           </div>
-          <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={async () => {
-            if (pendingChangesRef.current) {
-              await doSave();
-            }
-            onClose();
-          }}><X size={18} /></button>
+          <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={onClose}><X size={18} /></button>
         </div>
 
         <div className="kb-detail-body">
@@ -460,26 +316,7 @@ export default function CardDetailModal({
                     <Pencil size={11} />
                   </button>
                 )}
-                <button
-                  className="kb-btn-icon-sm"
-                  onClick={handleAiDescribe}
-                  disabled={aiDescLoading}
-                  title="AI: Generate or improve description"
-                  style={{ marginLeft: 'auto' }}
-                >
-                  {aiDescLoading ? <Loader size={13} /> : <Sparkles size={13} />}
-                </button>
               </div>
-              {aiDescPreview && (
-                <div className="kb-ai-preview">
-                  <div className="kb-ai-preview-label"><Sparkles size={11} /> AI Suggestion</div>
-                  <div className="kb-ai-preview-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(aiDescPreview.replace(/\n/g, '<br>')) }} />
-                  <div className="kb-ai-preview-actions">
-                    <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={() => { setEditDesc(aiDescPreview); setAiDescPreview(null); pendingChangesRef.current = true; }}>Accept</button>
-                    <button className="kb-btn kb-btn-sm" onClick={() => setAiDescPreview(null)}>Discard</button>
-                  </div>
-                </div>
-              )}
               {editingDesc ? (
                 <div className="kb-rt-editor">
                   <div className="kb-rt-toolbar">
@@ -531,15 +368,6 @@ export default function CardDetailModal({
               <div className="kb-detail-section-label">
                 <CheckSquare size={13} />
                 Checklist {checklists.length > 0 && `(${completedCount}/${checklists.length})`}
-                <button
-                  className="kb-btn-icon-sm"
-                  onClick={handleAiChecklist}
-                  disabled={aiChecklistLoading}
-                  title="AI: Suggest checklist items"
-                  style={{ marginLeft: 'auto' }}
-                >
-                  {aiChecklistLoading ? <Loader size={13} /> : <Sparkles size={13} />}
-                </button>
               </div>
               {checklists.length > 0 && (
                 <div className="kb-checklist-progress">
@@ -556,17 +384,14 @@ export default function CardDetailModal({
                   <div key={item.id} className="kb-checklist-item">
                     <button
                       className={`kb-checkbox ${item.is_completed ? 'checked' : ''}`}
-                      onClick={() => {
-                        if (!item.is_completed) hapticSuccess(); else hapticLight();
-                        onToggleChecklistItem(item.id, !item.is_completed);
-                      }}
+                      onClick={() => onToggleChecklistItem(item.id, !item.is_completed)}
                     >
                       {item.is_completed && <Check size={11} />}
                     </button>
                     <span className={`kb-checklist-text ${item.is_completed ? 'completed' : ''}`}>
                       {item.title}
                     </span>
-                    <button className="kb-btn-icon-sm" onClick={() => { hapticHeavy(); onDeleteChecklistItem(item.id); }}>
+                    <button className="kb-btn-icon-sm" onClick={() => onDeleteChecklistItem(item.id)}>
                       <X size={11} />
                     </button>
                   </div>
@@ -585,35 +410,6 @@ export default function CardDetailModal({
                   Add
                 </button>
               </div>
-              {aiChecklistSuggestions.length > 0 && (
-                <div className="kb-ai-preview" style={{ marginTop: 8 }}>
-                  <div className="kb-ai-preview-label"><Sparkles size={11} /> AI Suggestions</div>
-                  {aiChecklistSuggestions.map((s, i) => (
-                    <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: 13, cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={s.selected}
-                        onChange={() => setAiChecklistSuggestions(prev => prev.map((p, j) => j === i ? { ...p, selected: !p.selected } : p))}
-                      />
-                      {s.title}
-                    </label>
-                  ))}
-                  <div className="kb-ai-preview-actions">
-                    <button
-                      className="kb-btn kb-btn-primary kb-btn-sm"
-                      onClick={async () => {
-                        for (const s of aiChecklistSuggestions.filter(s => s.selected)) {
-                          await onAddChecklistItem(s.title);
-                        }
-                        setAiChecklistSuggestions([]);
-                      }}
-                    >
-                      Add Selected
-                    </button>
-                    <button className="kb-btn kb-btn-sm" onClick={() => setAiChecklistSuggestions([])}>Discard</button>
-                  </div>
-                </div>
-              )}
 
               {/* Template actions */}
               <div className="kb-template-actions">
@@ -793,7 +589,7 @@ export default function CardDetailModal({
                         <button className="kb-btn-icon-sm" onClick={() => { setEditingCommentId(comment.id); setEditingCommentText(comment.content); }}>
                           <Pencil size={11} />
                         </button>
-                        <button className="kb-btn-icon-sm" onClick={() => { hapticHeavy(); onDeleteComment(comment.id); }}>
+                        <button className="kb-btn-icon-sm" onClick={() => onDeleteComment(comment.id)}>
                           <Trash2 size={11} />
                         </button>
                       </div>
@@ -884,48 +680,19 @@ export default function CardDetailModal({
               </select>
             </div>
 
-            {/* Assignees */}
+            {/* Assignee */}
             <div className="kb-form-group">
-              <div className="kb-detail-section-label">
-                <User size={13} /> Assignees
-                <button className="kb-btn-icon-sm" onClick={() => setShowAssigneePicker(!showAssigneePicker)}>
-                  {showAssigneePicker ? <X size={12} /> : <Plus size={12} />}
-                </button>
-              </div>
-              <div className="kb-label-chips">
-                {editAssignees.map(name => (
-                  <span key={name} className="kb-label-chip" style={{ background: '#3b82f622', color: '#3b82f6', borderColor: '#3b82f644' }}>
-                    @{name}
-                    <button onClick={() => setEditAssignees(prev => prev.filter(n => n !== name))} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, marginLeft: 4 }}>
-                      <X size={10} />
-                    </button>
-                  </span>
+              <div className="kb-detail-section-label"><User size={13} /> Assignee</div>
+              <select
+                className="kb-input"
+                value={editAssignee}
+                onChange={e => setEditAssignee(e.target.value)}
+              >
+                <option value="">Unassigned</option>
+                {userProfiles.filter(p => p.name).map(p => (
+                  <option key={p.id} value={p.name}>@{p.name}</option>
                 ))}
-                {editAssignees.length === 0 && <span style={{ color: '#888', fontSize: 12 }}>Unassigned</span>}
-              </div>
-              {showAssigneePicker && (
-                <div className="kb-label-picker">
-                  {userProfiles.filter(p => p.name).map(p => {
-                    const isSelected = editAssignees.includes(p.name);
-                    return (
-                      <button
-                        key={p.id}
-                        className={`kb-label-picker-item ${isSelected ? 'selected' : ''}`}
-                        onClick={() => {
-                          setEditAssignees(prev =>
-                            isSelected ? prev.filter(n => n !== p.name) : [...prev, p.name]
-                          );
-                        }}
-                        style={{ '--label-color': '#3b82f6' } as any}
-                      >
-                        <span className="kb-label-dot" style={{ background: '#3b82f6' }} />
-                        @{p.name}
-                        {isSelected && <Check size={12} style={{ marginLeft: 'auto', color: '#3b82f6' }} />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              </select>
             </div>
 
             {/* Dates */}
@@ -943,11 +710,102 @@ export default function CardDetailModal({
               <DatePickerInput
                 className="kb-input"
                 value={editDueDate}
-                onChange={(v) => { setEditDueDate(v); if (!v) setEditDueTime(''); }}
+                onChange={setEditDueDate}
                 placeholder="Select due date…"
               />
-              {editDueDate && (
-                <DueTimePicker value={editDueTime} onChange={setEditDueTime} />
+            </div>
+
+            {/* Repeat */}
+            <div className="kb-form-group">
+              <div className="kb-detail-section-label"><Repeat size={13} /> Repeat</div>
+              <div className="kb-repeat-picker">
+                {(['off', 'daily', 'weekly', 'monthly'] as const).map(opt => (
+                  <button
+                    key={opt}
+                    className={`kb-repeat-option ${(opt === 'off' ? !repeatInterval : repeatInterval === opt) ? 'active' : ''}`}
+                    onClick={() => {
+                      if (opt === 'off') {
+                        setRepeatInterval(null);
+                        setRepeatDays([]);
+                      } else {
+                        setRepeatInterval(opt);
+                        if (opt === 'daily') setRepeatDays([]);
+                        if (opt === 'weekly' && repeatInterval !== 'weekly') {
+                          // Default to today's day of week
+                          setRepeatDays([new Date().getDay()]);
+                        }
+                        if (opt === 'monthly' && repeatInterval !== 'monthly') {
+                          // Default to today's day of month (capped at 28)
+                          setRepeatDays([Math.min(new Date().getDate(), 28)]);
+                        }
+                      }
+                    }}
+                  >
+                    {opt === 'off' ? 'Off' : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Weekly day picker */}
+              {repeatInterval === 'weekly' && (
+                <div className="kb-repeat-days">
+                  {['S','M','T','W','T','F','S'].map((label, idx) => (
+                    <button
+                      key={idx}
+                      className={`kb-repeat-day ${repeatDays.includes(idx) ? 'active' : ''}`}
+                      onClick={() => {
+                        setRepeatDays(prev =>
+                          prev.includes(idx)
+                            ? prev.filter(d => d !== idx)
+                            : [...prev, idx]
+                        );
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Monthly day picker */}
+              {repeatInterval === 'monthly' && (
+                <div className="kb-repeat-monthly">
+                  <span className="kb-repeat-monthly-label">Day of month</span>
+                  <select
+                    className="kb-input"
+                    value={repeatDays[0] ?? 1}
+                    onChange={e => setRepeatDays([parseInt(e.target.value)])}
+                    style={{ width: 72 }}
+                  >
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Summary & next date preview */}
+              {repeatInterval && (
+                <div className="kb-repeat-summary">
+                  <span className="kb-repeat-summary-text">
+                    {formatRepeatSummary({ interval: repeatInterval, days: repeatDays })}
+                  </span>
+                  <span className="kb-repeat-next">
+                    Next: {formatNextDate({ interval: repeatInterval, days: repeatDays, ...(repeatEndDate ? { endDate: repeatEndDate } : {}) })}
+                  </span>
+                </div>
+              )}
+
+              {/* Optional end date */}
+              {repeatInterval && (
+                <div className="kb-repeat-end">
+                  <DatePickerInput
+                    className="kb-input"
+                    value={repeatEndDate}
+                    onChange={setRepeatEndDate}
+                    placeholder="End date (optional)…"
+                  />
+                </div>
               )}
             </div>
 
@@ -994,16 +852,9 @@ export default function CardDetailModal({
 
             {/* Actions */}
             <div style={{ borderTop: '1px solid #2a2d3a', paddingTop: 16, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {saveError && (
-                <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#f87171', lineHeight: 1.4 }}>
-                  {saveError}
-                </div>
-              )}
-              {autoSaveStatus !== 'idle' && (
-                <div style={{ textAlign: 'center', fontSize: 12, color: autoSaveStatus === 'saving' ? '#888' : '#4ade80', padding: '4px 0' }}>
-                  {autoSaveStatus === 'saving' ? 'Saving...' : 'Saved'}
-                </div>
-              )}
+              <button className="kb-btn kb-btn-primary" onMouseDown={e => e.preventDefault()} onClick={handleSave} disabled={saving || !editTitle.trim()} style={{ width: '100%', justifyContent: 'center' }}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
               <button
                 className="kb-btn kb-btn-ghost"
                 onClick={async () => {
@@ -1031,7 +882,6 @@ export default function CardDetailModal({
                 className="kb-btn kb-btn-danger"
                 onClick={async () => {
                   if (confirm('Delete this card?')) {
-                    hapticHeavy();
                     await onDelete();
                     onClose();
                   }

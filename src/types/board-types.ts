@@ -1,5 +1,13 @@
 export type CardPriority = 'low' | 'medium' | 'high' | 'urgent';
 
+export type RepeatInterval = 'daily' | 'weekly' | 'monthly';
+
+export interface RepeatRule {
+  interval: RepeatInterval;
+  days: number[];       // weekly: 0–6 (Sun–Sat), monthly: 1–28, daily: []
+  endDate?: string;     // YYYY-MM-DD optional end date
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -16,40 +24,9 @@ export interface ProjectBoard {
   icon_color?: string;
   is_archived: boolean;
   is_public: boolean;
-  team_id?: string;
+  timezone?: string;
   created_at: string;
   updated_at: string;
-}
-
-// ── Teams ──
-
-export type TeamRole = 'owner' | 'editor' | 'viewer';
-
-export interface Team {
-  id: string;
-  name: string;
-  created_by: string;
-  created_at: string;
-}
-
-export interface TeamMember {
-  team_id: string;
-  user_id: string;
-  role: TeamRole;
-  joined_at: string;
-  user_profiles?: { name: string };
-}
-
-export interface TeamInvite {
-  id: string;
-  team_id: string;
-  invite_code: string;
-  max_uses: number | null;
-  use_count: number;
-  expires_at: string | null;
-  is_active: boolean;
-  created_by: string;
-  created_at: string;
 }
 
 export type ColumnType = 'normal' | 'board_links';
@@ -81,9 +58,7 @@ export interface BoardCard {
   priority: CardPriority | null;
   start_date?: string;
   due_date?: string;
-  due_time?: string | null;
   assignee?: string;
-  assignees?: string[];
   created_by?: string;
   is_archived: boolean;
   created_at: string;
@@ -93,6 +68,8 @@ export interface BoardCard {
   checklists?: CardChecklist[];
   custom_field_values?: CardCustomFieldValue[];
   card_links?: CardLink[];
+  repeat_rule?: RepeatRule | null;
+  repeat_series_id?: string | null;
 }
 
 export interface CardLabelAssignment {
@@ -131,15 +108,6 @@ export interface ChecklistTemplate {
 // ── Notifications ──
 
 export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention';
-
-export interface DeviceToken {
-  id: string;
-  user_id: string;
-  token: string;
-  platform: 'ios' | 'android' | 'web';
-  created_at: string;
-  updated_at: string;
-}
 
 export interface Notification {
   id: string;
@@ -256,24 +224,3 @@ export interface BoardEmail {
   received_at: string;
   created_at: string;
 }
-
-// ── AI Types ──
-
-export type AiGenerateAction = 'describe' | 'checklist' | 'classify' | 'title' | 'breakdown';
-
-export interface AiGenerateRequest {
-  action: AiGenerateAction;
-  boardTitle: string;
-  columnName?: string;
-  cardTitle: string;
-  cardDescription?: string;
-  existingChecklists?: string[];
-  availableLabels?: string[];
-  currentPriority?: string | null;
-}
-
-export interface AiDescribeResult { description: string }
-export interface AiChecklistResult { items: string[] }
-export interface AiClassifyResult { suggestedPriority: CardPriority; suggestedLabels: string[] }
-export interface AiTitleResult { title: string }
-export interface AiBreakdownResult { cards: { title: string; description: string }[] }

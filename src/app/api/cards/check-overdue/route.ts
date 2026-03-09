@@ -24,25 +24,31 @@ export async function GET(req: NextRequest) {
   }
 
   const db = getSupabaseAdmin();
-  const tz = process.env.APP_TIMEZONE || 'America/New_York';
+  const fallbackTz = process.env.APP_TIMEZONE || 'America/New_York';
   const now = new Date();
 
-  // Get current date and time in the app's timezone
-  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
-  const todayStr = formatter.format(now); // 'YYYY-MM-DD'
-  const timeFormatter = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
-  const currentTime = timeFormatter.format(now); // 'HH:mm'
+  // Fetch all non-archived boards with their timezone
+  const { data: boards, error: boardsErr } = await db
+    .from('project_boards')
+    .select('id, timezone')
+    .eq('is_archived', false);
 
-  // Find non-archived cards that are overdue:
-  // 1. due_date is before today, OR
-  // 2. due_date is today AND due_time has passed
-  // We query cards due today or earlier that haven't been archived
+  if (boardsErr) {
+    console.error('[check-overdue] Failed to query boards:', boardsErr.message);
+    return NextResponse.json({ error: boardsErr.message }, { status: 500 });
+  }
+
+  const boardTzMap = new Map<string, string>();
+  for (const b of boards || []) {
+    boardTzMap.set(b.id, b.timezone || fallbackTz);
+  }
+
+  // Find non-archived cards with a due date
   const { data: cards, error: cardsErr } = await db
     .from('board_cards')
     .select('id, title, due_date, due_time, board_id, created_by, assignee, assignees')
     .eq('is_archived', false)
-    .not('due_date', 'is', null)
-    .lte('due_date', todayStr);
+    .not('due_date', 'is', null);
 
   if (cardsErr) {
     console.error('[check-overdue] Failed to query cards:', cardsErr.message);
@@ -53,14 +59,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ checked: 0, notified: 0 });
   }
 
-  // Filter to actually overdue cards (accounting for due_time on today's cards)
+  // Filter to actually overdue cards using each board's timezone
   const overdueCards = cards.filter(card => {
+    const tz = boardTzMap.get(card.board_id) || fallbackTz;
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    const currentTime = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
+
     if (card.due_date < todayStr) return true;
-    // due_date === todayStr
-    if (card.due_time) {
+    if (card.due_date === todayStr && card.due_time) {
       return card.due_time <= currentTime;
     }
-    // No time set, due today = not overdue until end of day
     return false;
   });
 

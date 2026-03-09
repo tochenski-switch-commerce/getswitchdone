@@ -1,33 +1,26 @@
 'use client';
 
-import React from 'react';
 import type { BoardCard, CardPriority } from '@/types/board-types';
 import {
   MessageSquare, CheckSquare, CalendarDays,
-  User, Bell, Check,
+  User, Bell, Check, ChevronRight,
 } from '@/components/BoardIcons';
 import { PRIORITY_CONFIG } from './helpers';
 
-function formatTime12Short(val: string): string {
-  if (!val) return '';
-  const [h, m] = val.split(':').map(Number);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${hour}:${String(m).padStart(2, '0')} ${period}`;
-}
-
-function KanbanCard({
+export default function KanbanCard({
   card,
   onClick,
   isDragging,
   onPriorityChange,
   hasAlert,
+  onMoveToNext,
 }: {
   card: BoardCard;
   onClick: () => void;
   isDragging?: boolean;
   onPriorityChange?: (priority: CardPriority | null) => void;
   hasAlert?: boolean;
+  onMoveToNext?: () => void;
 }) {
   const pri = card.priority ? PRIORITY_CONFIG[card.priority] : null;
   const labels = card.labels || [];
@@ -36,19 +29,11 @@ function KanbanCard({
   const completedCount = checklists.filter(c => c.is_completed).length;
 
   const now = new Date();
-  const nowMidnight = new Date(now);
-  nowMidnight.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
   const dueDate = card.due_date ? new Date(card.due_date + 'T00:00:00') : null;
-  const daysUntilDue = dueDate ? Math.ceil((dueDate.getTime() - nowMidnight.getTime()) / 86400000) : null;
-  // Time-aware overdue: if due today with a time, check if the time has passed
-  const isOverdue = daysUntilDue !== null && (
-    daysUntilDue < 0 ||
-    (daysUntilDue === 0 && card.due_time && (() => {
-      const [h, m] = card.due_time!.split(':').map(Number);
-      return h * 60 + m <= now.getHours() * 60 + now.getMinutes();
-    })())
-  );
-  const isDueSoon = !isOverdue && daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 2;
+  const daysUntilDue = dueDate ? Math.ceil((dueDate.getTime() - now.getTime()) / 86400000) : null;
+  const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
+  const isDueSoon = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 2;
 
   return (
     <div
@@ -106,7 +91,7 @@ function KanbanCard({
             )}
             {card.start_date && card.due_date && <span className="kb-card-date-sep">→</span>}
             {card.due_date && (
-              <span>{isOverdue ? 'Overdue' : isDueSoon ? (daysUntilDue === 0 ? 'Today' : daysUntilDue === 1 ? 'Tomorrow' : 'In 2 days') : new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}{card.due_time ? ` ${formatTime12Short(card.due_time)}` : ''}</span>
+              <span>{isOverdue ? 'Overdue' : isDueSoon ? (daysUntilDue === 0 ? 'Today' : daysUntilDue === 1 ? 'Tomorrow' : 'In 2 days') : new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
             )}
           </span>
         )}
@@ -124,17 +109,24 @@ function KanbanCard({
         </span>
       </div>
 
-      {/* Assignees */}
-      {((card.assignees && card.assignees.length > 0) || card.assignee) && (
+      {/* Assignee */}
+      {card.assignee && (
         <div className="kb-card-assignee">
           <User size={10} />
-          {(card.assignees && card.assignees.length > 0 ? card.assignees : card.assignee ? [card.assignee] : []).map((name, i) => (
-            <span key={name}>{i > 0 && ', '}@{name}</span>
-          ))}
+          @{card.assignee}
         </div>
+      )}
+
+      {/* Move to next column */}
+      {onMoveToNext && (
+        <button
+          className="kb-card-move-next"
+          title="Move to next list"
+          onClick={e => { e.stopPropagation(); onMoveToNext(); }}
+        >
+          <ChevronRight size={14} />
+        </button>
       )}
     </div>
   );
 }
-
-export default React.memo(KanbanCard);

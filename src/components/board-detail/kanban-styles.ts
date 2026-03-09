@@ -506,6 +506,7 @@ export const kanbanStyles = `
     user-select: none;
     overflow: hidden;
     min-width: 0;
+    position: relative;
   }
   .kb-card:hover {
     border-color: #3b3f52;
@@ -655,6 +656,32 @@ export const kanbanStyles = `
   @keyframes kb-alert-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+  }
+  .kb-card-move-next {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 1px solid #3b3f52;
+    background: #252836;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+    padding: 0;
+  }
+  .kb-card:hover .kb-card-move-next {
+    opacity: 1;
+  }
+  .kb-card-move-next:hover {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
   }
 
   /* ── Keyboard shortcut help bar ── */
