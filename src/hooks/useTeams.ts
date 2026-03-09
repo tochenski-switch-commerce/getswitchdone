@@ -52,21 +52,12 @@ export function useTeams() {
   const createTeam = useCallback(async (name: string) => {
     setError(null);
     try {
-      const user = await getCachedUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { data, error: err } = await supabase
-        .from('teams')
-        .insert([{ name: name.trim(), created_by: user.id }])
-        .select()
-        .single();
+      const { data, error: err } = await supabase.rpc('create_team', { team_name: name.trim() });
       if (err) throw err;
 
-      // Add creator as owner
-      await supabase.from('team_members').insert([{ team_id: data.id, user_id: user.id, role: 'owner' }]);
-
-      setTeams(prev => [data, ...prev]);
-      return data as Team;
+      const team = data as Team;
+      setTeams(prev => [team, ...prev]);
+      return team;
     } catch (err: any) {
       setError(err.message);
       return null;
@@ -103,13 +94,24 @@ export function useTeams() {
     try {
       const { data, error: err } = await supabase
         .from('team_members')
-        .select('*, user_profiles:user_id(name)')
+        .select('*')
         .eq('team_id', teamId)
         .order('joined_at');
       if (err) throw err;
+
+      const userIds = (data || []).map(m => m.user_id);
+      let profileMap: Record<string, string> = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('id, name')
+          .in('id', userIds);
+        (profiles || []).forEach(p => { profileMap[p.id] = p.name || ''; });
+      }
+
       const parsed = (data || []).map((m: any) => ({
         ...m,
-        user_profiles: Array.isArray(m.user_profiles) ? m.user_profiles[0] : m.user_profiles,
+        user_profiles: { name: profileMap[m.user_id] || '' },
       })) as TeamMember[];
       setMembers(parsed);
       return parsed;

@@ -3,6 +3,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 
 import QuickActionHandler from '@/components/QuickActionHandler';
 import ErrorCatcher from '@/components/ErrorCatcher';
+import TopNav from '@/components/TopNav';
 
 export const metadata: Metadata = {
   title: 'GSD Boards',
@@ -87,6 +88,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <ErrorCatcher />
           <QuickActionHandler />
+          <TopNav />
           {children}
         </AuthProvider>
         <ServiceWorkerRegistration />

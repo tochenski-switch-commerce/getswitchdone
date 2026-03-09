@@ -185,6 +185,21 @@ export const kanbanStyles = `
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
+  .kb-team-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(99,102,241,0.12) !important;
+    color: #818cf8;
+    border: 1px solid rgba(99,102,241,0.25);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
 
   /* ── Search ── */
   .kb-search-box {
@@ -2317,5 +2332,35 @@ export const kanbanStyles = `
     .kb-rt-tool-btn { width: 32px; height: 32px; }
     .kb-rt-editable { min-height: 60px; font-size: 14px; }
     .kb-rt-editable-sm { min-height: 40px; font-size: 14px; }
+  }
+
+  /* ── AI Preview ── */
+  .kb-ai-preview {
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .kb-ai-preview-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #818cf8;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .kb-ai-preview-content {
+    font-size: 13px;
+    color: #e5e7eb;
+    line-height: 1.5;
+    margin-bottom: 8px;
+  }
+  .kb-ai-preview-actions {
+    display: flex;
+    gap: 6px;
   }
 `;

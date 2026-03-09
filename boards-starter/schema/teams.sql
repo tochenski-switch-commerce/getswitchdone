@@ -42,6 +42,28 @@ CREATE INDEX IF NOT EXISTS idx_team_members_user_id ON team_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_team_invites_code ON team_invites(invite_code);
 
 -- ============================================================
+-- Helper functions (SECURITY DEFINER — bypass RLS to avoid
+-- infinite recursion when team_members policies query itself)
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_my_team_ids()
+RETURNS SETOF uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT team_id FROM team_members WHERE user_id = auth.uid();
+$$;
+
+CREATE OR REPLACE FUNCTION get_my_owned_team_ids()
+RETURNS SETOF uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT team_id FROM team_members WHERE user_id = auth.uid() AND role = 'owner';
+$$;
+
+-- ============================================================
 -- Row-Level Security
 -- ============================================================
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
@@ -51,7 +73,7 @@ ALTER TABLE team_invites ENABLE ROW LEVEL SECURITY;
 -- teams: viewable/manageable by members
 CREATE POLICY "View teams I belong to" ON teams
   FOR SELECT TO authenticated
-  USING (id IN (SELECT team_id FROM team_members WHERE user_id = auth.uid()));
+  USING (id IN (SELECT get_my_team_ids()));
 
 CREATE POLICY "Create teams" ON teams
   FOR INSERT TO authenticated
@@ -59,22 +81,22 @@ CREATE POLICY "Create teams" ON teams
 
 CREATE POLICY "Update teams (owner only)" ON teams
   FOR UPDATE TO authenticated
-  USING (id IN (SELECT team_id FROM team_members WHERE user_id = auth.uid() AND role = 'owner'));
+  USING (id IN (SELECT get_my_owned_team_ids()));
 
 CREATE POLICY "Delete teams (owner only)" ON teams
   FOR DELETE TO authenticated
-  USING (id IN (SELECT team_id FROM team_members WHERE user_id = auth.uid() AND role = 'owner'));
+  USING (id IN (SELECT get_my_owned_team_ids()));
 
 -- team_members: viewable by fellow members, manageable by owners
 CREATE POLICY "View team members" ON team_members
   FOR SELECT TO authenticated
-  USING (team_id IN (SELECT team_id FROM team_members AS tm WHERE tm.user_id = auth.uid()));
+  USING (team_id IN (SELECT get_my_team_ids()));
 
 CREATE POLICY "Insert team members (owner or self-join)" ON team_members
   FOR INSERT TO authenticated
   WITH CHECK (
     -- owners can add anyone
-    team_id IN (SELECT team_id FROM team_members AS tm WHERE tm.user_id = auth.uid() AND tm.role = 'owner')
+    team_id IN (SELECT get_my_owned_team_ids())
     -- or self-join (used by invite flow)
     OR user_id = auth.uid()
   );
@@ -83,13 +105,13 @@ CREATE POLICY "Delete team members (owner or self)" ON team_members
   FOR DELETE TO authenticated
   USING (
     user_id = auth.uid()
-    OR team_id IN (SELECT team_id FROM team_members AS tm WHERE tm.user_id = auth.uid() AND tm.role = 'owner')
+    OR team_id IN (SELECT get_my_owned_team_ids())
   );
 
 -- team_invites: viewable/manageable by team owners
 CREATE POLICY "View team invites (owner)" ON team_invites
   FOR SELECT TO authenticated
-  USING (team_id IN (SELECT team_id FROM team_members WHERE user_id = auth.uid() AND role = 'owner'));
+  USING (team_id IN (SELECT get_my_owned_team_ids()));
 
 -- Allow anyone authenticated to read an invite by code (for the join flow)
 CREATE POLICY "Read invite by code" ON team_invites
@@ -98,15 +120,15 @@ CREATE POLICY "Read invite by code" ON team_invites
 
 CREATE POLICY "Create team invites (owner)" ON team_invites
   FOR INSERT TO authenticated
-  WITH CHECK (team_id IN (SELECT team_id FROM team_members WHERE user_id = auth.uid() AND role = 'owner'));
+  WITH CHECK (team_id IN (SELECT get_my_owned_team_ids()));
 
 CREATE POLICY "Update team invites (owner)" ON team_invites
   FOR UPDATE TO authenticated
-  USING (team_id IN (SELECT team_id FROM team_members WHERE user_id = auth.uid() AND role = 'owner'));
+  USING (team_id IN (SELECT get_my_owned_team_ids()));
 
 CREATE POLICY "Delete team invites (owner)" ON team_invites
   FOR DELETE TO authenticated
-  USING (team_id IN (SELECT team_id FROM team_members WHERE user_id = auth.uid() AND role = 'owner'));
+  USING (team_id IN (SELECT get_my_owned_team_ids()));
 
 -- ============================================================
 -- Update project_boards RLS — owner OR team member OR is_public
@@ -124,7 +146,7 @@ CREATE POLICY "View accessible boards" ON project_boards
   USING (
     auth.uid() = user_id
     OR is_public = true
-    OR team_id IN (SELECT team_id FROM team_members WHERE user_id = auth.uid())
+    OR team_id IN (SELECT get_my_team_ids())
   );
 
 CREATE POLICY "Insert own boards" ON project_boards
@@ -135,7 +157,7 @@ CREATE POLICY "Update own or team boards" ON project_boards
   FOR UPDATE TO authenticated
   USING (
     auth.uid() = user_id
-    OR team_id IN (SELECT team_id FROM team_members WHERE user_id = auth.uid() AND role = 'owner')
+    OR team_id IN (SELECT get_my_owned_team_ids())
   );
 
 CREATE POLICY "Delete own boards" ON project_boards
@@ -157,7 +179,7 @@ AS $$
       AND (
         user_id = auth.uid()
         OR is_public = true
-        OR team_id IN (SELECT team_id FROM team_members WHERE user_id = auth.uid())
+        OR team_id IN (SELECT get_my_team_ids())
       )
   );
 $$;
@@ -255,6 +277,28 @@ CREATE POLICY "Access board emails" ON board_emails
     board_id IS NULL  -- unrouted emails visible to all authenticated
     OR can_access_board(board_id)
   );
+
+-- ============================================================
+-- create_team() — atomic: creates team + adds owner in one call
+-- ============================================================
+CREATE OR REPLACE FUNCTION create_team(team_name text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_team teams%ROWTYPE;
+BEGIN
+  INSERT INTO teams (name, created_by)
+    VALUES (trim(team_name), auth.uid())
+    RETURNING * INTO v_team;
+
+  INSERT INTO team_members (team_id, user_id, role)
+    VALUES (v_team.id, auth.uid(), 'owner');
+
+  RETURN row_to_json(v_team);
+END;
+$$;
 
 -- ============================================================
 -- Increment invite use_count (called from app after joining)

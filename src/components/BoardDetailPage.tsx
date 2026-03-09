@@ -4,17 +4,20 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
 import { useRealtimeBoard } from '@/hooks/useRealtimeBoard';
+import { useTeams } from '@/hooks/useTeams';
 import { useAuth } from '@/contexts/AuthContext';
 import type { BoardCard, CardPriority, BoardEmail } from '@/types/board-types';
 import {
   Plus, ArrowLeft, Search, MoreHorizontal, Trash2, Pencil,
-  Tag, X, ChevronLeft, ChevronRight, User,
+  Tag, X, ChevronLeft, ChevronRight, User, Users,
   FolderKanban, Check, Globe, Lock, StickyNote, Copy,
   Zap, Bold, Italic, Underline, Strikethrough,
   LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, Bell, FileText, Mail,
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
+  BotMessageSquare,
 } from '@/components/BoardIcons';
 import InboxPanel from '@/components/InboxPanel';
+import AiPanel from '@/components/AiPanel';
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import DatePickerInput from '@/components/DatePickerInput';
@@ -35,7 +38,7 @@ function BoardPage() {
   const searchParams = useSearchParams();
   const boardId = params.id as string;
   const cardParam = searchParams.get('card');
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, session, loading: authLoading } = useAuth();
 
   // Redirect unauthenticated users to sign-in, preserving the current URL
   useEffect(() => {
@@ -63,6 +66,8 @@ function BoardPage() {
     loading, setBoard,
   } = useProjectBoard();
 
+  const { teams, fetchTeams } = useTeams();
+
   const [search, setSearch] = useState('');
   const [filterPriority, setFilterPriority] = useState<CardPriority | 'none' | ''>('');
   const [filterLabel, setFilterLabel] = useState('');
@@ -82,6 +87,7 @@ function BoardPage() {
   const [showBoardIconPicker, setShowBoardIconPicker] = useState(false);
   const [iconColorHex, setIconColorHex] = useState('');
   const [showInbox, setShowInbox] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
   const [showEmailPanel, setShowEmailPanel] = useState(false);
   const [emailView, setEmailView] = useState<'board' | 'unrouted'>('board');
   const [emailSearch, setEmailSearch] = useState('');
@@ -150,9 +156,10 @@ function BoardPage() {
         fetchUserProfiles(),
         fetchNotifications(),
         fetchBoards(),
+        fetchTeams(),
       ]);
     }
-  }, [boardId, fetchBoard, fetchChecklistTemplates, fetchUserProfiles, fetchNotifications, fetchBoards]);
+  }, [boardId, fetchBoard, fetchChecklistTemplates, fetchUserProfiles, fetchNotifications, fetchBoards, fetchTeams]);
 
   // Sync note content when board loads
   useEffect(() => {
@@ -420,6 +427,14 @@ function BoardPage() {
     if (!cardParam) closedCardRef.current = null;
   }, [cardParam, board, alertCardIds, markCardNotificationsRead]);
 
+  // Auto-open "add card" from widget deep link ?addCard=1
+  useEffect(() => {
+    if (searchParams.get('addCard') === '1' && board && board.columns.length > 0) {
+      setAddingCardCol(board.columns[0].id);
+      router.replace(`/boards/${boardId}`);
+    }
+  }, [searchParams, board, boardId, router]);
+
   // ── Keyboard shortcuts (hover cards + card detail navigation) ──
   const navigateCard = useCallback((direction: 'prev' | 'next') => {
     if (!activeCard || !board) return;
@@ -645,6 +660,10 @@ function BoardPage() {
           {board.is_public && (
             <span className="kb-public-badge"><Globe size={11} /> Public</span>
           )}
+          {board.team_id && (() => {
+            const t = teams.find(t => t.id === board.team_id);
+            return t ? <span className="kb-team-badge"><Users size={11} /> {t.name}</span> : null;
+          })()}
         </div>
 
         <div className="kb-topbar-right">
@@ -757,6 +776,15 @@ function BoardPage() {
             )}
           </button>
 
+          {/* GSD AI */}
+          <button
+            className={`kb-btn-icon ${showAiPanel ? 'kb-btn-icon-active' : ''}`}
+            onClick={() => setShowAiPanel(!showAiPanel)}
+            title="GSD AI"
+          >
+            <BotMessageSquare size={16} />
+          </button>
+
           {/* Board menu */}
           <div style={{ position: 'relative' }}>
             <button className="kb-btn-icon" onClick={() => setShowBoardMenu(!showBoardMenu)}>
@@ -788,6 +816,33 @@ function BoardPage() {
                       }}
                     >
                       {board.is_public ? <><Lock size={14} /> Make Private</> : <><Globe size={14} /> Share (Make Public)</>}
+                    </button>
+                  )}
+
+                  {/* Team transfer options — owner only */}
+                  {board.user_id === user?.id && !board.team_id && teams.length > 0 && (
+                    teams.map(t => (
+                      <button
+                        key={t.id}
+                        className="kb-dropdown-item"
+                        onClick={async () => {
+                          await updateBoard(boardId, { team_id: t.id });
+                          setShowBoardMenu(false);
+                        }}
+                      >
+                        <Users size={14} /> Move to {t.name}
+                      </button>
+                    ))
+                  )}
+                  {board.user_id === user?.id && board.team_id && (
+                    <button
+                      className="kb-dropdown-item"
+                      onClick={async () => {
+                        await updateBoard(boardId, { team_id: null as any });
+                        setShowBoardMenu(false);
+                      }}
+                    >
+                      <Users size={14} /> Remove from Team
                     </button>
                   )}
                   <button
@@ -1628,6 +1683,17 @@ function BoardPage() {
               router.push(`/boards/${navBoardId}?card=${cardId}`);
             }
           }}
+        />
+      )}
+
+      {/* ── AI panel ── */}
+      {showAiPanel && (
+        <AiPanel
+          boardId={boardId}
+          boardTitle={board?.title || ''}
+          accessToken={session?.access_token || ''}
+          onClose={() => setShowAiPanel(false)}
+          onBoardChanged={() => fetchBoard(boardId)}
         />
       )}
     </div>

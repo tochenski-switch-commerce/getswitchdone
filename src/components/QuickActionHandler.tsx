@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 /**
  * Listens for Home Screen Quick Actions (3D Touch / long-press)
- * dispatched from native iOS via window CustomEvent.
+ * and Widget deep links dispatched from native iOS via window CustomEvent.
  */
 export default function QuickActionHandler() {
   const router = useRouter();
@@ -26,8 +26,19 @@ export default function QuickActionHandler() {
       }
     };
 
+    const deepLinkHandler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.route) {
+        router.push(detail.route);
+      }
+    };
+
     window.addEventListener('quickAction', handler);
-    return () => window.removeEventListener('quickAction', handler);
+    window.addEventListener('widgetDeepLink', deepLinkHandler);
+    return () => {
+      window.removeEventListener('quickAction', handler);
+      window.removeEventListener('widgetDeepLink', deepLinkHandler);
+    };
   }, [router]);
 
   return null;

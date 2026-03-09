@@ -68,5 +68,16 @@
 	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>GSD Boards uses Face ID to protect your boards when the app is locked.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.getswitchdone.boards</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>gsdboards</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

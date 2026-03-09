@@ -9,11 +9,13 @@ import {
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, Pencil,
   Check, Copy, LinkIcon, SlidersHorizontal,
   Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered,
+  Sparkles, Loader,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import CustomFieldInput from './CustomFieldInput';
 import { PRIORITY_CONFIG, linkifyText, renderCommentText, sanitizeRichText } from './helpers';
 import { hapticLight, hapticHeavy, hapticSuccess } from '@/lib/haptics';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function CardDetailModal({
   card,
@@ -96,6 +98,54 @@ export default function CardDetailModal({
   const descRef = useRef<HTMLDivElement>(null);
   const commentAddRef = useRef<HTMLDivElement>(null);
   const commentEditRef = useRef<HTMLDivElement>(null);
+
+  // AI state
+  const { session } = useAuth();
+  const [aiDescLoading, setAiDescLoading] = useState(false);
+  const [aiDescPreview, setAiDescPreview] = useState<string | null>(null);
+  const [aiChecklistLoading, setAiChecklistLoading] = useState(false);
+  const [aiChecklistSuggestions, setAiChecklistSuggestions] = useState<{ title: string; selected: boolean }[]>([]);
+
+  const aiGenerate = useCallback(async (action: string, extra?: Record<string, any>) => {
+    const token = session?.access_token;
+    if (!token) return null;
+    const res = await fetch('/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        action,
+        card: { title: card.title, description: editDesc || undefined },
+        boardContext: {
+          boardTitle: board.title,
+          columns: board.columns.map(c => c.title),
+          labels: board.labels?.map(l => l.name),
+        },
+        ...extra,
+      }),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  }, [session, card.title, editDesc, board]);
+
+  const handleAiDescribe = useCallback(async () => {
+    setAiDescLoading(true);
+    try {
+      const result = await aiGenerate('describe');
+      if (result?.description) setAiDescPreview(result.description);
+    } finally {
+      setAiDescLoading(false);
+    }
+  }, [aiGenerate]);
+
+  const handleAiChecklist = useCallback(async () => {
+    setAiChecklistLoading(true);
+    try {
+      const result = await aiGenerate('checklist');
+      if (result?.items) setAiChecklistSuggestions(result.items.map((t: string) => ({ title: t, selected: true })));
+    } finally {
+      setAiChecklistLoading(false);
+    }
+  }, [aiGenerate]);
 
   useEffect(() => {
     if (editingDesc && descRef.current) {
@@ -320,7 +370,26 @@ export default function CardDetailModal({
                     <Pencil size={11} />
                   </button>
                 )}
+                <button
+                  className="kb-btn-icon-sm"
+                  onClick={handleAiDescribe}
+                  disabled={aiDescLoading}
+                  title="AI: Generate or improve description"
+                  style={{ marginLeft: 'auto' }}
+                >
+                  {aiDescLoading ? <Loader size={13} /> : <Sparkles size={13} />}
+                </button>
               </div>
+              {aiDescPreview && (
+                <div className="kb-ai-preview">
+                  <div className="kb-ai-preview-label"><Sparkles size={11} /> AI Suggestion</div>
+                  <div className="kb-ai-preview-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(aiDescPreview.replace(/\n/g, '<br>')) }} />
+                  <div className="kb-ai-preview-actions">
+                    <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={() => { setEditDesc(aiDescPreview); setAiDescPreview(null); pendingChangesRef.current = true; }}>Accept</button>
+                    <button className="kb-btn kb-btn-sm" onClick={() => setAiDescPreview(null)}>Discard</button>
+                  </div>
+                </div>
+              )}
               {editingDesc ? (
                 <div className="kb-rt-editor">
                   <div className="kb-rt-toolbar">
@@ -372,6 +441,15 @@ export default function CardDetailModal({
               <div className="kb-detail-section-label">
                 <CheckSquare size={13} />
                 Checklist {checklists.length > 0 && `(${completedCount}/${checklists.length})`}
+                <button
+                  className="kb-btn-icon-sm"
+                  onClick={handleAiChecklist}
+                  disabled={aiChecklistLoading}
+                  title="AI: Suggest checklist items"
+                  style={{ marginLeft: 'auto' }}
+                >
+                  {aiChecklistLoading ? <Loader size={13} /> : <Sparkles size={13} />}
+                </button>
               </div>
               {checklists.length > 0 && (
                 <div className="kb-checklist-progress">
@@ -417,6 +495,35 @@ export default function CardDetailModal({
                   Add
                 </button>
               </div>
+              {aiChecklistSuggestions.length > 0 && (
+                <div className="kb-ai-preview" style={{ marginTop: 8 }}>
+                  <div className="kb-ai-preview-label"><Sparkles size={11} /> AI Suggestions</div>
+                  {aiChecklistSuggestions.map((s, i) => (
+                    <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: 13, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={s.selected}
+                        onChange={() => setAiChecklistSuggestions(prev => prev.map((p, j) => j === i ? { ...p, selected: !p.selected } : p))}
+                      />
+                      {s.title}
+                    </label>
+                  ))}
+                  <div className="kb-ai-preview-actions">
+                    <button
+                      className="kb-btn kb-btn-primary kb-btn-sm"
+                      onClick={async () => {
+                        for (const s of aiChecklistSuggestions.filter(s => s.selected)) {
+                          await onAddChecklistItem(s.title);
+                        }
+                        setAiChecklistSuggestions([]);
+                      }}
+                    >
+                      Add Selected
+                    </button>
+                    <button className="kb-btn kb-btn-sm" onClick={() => setAiChecklistSuggestions([])}>Discard</button>
+                  </div>
+                </div>
+              )}
 
               {/* Template actions */}
               <div className="kb-template-actions">

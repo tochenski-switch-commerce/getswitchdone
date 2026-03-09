@@ -92,7 +92,11 @@ function BoardsListPage() {
       setShowInbox(true);
       router.replace('/boards');
     }
-  }, [searchParams, router]);
+    // Widget "Add Card" deep link: navigate to most recent board with addCard flag
+    if (searchParams.get('addCard') === '1' && boards.length > 0) {
+      router.replace(`/boards/${boards[0].id}?addCard=1`);
+    }
+  }, [searchParams, router, boards]);
 
   const handleCreate = async () => {
     if (!newTitle.trim()) return;

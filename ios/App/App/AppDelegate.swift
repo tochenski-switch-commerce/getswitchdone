@@ -3,6 +3,7 @@ import Capacitor
 import LocalAuthentication
 import Security
 import UserNotifications
+import WidgetKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -19,6 +20,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         if !pluginsRegistered, let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge {
             bridge.registerPluginInstance(NativeBiometric())
             bridge.registerPluginInstance(BadgeManager())
+            bridge.registerPluginInstance(WidgetBridge())
             pluginsRegistered = true
         }
     }
@@ -28,9 +30,44 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        // Handle gsdboards:// deep links from widget
+        if url.scheme == "gsdboards" {
+            handleWidgetDeepLink(url)
+            return true
+        }
         // Called when the app was launched with a url. Feel free to add additional processing here,
         // but if you want the App API to support tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
+    }
+
+    private func handleWidgetDeepLink(_ url: URL) {
+        guard let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge else { return }
+
+        let host = url.host ?? ""
+        let query = url.query ?? ""
+        var route: String
+
+        switch host {
+        case "inbox":
+            route = "/boards?inbox=1"
+        case "add-card":
+            route = "/boards?addCard=1"
+        case "boards":
+            route = "/boards"
+        case "board":
+            let boardId = url.pathComponents.count > 1 ? url.pathComponents[1] : ""
+            route = "/boards/\(boardId)"
+            if !query.isEmpty {
+                route += "?\(query)"
+            }
+        case "auth":
+            route = "/auth"
+        default:
+            route = "/boards"
+        }
+
+        let js = "window.dispatchEvent(new CustomEvent('widgetDeepLink', { detail: { route: '\(route)' } }))"
+        bridge.webView?.evaluateJavaScript(js)
     }
 
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
@@ -279,5 +316,67 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound, .badge])
+    }
+}
+
+// MARK: - Widget Bridge Plugin (shares auth token with widget via App Group)
+
+@objc(WidgetBridge)
+public class WidgetBridge: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "WidgetBridge"
+    public let jsName = "WidgetBridge"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "setSession", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearSession", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "reloadWidgets", returnType: CAPPluginReturnPromise),
+    ]
+
+    private static let appGroupID = "group.com.getswitchdone.boards"
+
+    @objc func setSession(_ call: CAPPluginCall) {
+        guard let accessToken = call.getString("accessToken"),
+              let userId = call.getString("userId") else {
+            call.reject("Missing accessToken or userId")
+            return
+        }
+        let refreshToken = call.getString("refreshToken")
+
+        guard let defaults = UserDefaults(suiteName: WidgetBridge.appGroupID) else {
+            call.reject("Cannot access App Group")
+            return
+        }
+
+        defaults.set(accessToken, forKey: "supabase_access_token")
+        defaults.set(userId, forKey: "supabase_user_id")
+        if let rt = refreshToken {
+            defaults.set(rt, forKey: "supabase_refresh_token")
+        }
+        defaults.synchronize()
+
+        // Reload all widgets so they pick up the new session
+        WidgetCenter.shared.reloadAllTimelines()
+
+        call.resolve(["success": true])
+    }
+
+    @objc func clearSession(_ call: CAPPluginCall) {
+        guard let defaults = UserDefaults(suiteName: WidgetBridge.appGroupID) else {
+            call.reject("Cannot access App Group")
+            return
+        }
+
+        defaults.removeObject(forKey: "supabase_access_token")
+        defaults.removeObject(forKey: "supabase_refresh_token")
+        defaults.removeObject(forKey: "supabase_user_id")
+        defaults.synchronize()
+
+        WidgetCenter.shared.reloadAllTimelines()
+
+        call.resolve(["success": true])
+    }
+
+    @objc func reloadWidgets(_ call: CAPPluginCall) {
+        WidgetCenter.shared.reloadAllTimelines()
+        call.resolve(["success": true])
     }
 }
