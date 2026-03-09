@@ -289,8 +289,6 @@ const publicFormStyles = `
     align-items: flex-start;
     justify-content: center;
     padding: 40px 16px 80px;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
   }
   .pf-container {
     width: 100%;
