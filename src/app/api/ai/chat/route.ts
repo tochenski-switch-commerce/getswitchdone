@@ -111,6 +111,20 @@ GUIDELINES:
 - When suggesting priorities or actions, be opinionated but explain your reasoning briefly.
 - Format responses in clean markdown. Use bold for emphasis.`;
 
+  // DEBUG: minimal test to isolate the issue
+  const testResult = streamText({
+    model: gsdModel,
+    prompt: 'Say hello in one sentence.',
+  });
+  try {
+    const testText = await testResult.text;
+    // If we get here, the basic model works — issue is with tools/config
+    // Now try with the full config
+  } catch (testErr) {
+    const tmsg = testErr instanceof Error ? testErr.message : String(testErr);
+    return new Response(`Basic model test failed: ${tmsg}\nThis likely means the OPENAI_API_KEY is not set or invalid in the Netlify environment.`, { status: 500 });
+  }
+
   const result = streamText({
     model: gsdModel,
     system: systemPrompt,
