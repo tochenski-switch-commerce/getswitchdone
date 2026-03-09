@@ -98,6 +98,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 
+    // Triggered by content-available:1 in APNs payload (background + foreground)
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        // Refresh widget timelines so they show the latest data
+        WidgetCenter.shared.reloadAllTimelines()
+        completionHandler(.newData)
+    }
+
 }
 
 // MARK: - Native Biometric Plugin (Face ID / Touch ID)
@@ -316,6 +323,8 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        // Refresh widget when notification arrives in foreground
+        WidgetCenter.shared.reloadAllTimelines()
         completionHandler([.banner, .sound, .badge])
     }
 }

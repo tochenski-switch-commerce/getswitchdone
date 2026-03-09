@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
       alert: { title, body: body || '' },
       sound: 'default',
       badge: (unreadCount ?? 0) + 1, // +1 for the notification being created
+      'content-available': 1, // trigger background fetch so widget refreshes
     },
     type,
     board_id,
