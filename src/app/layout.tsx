@@ -54,6 +54,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           html, body {
             overscroll-behavior-y: none;
             -webkit-overflow-scrolling: touch;
+          }
+          body {
             overflow-x: hidden;
           }
           /* Safe-area padding for iPhone notch / Dynamic Island */

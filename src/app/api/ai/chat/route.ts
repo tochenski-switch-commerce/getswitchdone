@@ -356,5 +356,26 @@ GUIDELINES:
     },
   });
 
-  return result.toTextStreamResponse();
+  // Manually stream only text-delta parts from fullStream.
+  // toTextStreamResponse() can silently drop text from multi-step tool flows.
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const part of result.fullStream) {
+          if (part.type === 'text-delta') {
+            controller.enqueue(encoder.encode(part.text));
+          }
+        }
+      } catch (err) {
+        console.error('[AI CHAT] stream error:', err);
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(readable, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
 }
