@@ -135,6 +135,8 @@ function BoardPage() {
   const [dragOverPos, setDragOverPos] = useState<'above' | 'below'>('below');
   const [listActionsColId, setListActionsColId] = useState<string | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [zoomedColId, setZoomedColId] = useState<string | null>(null);
+  const lastTapRef = useRef<{ colId: string; time: number } | null>(null);
   const noteRef = useRef<HTMLDivElement>(null);
   const noteSaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -1081,13 +1083,27 @@ function BoardPage() {
             return (
               <div
                 key={col.id}
-                className={`kb-column ${dragOverCol === col.id ? 'drag-over' : ''} ${isLinkCol ? 'kb-column-links' : ''}`}
+                className={`kb-column ${dragOverCol === col.id ? 'drag-over' : ''} ${isLinkCol ? 'kb-column-links' : ''} ${zoomedColId === col.id ? 'kb-column-zoomed' : ''}`}
                 onDragOver={e => handleDragOver(e, col.id)}
                 onDragLeave={() => setDragOverCol(null)}
                 onDrop={e => handleDrop(e, col.id)}
               >
                 {/* Column header */}
-                <div className="kb-column-header">
+                <div className="kb-column-header" onTouchEnd={e => {
+                  const now = Date.now();
+                  const last = lastTapRef.current;
+                  if (last && last.colId === col.id && now - last.time < 300) {
+                    e.preventDefault();
+                    setZoomedColId(prev => prev === col.id ? null : col.id);
+                    hapticLight();
+                    lastTapRef.current = null;
+                    // scroll the column into view
+                    const colEl = (e.currentTarget as HTMLElement).parentElement;
+                    if (colEl) setTimeout(() => colEl.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' }), 50);
+                  } else {
+                    lastTapRef.current = { colId: col.id, time: now };
+                  }
+                }}>
                   <div className="kb-column-title-row">
                     <span className="kb-column-dot" style={{ background: col.color }} />
                     {isLinkCol && <LinkIcon size={13} style={{ color: col.color, marginRight: 2, flexShrink: 0 }} />}

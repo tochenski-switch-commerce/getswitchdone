@@ -2377,6 +2377,19 @@ export const kanbanStyles = `
     to { opacity: 1; transform: translateY(0); }
   }
 
+  /* ── Zoomed column (mobile double-tap) ── */
+  @media (max-width: 768px) {
+    .kb-column.kb-column-zoomed {
+      width: calc(100vw - 32px) !important;
+      min-width: calc(100vw - 32px) !important;
+      transition: width 0.25s ease, min-width 0.25s ease;
+      scroll-snap-align: start;
+    }
+    .kb-column.kb-column-zoomed .kb-column-header {
+      border-bottom: 2px solid #6366f1;
+    }
+  }
+
   /* ── Responsive ── */
   @media (max-width: 768px) {
     .kb-topbar { flex-direction: column; align-items: flex-start; }
