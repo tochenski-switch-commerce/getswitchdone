@@ -1,7 +1,7 @@
 {
-  "name": "GSD Boards",
-  "short_name": "GSD",
-  "description": "Kanban project boards — Get Stuff Done",
+  "name": "Lumio",
+  "short_name": "Lumio",
+  "description": "Kanban project boards — Lumio",
   "start_url": "/boards",
   "display": "standalone",
   "background_color": "#0f1117",

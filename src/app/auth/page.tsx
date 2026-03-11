@@ -223,7 +223,7 @@ function AuthForm() {
       <style>{authStyles}</style>
       <div className="kb-auth-container">
         <div className="kb-auth-card">
-          <h1 className="kb-auth-title">GSD Boards</h1>
+          <h1 className="kb-auth-title">Lumio</h1>
           <p className="kb-auth-subtitle">{mode === 'signin' ? 'Sign in to your account' : 'Create your account'}</p>
 
           {inviteParam && (

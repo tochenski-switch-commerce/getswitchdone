@@ -148,7 +148,7 @@ export default function AiPanel({
               <Sparkles size={16} />
             </div>
             <div className="kb-ai-header-text">
-              <span className="kb-ai-title">GSD AI</span>
+              <span className="kb-ai-title">Lumio AI</span>
               <span className="kb-ai-board-badge">{boardTitle}</span>
             </div>
           </div>

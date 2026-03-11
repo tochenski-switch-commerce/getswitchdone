@@ -1,5 +1,5 @@
 /**
- * Generate PWA icons for GSD Boards.
+ * Generate PWA icons for Lumio.
  * Run: node scripts/generate-icons.js
  *
  * Creates PNG icons using a raw-pixel approach (no native deps).
@@ -72,7 +72,7 @@ function crc32(buf) {
   return crc ^ -1;
 }
 
-// Draw a simple GSD icon: dark background with a stylized "G" / kanban grid
+// Draw a simple Lumio icon: dark background with a stylized kanban grid
 function drawIcon(size, maskable) {
   const pixels = Buffer.alloc(size * size * 4);
   const bg = { r: 15, g: 17, b: 23 };       // #0f1117
@@ -187,7 +187,7 @@ function drawIcon(size, maskable) {
     }
   }
 
-  // Title at top: "GSD" text as rounded rects
+  // Title at top: "Lumio" text as rounded rects
   const titleY = padding + Math.round(area * 0.02);
   const letterH = Math.max(4, Math.round(size * 0.05));
   const letterW = Math.max(8, Math.round(size * 0.08));
@@ -195,7 +195,7 @@ function drawIcon(size, maskable) {
   const totalLettersW = letterW * 3 + letterGap * 2;
   const titleX = Math.round((size - totalLettersW) / 2);
 
-  // Draw "GSD" as three accent-colored rounded rects
+  // Draw "Lumio" as three accent-colored rounded rects
   for (let i = 0; i < 3; i++) {
     fillRoundRect(titleX + i * (letterW + letterGap), titleY, letterW, letterH, Math.round(letterH / 3), accent);
   }

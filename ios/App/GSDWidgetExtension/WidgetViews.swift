@@ -1,7 +1,7 @@
 import SwiftUI
 import WidgetKit
 
-// MARK: - Color theme (matching GSD dark mode)
+// MARK: - Color theme (matching Lumio dark mode)
 
 extension Color {
     static let gsdBackground = Color(red: 0.059, green: 0.067, blue: 0.090) // #0f1117
@@ -147,7 +147,7 @@ struct MediumWidgetView: View {
                     .font(.system(size: 28))
                     .foregroundColor(.gsdBlue)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Sign in to GSD Boards")
+                    Text("Sign in to Lumio")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.gsdTextPrimary)
                     Text("Tap to open the app")

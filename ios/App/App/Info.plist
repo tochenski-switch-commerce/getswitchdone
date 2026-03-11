@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>GSD Boards</string>
+        <string>Lumio</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -67,7 +67,7 @@
 		</dict>
 	</array>
 	<key>NSFaceIDUsageDescription</key>
-	<string>GSD Boards uses Face ID to protect your boards when the app is locked.</string>
+	<string>Lumio uses Face ID to protect your boards when the app is locked.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

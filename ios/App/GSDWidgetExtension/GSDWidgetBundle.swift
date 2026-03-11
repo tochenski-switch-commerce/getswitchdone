@@ -11,7 +11,7 @@ struct GSDWidget: Widget {
             MediumWidgetView(data: entry.data)
                 .containerBackground(Color.gsdBackground, for: .widget)
         }
-        .configurationDisplayName("GSD Boards")
+        .configurationDisplayName("Lumio")
         .description("Inbox, due cards, and quick actions at a glance.")
         .supportedFamilies([.systemMedium])
     }

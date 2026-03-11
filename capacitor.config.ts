@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.getswitchdone.boards',
-  appName: 'GSD Boards',
+  appName: 'Lumio',
   webDir: 'out',
   server: {
     url: 'https://getswitchdone.netlify.app',

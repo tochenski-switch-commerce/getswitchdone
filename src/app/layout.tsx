@@ -6,13 +6,13 @@ import ErrorCatcher from '@/components/ErrorCatcher';
 import TopNav from '@/components/TopNav';
 
 export const metadata: Metadata = {
-  title: 'GSD Boards',
-  description: 'Kanban project boards — Get Stuff Done',
+  title: 'Lumio',
+  description: 'Kanban project boards — Lumio',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'GSD Boards',
+    title: 'Lumio',
   },
   other: {
     'mobile-web-app-capable': 'yes',
@@ -40,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* PWA: Apple splash screens */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="GSD Boards" />
+        <meta name="apple-mobile-web-app-title" content="Lumio" />
 
         {/* PWA: Microsoft tile */}
         <meta name="msapplication-TileColor" content="#0f1117" />

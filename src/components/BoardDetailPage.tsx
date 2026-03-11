@@ -868,11 +868,11 @@ function BoardPage() {
             <ClipboardList size={16} />
           </button>
 
-          {/* GSD AI */}
+          {/* Lumio AI */}
           <button
             className={`kb-btn-icon ${showAiPanel ? 'kb-btn-icon-active' : ''}`}
             onClick={() => setShowAiPanel(!showAiPanel)}
-            title="GSD AI"
+            title="Lumio AI"
           >
             <BotMessageSquare size={16} />
           </button>

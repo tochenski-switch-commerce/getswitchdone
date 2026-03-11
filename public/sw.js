@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gsd-boards-v1';
+const CACHE_NAME = 'lumio-v1';
 
 const PRECACHE_URLS = [
   '/boards',

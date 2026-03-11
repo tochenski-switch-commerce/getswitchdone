@@ -273,7 +273,7 @@ export default function PublicFormPage() {
             </button>
           </form>
         </div>
-        <p className="pf-powered">Powered by GSD Boards</p>
+        <p className="pf-powered">Powered by Lumio</p>
       </div>
     </div>
   );

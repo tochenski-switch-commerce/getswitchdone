@@ -66,7 +66,7 @@ ${columnSummaries}`,
 
 /* ── Knowledge base for user help ── */
 const HELP_KNOWLEDGE = `
-GSD Boards Feature Guide:
+Lumio Feature Guide:
 - BOARDS: Create boards from the boards list. Each board has columns, cards, labels, and custom fields. Boards can be public or private.
 - COLUMNS: Default columns are "To Do", "In Progress", "Review", "Done". Add, rename, reorder, or delete columns. Drag column headers to reorder.
 - CARDS: Click "+" on a column to add cards. Drag cards between columns. Click a card to open its detail modal.
@@ -75,7 +75,7 @@ GSD Boards Feature Guide:
 - LABELS: Create board-level labels with 18 color options. Assign multiple labels to cards. Manage in the label manager (Tag icon in board menu).
 - CUSTOM FIELDS: Create per-board fields (text, date, dropdown, multiselect, number, checkbox). Set values per card.
 - FORMS: Create public intake forms that generate cards when submitted. Configure field mappings. Share via /f/[slug] URL.
-- EMAIL INTAKE: Forward emails to the GSD inbox. Emails are auto-matched to boards by subject. Unmatched emails appear in the email panel for manual routing.
+- EMAIL INTAKE: Forward emails to the Lumio inbox. Emails are auto-matched to boards by subject. Unmatched emails appear in the email panel for manual routing.
 - KEYBOARD SHORTCUTS: Alt+Arrow = navigate cards, C = copy card, Delete = delete, D = toggle due date, M = self-assign, Enter = open detail.
 - DRAG & DROP: Drag cards between columns. Drag column headers to reorder. All positioning is persisted.
 - SEARCH & FILTER: Use the search bar + priority/label/date filters in the board header toolbar.
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
   const { board, columns, cards, labels, profiles, systemContext } = await buildBoardContext(boardId);
   if (!board) return new Response('Board not found', { status: 404 });
 
-  const systemPrompt = `You are GSD AI, a smart project management assistant built into the GSD Boards kanban app. You help the user manage their board, answer questions, provide analytics/insights, and perform actions.
+  const systemPrompt = `You are Lumio AI, a smart project management assistant built into the Lumio kanban app. You help the user manage their board, answer questions, provide analytics/insights, and perform actions.
 
 Current user: ${profiles.find((p: { id: string }) => p.id === user.id)?.name || user.email}
 

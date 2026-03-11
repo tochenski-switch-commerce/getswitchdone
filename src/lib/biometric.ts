@@ -81,7 +81,7 @@ export async function getLoginCredentials(): Promise<{ username: string; passwor
   if (!plugin) return null;
   const result = await plugin.getCredentials({
     server: CREDENTIAL_SERVER,
-    reason: 'Sign in to GSD Boards',
+    reason: 'Sign in to Lumio',
   });
   if (result?.username && result?.password) {
     return { username: result.username, password: result.password };
