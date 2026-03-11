@@ -8,7 +8,7 @@ import WidgetKit
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
-    var window: UIWindow?
+    // window is now owned by SceneDelegate (UIScene lifecycle)
     private var pluginsRegistered = false
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
@@ -16,13 +16,74 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    func application(_ application: UIApplication,
+                     configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        return UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+    }
+
+    private var activeWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
+    }
+
     func applicationDidBecomeActive(_ application: UIApplication) {
-        if !pluginsRegistered, let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge {
+        if !pluginsRegistered, let bridge = (activeWindow?.rootViewController as? CAPBridgeViewController)?.bridge {
             bridge.registerPluginInstance(NativeBiometric())
             bridge.registerPluginInstance(BadgeManager())
             bridge.registerPluginInstance(WidgetBridge())
             pluginsRegistered = true
             NSLog("[WidgetBridge] plugins registered")
+        }
+        // After bridge is ready, ask the web layer to re-sync the session.
+        // This covers the case where the initial syncSessionToWidget call was
+        // dropped by a page navigation ("Connection invalidated" on S:1).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            self.recoverWidgetSessionFromJS()
+        }
+    }
+
+    /// Reads the Supabase session from WKWebView localStorage and writes it
+    /// directly to App Group UserDefaults — bypassing the Capacitor bridge.
+    private func recoverWidgetSessionFromJS() {
+        guard let webView = (activeWindow?.rootViewController as? CAPBridgeViewController)?.webView else { return }
+        let js = """
+        (function() {
+            try {
+                // Supabase v2 stores sessions under "sb-<project>-auth-token"
+                const key = Object.keys(localStorage).find(k => k.endsWith('-auth-token'));
+                if (!key) return null;
+                const raw = localStorage.getItem(key);
+                if (!raw) return null;
+                const parsed = JSON.parse(raw);
+                const at = parsed?.access_token || parsed?.session?.access_token;
+                const rt = parsed?.refresh_token || parsed?.session?.refresh_token;
+                const uid = parsed?.user?.id || parsed?.session?.user?.id;
+                if (at && uid) return JSON.stringify({ at, rt, uid });
+            } catch(e) {}
+            return null;
+        })()
+        """
+        webView.evaluateJavaScript(js) { [weak self] result, _ in
+            guard let json = result as? String,
+                  let data = json.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+                  let at = obj["at"], let uid = obj["uid"] else {
+                NSLog("[WidgetBridge] recoverSession: no session in localStorage")
+                return
+            }
+            let rt = obj["rt"]
+            let appGroupID = "group.com.getswitchdone.boards"
+            if let defaults = UserDefaults(suiteName: appGroupID) {
+                defaults.set(at, forKey: "supabase_access_token")
+                defaults.set(uid, forKey: "supabase_user_id")
+                if let rt = rt { defaults.set(rt, forKey: "supabase_refresh_token") }
+                defaults.synchronize()
+                NSLog("[WidgetBridge] session recovered from localStorage for user %@", uid)
+                WidgetCenter.shared.reloadAllTimelines()
+            }
         }
     }
 
@@ -42,7 +103,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     private func handleWidgetDeepLink(_ url: URL) {
-        guard let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge else { return }
+        guard let bridge = (activeWindow?.rootViewController as? CAPBridgeViewController)?.bridge else { return }
 
         let host = url.host ?? ""
         let query = url.query ?? ""
@@ -79,7 +140,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
            let path = components.path.isEmpty ? nil : components.path {
             let route = components.query != nil ? "\(path)?\(components.query!)" : path
             let js = "window.dispatchEvent(new CustomEvent('widgetDeepLink', { detail: { route: '\(route)' } }))"
-            if let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge {
+            if let bridge = (activeWindow?.rootViewController as? CAPBridgeViewController)?.bridge {
                 bridge.webView?.evaluateJavaScript(js)
                 return true
             }
@@ -90,7 +151,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // Handle Home Screen Quick Actions
     func application(_ application: UIApplication, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
         let action = shortcutItem.type
-        guard let bridge = (window?.rootViewController as? CAPBridgeViewController)?.bridge else {
+        guard let bridge = (activeWindow?.rootViewController as? CAPBridgeViewController)?.bridge else {
             completionHandler(false)
             return
         }

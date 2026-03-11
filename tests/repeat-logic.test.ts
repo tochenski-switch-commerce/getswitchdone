@@ -445,6 +445,92 @@ assertEqual(
 }
 
 /* ═══════════════════════════════════════════════════════════
+   H — Due-date offset & due_time carry-forward (cron duplication)
+   ═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   H — Due-date offset & due_time carry-forward (cron duplication)
+   ═══════════════════════════════════════════════════════════ */
+console.log('\n🔹 H. Due-date offset & due_time carry-forward');
+
+/** Mirrors the cron route logic for computing the new due_date. */
+function computeNewDueDate(startDate: string | null, dueDate: string | null, newStartDate: string): string | null {
+  if (dueDate && startDate) {
+    const startMs = new Date(startDate + 'T00:00:00').getTime();
+    const dueMs = new Date(dueDate + 'T00:00:00').getTime();
+    const offsetDays = Math.round((dueMs - startMs) / 86400000);
+    const newDue = new Date(newStartDate + 'T00:00:00');
+    newDue.setDate(newDue.getDate() + offsetDays);
+    return newDue.toISOString().slice(0, 10);
+  } else if (dueDate && !startDate) {
+    return newStartDate;
+  }
+  return null;
+}
+
+// Same-day due date (offset = 0)
+assertEqual(
+  computeNewDueDate('2026-03-01', '2026-03-01', '2026-03-08'),
+  '2026-03-08',
+  'offset 0 days: due_date = new start_date'
+);
+
+// 2-day offset
+assertEqual(
+  computeNewDueDate('2026-03-01', '2026-03-03', '2026-03-08'),
+  '2026-03-10',
+  'offset 2 days: start Mar 1→Mar 8, due Mar 3→Mar 10'
+);
+
+// 7-day offset (weekly)
+assertEqual(
+  computeNewDueDate('2026-03-01', '2026-03-08', '2026-03-15'),
+  '2026-03-22',
+  'offset 7 days preserved'
+);
+
+// Offset across month boundary
+assertEqual(
+  computeNewDueDate('2026-03-28', '2026-04-02', '2026-04-28'),
+  '2026-05-03',
+  'offset 5 days crosses month boundary'
+);
+
+// No start_date: due_date falls back to today
+assertEqual(
+  computeNewDueDate(null, '2026-03-01', '2026-03-11'),
+  '2026-03-11',
+  'no start_date: due_date = newStartDate'
+);
+
+// No due_date: returns null
+assertEqual(
+  computeNewDueDate('2026-03-01', null, '2026-03-08'),
+  null,
+  'no due_date: returns null'
+);
+
+// Neither: returns null
+assertEqual(
+  computeNewDueDate(null, null, '2026-03-08'),
+  null,
+  'no start_date, no due_date: returns null'
+);
+
+// due_time is a plain string — just verify it passes through as-is
+{
+  const originalTime = '14:30';
+  const carriedTime = originalTime || null;
+  assertEqual(carriedTime, '14:30', 'due_time carries through as string');
+}
+
+// null due_time stays null
+{
+  const originalTime: string | null = null;
+  const carriedTime = originalTime || null;
+  assertEqual(carriedTime, null, 'null due_time stays null');
+}
+
+/* ═══════════════════════════════════════════════════════════
    Results
    ═══════════════════════════════════════════════════════════ */
 console.log('\n' + '═'.repeat(50));

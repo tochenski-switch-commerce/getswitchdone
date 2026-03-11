@@ -24,13 +24,25 @@ async function waitForPlugin(maxAttempts = 10): Promise<any> {
 
 export async function syncSessionToWidget(accessToken: string, refreshToken: string | undefined, userId: string) {
   if (!isNative()) return;
-  const plugin = await waitForPlugin();
-  if (!plugin) return;
-  try {
-    await plugin.setSession({ accessToken, refreshToken, userId });
-    console.log('[WidgetBridge] session synced');
-  } catch (err) {
-    console.error('[WidgetBridge] setSession failed:', err);
+  // Retry up to 4 times — the first attempt often dies when the page
+  // navigates (Next.js redirect) and the Capacitor bridge resets.
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const plugin = await waitForPlugin();
+    if (!plugin) return;
+    try {
+      await plugin.setSession({ accessToken, refreshToken, userId });
+      console.log('[WidgetBridge] session synced (attempt', attempt, ')');
+      return;
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      if (msg.includes('Connection invalidated') || msg.includes('disconnected')) {
+        console.warn('[WidgetBridge] bridge reset, retrying in', attempt * 500, 'ms...');
+        await new Promise((r) => setTimeout(r, attempt * 500));
+      } else {
+        console.error('[WidgetBridge] setSession failed:', err);
+        return;
+      }
+    }
   }
 }
 

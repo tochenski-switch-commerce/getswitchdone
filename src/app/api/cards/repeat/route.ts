@@ -136,6 +136,20 @@ export async function GET(request: Request) {
       .single();
     const nextPos = (posData?.position ?? 0) + 1;
 
+    // Compute new due_date: preserve the offset between start_date and due_date
+    let newDueDate: string | null = null;
+    if (card.due_date && card.start_date) {
+      const startMs = new Date(card.start_date + 'T00:00:00').getTime();
+      const dueMs = new Date(card.due_date + 'T00:00:00').getTime();
+      const offsetDays = Math.round((dueMs - startMs) / 86400000);
+      const newDue = new Date(todayStr + 'T00:00:00');
+      newDue.setDate(newDue.getDate() + offsetDays);
+      newDueDate = newDue.toISOString().slice(0, 10);
+    } else if (card.due_date && !card.start_date) {
+      // No start_date to anchor offset — set due_date to today
+      newDueDate = todayStr;
+    }
+
     const newCard = {
       board_id: card.board_id,
       column_id: card.column_id,
@@ -143,7 +157,10 @@ export async function GET(request: Request) {
       description: card.description || null,
       priority: card.priority || null,
       assignee: card.assignee || null,
+      assignees: card.assignees || null,
       start_date: todayStr,
+      due_date: newDueDate,
+      due_time: card.due_time || null,
       position: nextPos,
       repeat_rule: card.repeat_rule,
       repeat_series_id: card.repeat_series_id,
