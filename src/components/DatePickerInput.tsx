@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronLeft, ChevronRight } from '@/components/BoardIcons';
 
 interface DatePickerInputProps {
@@ -175,12 +176,13 @@ export default function DatePickerInput({ value, onChange, className = '', style
         </div>
       </div>
 
-      {open && dropdownPos && (
+      {open && dropdownPos && createPortal(
         <div
           ref={dropdownRef}
           className={`dp-dropdown ${dropUp ? 'dp-dropdown-up' : ''}`}
           style={{ top: dropdownPos.top, left: dropdownPos.left }}
         >
+          <style>{datePickerStyles}</style>
           {/* Navigation header */}
           <div className="dp-header">
             <button className="dp-nav-btn" onClick={prevMonth}><ChevronLeft size={14} /></button>
@@ -216,7 +218,8 @@ export default function DatePickerInput({ value, onChange, className = '', style
           <div className="dp-footer">
             <button className="dp-today-btn" onClick={goToday}>Today</button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

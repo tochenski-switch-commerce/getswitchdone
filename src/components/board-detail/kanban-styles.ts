@@ -2531,4 +2531,169 @@ export const kanbanStyles = `
   .kb-due-time-clear:hover {
     color: #ef4444;
   }
+
+  /* ── Mobile FAB (floating action button) ── */
+  .kb-mobile-fab {
+    display: none;
+    position: fixed;
+    bottom: max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+    right: 20px;
+    z-index: 900;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: #6366f1;
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.45), 0 2px 8px rgba(0,0,0,0.3);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .kb-mobile-fab:active {
+    transform: scale(0.92);
+    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3), 0 1px 4px rgba(0,0,0,0.2);
+  }
+
+  /* ── Mobile bottom sheet backdrop ── */
+  .kb-mobile-sheet-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0,0,0,0.5);
+    animation: kb-sheet-fade-in 0.2s ease;
+  }
+
+  /* ── Mobile bottom sheet ── */
+  .kb-mobile-sheet {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1101;
+    background: #1a1d2e;
+    border-radius: 20px 20px 0 0;
+    padding: 12px 20px max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+    flex-direction: column;
+    gap: 16px;
+    animation: kb-sheet-slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: 0 -4px 30px rgba(0,0,0,0.4);
+  }
+  .kb-mobile-sheet-handle {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: #3b3f52;
+    align-self: center;
+    flex-shrink: 0;
+  }
+  .kb-mobile-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .kb-mobile-sheet-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: #e5e7eb;
+  }
+
+  /* ── Column picker chips ── */
+  .kb-mobile-sheet-cols {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .kb-mobile-sheet-cols::-webkit-scrollbar { display: none; }
+  .kb-mobile-sheet-col-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1.5px solid #2a2d3a;
+    background: rgba(255,255,255,0.03);
+    color: #9ca3af;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .kb-mobile-sheet-col-chip.active {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: #6366f1;
+    color: #a5b4fc;
+  }
+  .kb-mobile-sheet-col-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Sheet input ── */
+  .kb-mobile-sheet-input {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1.5px solid #2a2d3a;
+    background: #13152080;
+    color: #e5e7eb;
+    font-size: 16px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s ease;
+    -webkit-appearance: none;
+  }
+  .kb-mobile-sheet-input::placeholder { color: #4b5563; }
+  .kb-mobile-sheet-input:focus { border-color: #6366f1; }
+
+  /* ── Sheet add button ── */
+  .kb-mobile-sheet-add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    background: #6366f1;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .kb-mobile-sheet-add-btn:active { transform: scale(0.98); }
+  .kb-mobile-sheet-add-btn.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  @keyframes kb-sheet-slide-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes kb-sheet-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @media (max-width: 768px) {
+    .kb-mobile-fab { display: flex; }
+    .kb-mobile-sheet-backdrop { display: block; }
+    .kb-mobile-sheet { display: flex; }
+  }
 `;
