@@ -4,6 +4,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import QuickActionHandler from '@/components/QuickActionHandler';
 import ErrorCatcher from '@/components/ErrorCatcher';
 import TopNav from '@/components/TopNav';
+import SplashScreen from '@/components/SplashScreen';
 
 export const metadata: Metadata = {
   title: 'Lumio',
@@ -88,6 +89,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }
         `}</style>
         <AuthProvider>
+          <SplashScreen />
           <ErrorCatcher />
           <QuickActionHandler />
           <TopNav />

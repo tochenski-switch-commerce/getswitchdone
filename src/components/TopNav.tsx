@@ -107,7 +107,7 @@ export default function TopNav() {
           color: #d1d5db;
         }
         .kb-nav-tab.active {
-          background: #2563eb;
+          background: #fa420f;
           color: #fff;
         }
         .kb-nav-right {
@@ -136,8 +136,8 @@ export default function TopNav() {
           width: 26px;
           height: 26px;
           border-radius: 50%;
-          background: #374151;
-          color: #d1d5db;
+          background: #fa420f;
+          color: #fff;
           font-size: 11px;
           font-weight: 700;
           border: none;
@@ -145,7 +145,7 @@ export default function TopNav() {
           transition: all 0.15s ease;
           margin-left: 4px;
         }
-        .kb-nav-profile-btn:hover { background: #4b5563; }
+        .kb-nav-profile-btn:hover { background: #e03a0d; }
         .kb-profile-dropdown {
           position: absolute;
           top: 100%;

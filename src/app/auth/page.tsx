@@ -379,7 +379,7 @@ const authStyles = `
     color: #6b7280;
   }
   .kb-auth-toggle-btn.active {
-    background: #2563eb;
+    background: #fa420f;
     color: #fff;
   }
   .kb-form-group {
@@ -425,11 +425,11 @@ const authStyles = `
     outline: none;
   }
   .kb-btn-primary {
-    background: #6366f1;
+    background: #fa420f;
     color: #fff;
   }
   .kb-btn-primary:hover {
-    background: #4f46e5;
+    background: #e03a0d;
   }
   .kb-btn-primary:disabled {
     opacity: 0.5;
