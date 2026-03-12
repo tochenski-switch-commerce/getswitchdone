@@ -232,12 +232,15 @@ export default function PublicFormPage() {
                 <Check size={32} />
               </div>
               <h2 className="pf-success-title">Submitted!</h2>
-              <p className="pf-success-desc">Your response has been recorded successfully.</p>
-              {createdCardUrl && (
-                <a href={createdCardUrl} className="pf-btn pf-btn-primary" style={{ display: 'inline-block', textDecoration: 'none', textAlign: 'center' }}>
-                  View card
-                </a>
-              )}
+              <p className="pf-success-desc">
+                Your response has been recorded successfully.
+                {createdCardUrl && (
+                  <>
+                    {' '}
+                    <a href={createdCardUrl} className="pf-card-link">View card →</a>
+                  </>
+                )}
+              </p>
               <button className="pf-btn pf-btn-secondary" onClick={handleReset}>
                 Submit another response
               </button>
@@ -442,6 +445,14 @@ const publicFormStyles = `
     font-size: 14px;
     color: #9ca3af;
     margin: 0 0 24px;
+  }
+  .pf-card-link {
+    color: #818cf8;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .pf-card-link:hover {
+    text-decoration: underline;
   }
   .pf-error-state p {
     font-size: 14px;

@@ -177,11 +177,11 @@ function AuthForm() {
           <div className="kb-auth-card" style={{ textAlign: 'center' }}>
             <div style={{
               width: 72, height: 72, borderRadius: 18,
-              background: 'rgba(99, 102, 241, 0.1)',
+              background: 'rgba(250, 66, 15, 0.1)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               margin: '0 auto 20px',
             }}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fa420f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M7 3H5a2 2 0 0 0-2 2v2" />
                 <path d="M17 3h2a2 2 0 0 1 2 2v2" />
                 <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
@@ -228,7 +228,7 @@ function AuthForm() {
 
           {inviteParam && (
             <div className="kb-invite-banner">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa420f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                 <circle cx="9" cy="7" r="4" />
                 <line x1="19" y1="8" x2="19" y2="14" />
@@ -379,7 +379,7 @@ const authStyles = `
     color: #6b7280;
   }
   .kb-auth-toggle-btn.active {
-    background: #2563eb;
+    background: #fa420f;
     color: #fff;
   }
   .kb-form-group {
@@ -407,8 +407,8 @@ const authStyles = `
     box-sizing: border-box;
   }
   .kb-input:focus {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 2px rgba(99,102,241,0.2);
+    border-color: #fa420f;
+    box-shadow: 0 0 0 2px rgba(250,66,15,0.2);
   }
   .kb-btn {
     display: inline-flex;
@@ -425,11 +425,11 @@ const authStyles = `
     outline: none;
   }
   .kb-btn-primary {
-    background: #6366f1;
+    background: #fa420f;
     color: #fff;
   }
   .kb-btn-primary:hover {
-    background: #4f46e5;
+    background: #e03a0d;
   }
   .kb-btn-primary:disabled {
     opacity: 0.5;
@@ -457,8 +457,8 @@ const authStyles = `
     padding: 20px;
     border-radius: 16px;
     border: 1px solid #2a2d3a;
-    background: rgba(99, 102, 241, 0.08);
-    color: #818cf8;
+    background: rgba(250, 66, 15, 0.08);
+    color: #fa420f;
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
@@ -467,8 +467,8 @@ const authStyles = `
     margin-bottom: 0;
   }
   .kb-biometric-btn:hover {
-    background: rgba(99, 102, 241, 0.15);
-    border-color: #4f46e5;
+    background: rgba(250, 66, 15, 0.15);
+    border-color: #fa420f;
   }
   .kb-biometric-btn:disabled {
     opacity: 0.5;
@@ -510,7 +510,7 @@ const authStyles = `
   .kb-checkbox {
     width: 16px;
     height: 16px;
-    accent-color: #6366f1;
+    accent-color: #fa420f;
   }
   .kb-invite-banner {
     display: flex;
