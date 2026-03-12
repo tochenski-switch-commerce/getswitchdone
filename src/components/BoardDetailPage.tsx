@@ -21,7 +21,7 @@ import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
 const AiPanel = dynamic(() => import('@/components/AiPanel'), { ssr: false });
-const AutopilotBanner = dynamic(() => import('@/components/AutopilotBanner'), { ssr: false });
+// const AutopilotBanner = dynamic(() => import('@/components/AutopilotBanner'), { ssr: false });
 const MeetingNotesModal = dynamic(() => import('@/components/MeetingNotesModal'), { ssr: false });
 const DatePickerInput = dynamic(() => import('@/components/DatePickerInput'), { ssr: false });
 
@@ -142,6 +142,10 @@ function BoardPage() {
 
   const newCardRef = useRef<HTMLInputElement>(null);
   const newColRef = useRef<HTMLInputElement>(null);
+  const [mobileAddOpen, setMobileAddOpen] = useState(false);
+  const [mobileAddColId, setMobileAddColId] = useState<string | null>(null);
+  const [mobileAddTitle, setMobileAddTitle] = useState('');
+  const mobileAddRef = useRef<HTMLInputElement>(null);
 
   // Reset card selection when navigating to a different board (e.g. from inbox)
   const prevBoardIdRef = useRef(boardId);
@@ -440,6 +444,29 @@ function BoardPage() {
     setAddingCardCol(null);
   };
 
+  // ── Mobile add card ──
+  const openMobileAdd = useCallback(() => {
+    const normalCols = board?.columns.filter(c => c.column_type !== 'board_links').sort((a, b) => a.position - b.position) || [];
+    const defaultCol = (zoomedColId && normalCols.find(c => c.id === zoomedColId)) ? zoomedColId : normalCols[0]?.id || null;
+    setMobileAddColId(defaultCol);
+    setMobileAddTitle('');
+    setMobileAddOpen(true);
+    setTimeout(() => mobileAddRef.current?.focus(), 80);
+  }, [board, zoomedColId]);
+
+  const handleMobileAddCard = async () => {
+    if (!mobileAddTitle.trim() || !mobileAddColId) return;
+    await addCard(boardId, { column_id: mobileAddColId, title: mobileAddTitle });
+    hapticMedium();
+    setMobileAddTitle('');
+    setTimeout(() => mobileAddRef.current?.focus(), 50);
+  };
+
+  const closeMobileAdd = useCallback(() => {
+    setMobileAddOpen(false);
+    setMobileAddTitle('');
+  }, []);
+
   // ── Add column ──
   const handleAddColumn = async () => {
     if (!newColTitle.trim()) return;
@@ -482,10 +509,14 @@ function BoardPage() {
   // Auto-open "add card" from widget deep link ?addCard=1
   useEffect(() => {
     if (searchParams.get('addCard') === '1' && board && board.columns.length > 0) {
-      setAddingCardCol(board.columns[0].id);
+      if (window.innerWidth <= 768) {
+        openMobileAdd();
+      } else {
+        setAddingCardCol(board.columns[0].id);
+      }
       router.replace(`/boards/${boardId}`);
     }
-  }, [searchParams, board, boardId, router]);
+  }, [searchParams, board, boardId, router, openMobileAdd]);
 
   // ── Keyboard shortcuts (hover cards + card detail navigation) ──
   const navigateCard = useCallback((direction: 'prev' | 'next') => {
@@ -1039,8 +1070,8 @@ function BoardPage() {
 
 
 
-      {/* ── Autopilot banner ── */}
-      <AutopilotBanner
+      {/* ── Autopilot banner (disabled) ── */}
+      {/* <AutopilotBanner
         boardId={boardId}
         accessToken={session?.access_token || ''}
         onOpenChat={(prompt) => {
@@ -1051,7 +1082,7 @@ function BoardPage() {
           const card = board?.cards.find(c => c.id === cardId);
           if (card) setSelectedCard(card);
         }}
-      />
+      /> */}
 
       {/* ── Kanban columns ── */}
       <div className="kb-columns-scroll">
@@ -1849,6 +1880,64 @@ function BoardPage() {
           addCard={addCard}
         />
       )}
+
+      {/* ── Mobile FAB + Add Card Bottom Sheet ── */}
+      {!activeCard && !showAiPanel && !showMeetingNotes && !showEmailPanel && !showNotePanel && (
+        <button
+          className="kb-mobile-fab"
+          onClick={openMobileAdd}
+          aria-label="Add card"
+        >
+          <Plus size={28} />
+        </button>
+      )}
+
+      {mobileAddOpen && (() => {
+        const normalCols = columns.filter(c => c.column_type !== 'board_links');
+        return (
+          <>
+            <div className="kb-mobile-sheet-backdrop" onClick={closeMobileAdd} />
+            <div className="kb-mobile-sheet">
+              <div className="kb-mobile-sheet-handle" />
+              <div className="kb-mobile-sheet-header">
+                <span className="kb-mobile-sheet-title">Add Card</span>
+                <button className="kb-btn-icon-sm" onClick={closeMobileAdd}><X size={18} /></button>
+              </div>
+              <div className="kb-mobile-sheet-cols">
+                {normalCols.map(col => (
+                  <button
+                    key={col.id}
+                    className={`kb-mobile-sheet-col-chip ${mobileAddColId === col.id ? 'active' : ''}`}
+                    onClick={() => { setMobileAddColId(col.id); hapticSelection(); }}
+                  >
+                    {col.color && <span className="kb-mobile-sheet-col-dot" style={{ background: col.color }} />}
+                    {col.title}
+                  </button>
+                ))}
+              </div>
+              <input
+                ref={mobileAddRef}
+                className="kb-mobile-sheet-input"
+                value={mobileAddTitle}
+                onChange={e => setMobileAddTitle(e.target.value)}
+                placeholder="Card title..."
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleMobileAddCard();
+                  if (e.key === 'Escape') closeMobileAdd();
+                }}
+                autoFocus
+              />
+              <button
+                className={`kb-mobile-sheet-add-btn ${mobileAddTitle.trim() ? '' : 'disabled'}`}
+                onClick={handleMobileAddCard}
+              >
+                <Plus size={18} />
+                Add Card
+              </button>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
