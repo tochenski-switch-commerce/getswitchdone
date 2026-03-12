@@ -16,6 +16,7 @@ export default function PublicFormPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [createdCardUrl, setCreatedCardUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -84,6 +85,9 @@ export default function PublicFormPage() {
         setError(result.error || 'Submission failed');
         return;
       }
+      if (result.cardId && result.boardId) {
+        setCreatedCardUrl(`/boards/${result.boardId}?card=${result.cardId}`);
+      }
       setSubmitted(true);
     } catch {
       setError('Failed to submit form. Please try again.');
@@ -94,6 +98,7 @@ export default function PublicFormPage() {
 
   const handleReset = () => {
     setSubmitted(false);
+    setCreatedCardUrl(null);
     setError(null);
     setFieldErrors({});
     if (form) {
@@ -228,6 +233,11 @@ export default function PublicFormPage() {
               </div>
               <h2 className="pf-success-title">Submitted!</h2>
               <p className="pf-success-desc">Your response has been recorded successfully.</p>
+              {createdCardUrl && (
+                <a href={createdCardUrl} className="pf-btn pf-btn-primary" style={{ display: 'inline-block', textDecoration: 'none', textAlign: 'center' }}>
+                  View card
+                </a>
+              )}
               <button className="pf-btn pf-btn-secondary" onClick={handleReset}>
                 Submit another response
               </button>

@@ -734,6 +734,9 @@ export const kanbanStyles = `
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
+  @media (max-width: 768px) {
+    .kb-shortcut-bar { display: none; }
+  }
 
   /* ── Card detail nav buttons ── */
   .kb-detail-header-actions {

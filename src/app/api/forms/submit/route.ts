@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, cardId: card.id });
+    return NextResponse.json({ success: true, cardId: card.id, boardId: form.board_id });
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
