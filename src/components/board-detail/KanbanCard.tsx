@@ -3,7 +3,7 @@
 import type { BoardCard, CardPriority } from '@/types/board-types';
 import {
   MessageSquare, CheckSquare, CalendarDays,
-  User, Bell, Check, ChevronRight, Repeat,
+  User, Bell, ChevronRight, Repeat, Clock,
 } from '@/components/BoardIcons';
 import { PRIORITY_CONFIG, formatRepeatSummary } from './helpers';
 
@@ -14,6 +14,7 @@ export default function KanbanCard({
   onPriorityChange,
   hasAlert,
   onMoveToNext,
+  onToggleComplete,
 }: {
   card: BoardCard;
   onClick: () => void;
@@ -21,6 +22,7 @@ export default function KanbanCard({
   onPriorityChange?: (priority: CardPriority | null) => void;
   hasAlert?: boolean;
   onMoveToNext?: () => void;
+  onToggleComplete?: () => void;
 }) {
   const pri = card.priority ? PRIORITY_CONFIG[card.priority] : null;
   const labels = card.labels || [];
@@ -32,14 +34,15 @@ export default function KanbanCard({
   now.setHours(0, 0, 0, 0);
   const dueDate = card.due_date ? new Date(card.due_date + 'T00:00:00') : null;
   const daysUntilDue = dueDate ? Math.ceil((dueDate.getTime() - now.getTime()) / 86400000) : null;
-  const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
-  const isDueSoon = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 2;
+  const isOverdue = !card.is_complete && daysUntilDue !== null && daysUntilDue < 0;
+  const isDueSoon = !card.is_complete && daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 2;
 
   return (
     <div
       className={`kb-card ${isDragging ? 'dragging' : ''}`}
       onClick={onClick}
       draggable
+      style={card.is_complete ? { opacity: 0.55 } : undefined}
     >
       {/* Priority select + Labels row */}
       {(pri || labels.length > 0) && (
@@ -71,8 +74,44 @@ export default function KanbanCard({
       )}
 
       {/* Title */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-        <p className="kb-card-title" style={{ flex: 1 }}>{card.title}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        {onToggleComplete && (
+          <button
+            onClick={e => { e.stopPropagation(); onToggleComplete(); }}
+            title={card.is_complete ? 'Mark incomplete' : 'Mark complete'}
+            style={{
+              flexShrink: 0,
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              color: card.is_complete ? '#22c55e' : '#4b5563',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            {card.is_complete ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" fill="rgba(34,197,94,0.15)" stroke="#22c55e" />
+                <polyline points="8 12 11 15 16 9" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+              </svg>
+            )}
+          </button>
+        )}
+        <p
+          className="kb-card-title"
+          style={{
+            flex: 1,
+            textDecoration: card.is_complete ? 'line-through' : undefined,
+            color: card.is_complete ? '#6b7280' : undefined,
+          }}
+        >
+          {card.title}
+        </p>
         {hasAlert && (
           <span className="kb-card-alert" title="You have unread notifications for this card">
             <Bell size={12} />
@@ -111,10 +150,23 @@ export default function KanbanCard({
           )}
           {checklists.length > 0 && (
             <span className={`kb-card-count ${completedCount === checklists.length ? 'done' : ''}`}>
-              <CheckSquare size={10} /> {completedCount}/{checklists.length}
+              <CheckSquare size={10} /> {completedCount} of {checklists.length}
             </span>
           )}
         </span>
+      </div>
+
+      {/* Created / Updated dates */}
+      <div className="kb-card-timestamps">
+        <Clock size={9} />
+        <span title={`Created: ${new Date(card.created_at).toLocaleString()}`}>
+          {new Date(card.created_at).toLocaleDateString('en-US', { month: 'numeric', day: '2-digit', year: '2-digit' })}
+        </span>
+        {card.updated_at !== card.created_at && (
+          <span title={`Updated: ${new Date(card.updated_at).toLocaleString()}`} className="kb-card-updated">
+            · {new Date(card.updated_at).toLocaleDateString('en-US', { month: 'numeric', day: '2-digit', year: '2-digit' })}
+          </span>
+        )}
       </div>
 
       {/* Assignee */}

@@ -67,7 +67,6 @@ export default function FormsListPage() {
     const { data } = await supabase
       .from('project_boards')
       .select('*')
-      .eq('user_id', user.id)
       .eq('is_archived', false)
       .order('title');
     if (data) setBoards(data);

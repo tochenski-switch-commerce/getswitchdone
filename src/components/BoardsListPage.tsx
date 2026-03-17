@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 /* AUTH: Replace with your auth hook */
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,37 +14,29 @@ import {
   Plus,
   LayoutDashboard,
   Trash2,
-  Archive,
   Calendar,
   FolderKanban,
   Globe,
-  Lock,
   User,
   Users,
   FileText,
   Copy,
   getBoardIcon,
-  BOARD_ICONS,
-  ICON_COLORS,
   DEFAULT_ICON_COLOR,
 } from '@/components/BoardIcons';
 import type { BoardIconKey } from '@/components/BoardIcons';
+import BoardWizardModal from '@/components/BoardWizardModal';
+import { useTemplates } from '@/hooks/useTemplates';
+import type { TemplateData } from '@/types/board-types';
 
 function BoardsListPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { boards, fetchBoards, createBoard, deleteBoard, duplicateBoard, loading, error } = useProjectBoard();
+  const { boards, fetchBoards, createBoard, createBoardFromTemplate, deleteBoard, duplicateBoard, loading } = useProjectBoard();
+  const { teamTemplates, fetchTeamTemplates } = useTemplates();
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [newIcon, setNewIcon] = useState<BoardIconKey>('folder-kanban');
-  const [newIconColor, setNewIconColor] = useState(DEFAULT_ICON_COLOR);
-  const [newIconHex, setNewIconHex] = useState('');
-  const [newTeamId, setNewTeamId] = useState<string | ''>('');
-  const overlayMouseDown = useRef<EventTarget | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
 
 
   const { teams, fetchTeams } = useTeams();
@@ -74,22 +66,11 @@ function BoardsListPage() {
     }
   }, [searchParams, router, boards]);
 
-  const handleCreate = async () => {
-    if (!newTitle.trim()) return;
-    setCreating(true);
-    const board = await createBoard(newTitle, newDesc, newIcon, newIconColor, newTeamId || undefined);
-    setCreating(false);
-    if (board) {
-      setNewTitle('');
-      setNewDesc('');
-      setNewIcon('folder-kanban');
-      setNewIconColor(DEFAULT_ICON_COLOR);
-      setNewIconHex('');
-      setNewTeamId('');
-      setShowCreate(false);
-      router.push(`/boards/${board.id}`);
+  useEffect(() => {
+    if (teams.length > 0 || user) {
+      fetchTeamTemplates(teams.map(t => t.id));
     }
-  };
+  }, [teams, user, fetchTeamTemplates]);
 
   const renderBoardCard = (board: typeof boards[0], teamName?: string) => (
     <div
@@ -169,7 +150,7 @@ function BoardsListPage() {
               <FileText size={16} />
               Forms
             </button>
-            <button className="kb-btn kb-btn-primary" onClick={() => setShowCreate(true)}>
+            <button className="kb-btn kb-btn-primary" onClick={() => setShowWizard(true)}>
               <Plus size={16} />
               New Board
             </button>
@@ -177,125 +158,22 @@ function BoardsListPage() {
           </div>
         </div>
 
-        {/* Create modal */}
-        {showCreate && (
-          <div className="kb-modal-overlay"
-            onMouseDown={e => { overlayMouseDown.current = e.target; }}
-            onClick={e => { if (e.target === e.currentTarget && overlayMouseDown.current === e.currentTarget) setShowCreate(false); }}
-          >
-            <div className="kb-modal">
-              <h2 className="kb-modal-title">Create New Board</h2>
-              <div className="kb-form-group">
-                <label className="kb-label">Board Title</label>
-                <input
-                  className="kb-input"
-                  value={newTitle}
-                  onChange={e => setNewTitle(e.target.value)}
-                  placeholder="e.g. Website Redesign"
-                  autoFocus
-                  onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                />
-              </div>
-              <div className="kb-form-group">
-                <label className="kb-label">Icon</label>
-                <div className="kb-icon-grid">
-                  {BOARD_ICONS.map(({ key, label, Icon }) => (
-                    <button
-                      key={key}
-                      className={`kb-icon-option${newIcon === key ? ' selected' : ''}`}
-                      onClick={() => setNewIcon(key)}
-                      title={label}
-                      type="button"
-                    >
-                      <Icon size={18} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="kb-form-group">
-                <label className="kb-label">Icon Color</label>
-                <div className="kb-icon-color-grid">
-                  {ICON_COLORS.map(({ value, label }) => (
-                    <button
-                      key={value}
-                      className={`kb-color-swatch${newIconColor === value ? ' selected' : ''}`}
-                      style={{ backgroundColor: value }}
-                      onClick={() => setNewIconColor(value)}
-                      title={label}
-                      type="button"
-                    />
-                  ))}
-                </div>
-                <div className="kb-hex-row">
-                  <span className="kb-hex-label">#</span>
-                  <input
-                    className="kb-hex-input"
-                    value={newIconHex}
-                    onChange={e => {
-                      const v = e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
-                      setNewIconHex(v);
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && /^[0-9a-fA-F]{3,6}$/.test(newIconHex)) {
-                        e.preventDefault();
-                        const hex = newIconHex.length === 3 ? newIconHex.split('').map(c => c + c).join('') : newIconHex;
-                        setNewIconColor(`#${hex}`);
-                        setNewIconHex('');
-                      }
-                    }}
-                    placeholder="hex e.g. ff6b6b"
-                    maxLength={6}
-                  />
-                  <button
-                    className="kb-btn kb-btn-primary"
-                    style={{ padding: '5px 10px', fontSize: 11 }}
-                    disabled={!/^[0-9a-fA-F]{3,6}$/.test(newIconHex)}
-                    onClick={() => {
-                      const hex = newIconHex.length === 3 ? newIconHex.split('').map(c => c + c).join('') : newIconHex;
-                      setNewIconColor(`#${hex}`);
-                      setNewIconHex('');
-                    }}
-                    type="button"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-              <div className="kb-form-group">
-                <label className="kb-label">Description (optional)</label>
-                <textarea
-                  className="kb-textarea"
-                  value={newDesc}
-                  onChange={e => setNewDesc(e.target.value)}
-                  placeholder="Brief description of this board..."
-                  rows={3}
-                />
-              </div>
-              {teams.length > 0 && (
-                <div className="kb-form-group">
-                  <label className="kb-label">Team (optional)</label>
-                  <select
-                    className="kb-input"
-                    value={newTeamId}
-                    onChange={e => setNewTeamId(e.target.value)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <option value="">Personal Board</option>
-                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </div>
-              )}
-              {error && (
-                <p style={{ fontSize: '13px', color: '#ef4444', margin: '0 0 8px', padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>{error}</p>
-              )}
-              <div className="kb-modal-actions">
-                <button className="kb-btn kb-btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button>
-                <button className="kb-btn kb-btn-primary" onClick={handleCreate} disabled={creating || !newTitle.trim()}>
-                  {creating ? 'Creating...' : 'Create Board'}
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* Board Wizard */}
+        {showWizard && (
+          <BoardWizardModal
+            onClose={() => setShowWizard(false)}
+            onCreated={boardId => { setShowWizard(false); router.push(`/boards/${boardId}`); }}
+            teams={teams}
+            teamTemplates={teamTemplates}
+            onCreateBlank={async (title, desc, icon, iconColor, teamId) => {
+              const board = await createBoard(title, desc, icon, iconColor, teamId || undefined);
+              return board?.id ?? null;
+            }}
+            onCreateFromTemplate={async (title, templateData, desc, icon, iconColor, teamId) => {
+              const board = await createBoardFromTemplate(title, templateData, desc, icon, iconColor, teamId || undefined);
+              return board?.id ?? null;
+            }}
+          />
         )}
 
         {/* Board grid */}
@@ -310,7 +188,7 @@ function BoardsListPage() {
             <LayoutDashboard size={48} style={{ color: '#4b5563', marginBottom: '16px' }} />
             <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>No boards yet</h3>
             <p style={{ color: '#9ca3af', fontSize: '14px', marginBottom: '20px' }}>Create your first project board to get started.</p>
-            <button className="kb-btn kb-btn-primary" onClick={() => setShowCreate(true)}>
+            <button className="kb-btn kb-btn-primary" onClick={() => setShowWizard(true)}>
               <Plus size={16} />
               Create Board
             </button>

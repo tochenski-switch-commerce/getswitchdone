@@ -43,11 +43,12 @@ export async function GET(req: NextRequest) {
     boardTzMap.set(b.id, b.timezone || fallbackTz);
   }
 
-  // Find non-archived cards with a due date
+  // Find non-archived, incomplete cards with a due date
   const { data: cards, error: cardsErr } = await db
     .from('board_cards')
     .select('id, title, due_date, due_time, board_id, created_by, assignee, assignees')
     .eq('is_archived', false)
+    .eq('is_complete', false)
     .not('due_date', 'is', null);
 
   if (cardsErr) {
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Batch insert notifications
+  // Batch insert card overdue notifications
   if (notifications.length > 0) {
     const { error: insertErr } = await db.from('notifications').insert(notifications);
     if (insertErr) {
@@ -140,12 +141,96 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── Checklist item overdue notifications ────────────────────
+  const { data: checklistItems, error: checklistErr } = await db
+    .from('card_checklists')
+    .select('id, title, due_date, assignees, card_id, board_cards!inner(title, board_id, created_by, assignee, assignees, is_archived, is_complete)')
+    .eq('is_completed', false)
+    .not('due_date', 'is', null)
+    .eq('board_cards.is_archived', false)
+    .eq('board_cards.is_complete', false);
+
+  if (checklistErr) {
+    console.error('[check-overdue] Failed to query checklist items:', checklistErr.message);
+  }
+
+  const overdueChecklistItems = (checklistItems || []).filter((item: any) => {
+    const bc = item.board_cards;
+    const tz = boardTzMap.get(bc.board_id) || fallbackTz;
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    return item.due_date.slice(0, 10) < todayStr;
+  });
+
+  const checklistNotifications: { user_id: string; board_id: string; card_id: string; checklist_item_id: string; type: string; title: string; body: string }[] = [];
+  const checklistPushTargets: { user_id: string; title: string; body: string; type: string; board_id: string; card_id: string }[] = [];
+
+  if (overdueChecklistItems.length > 0) {
+    // Dedup: skip items already notified
+    const checklistItemIds = overdueChecklistItems.map((i: any) => i.id);
+    const { data: existingChecklistNotifs } = await db
+      .from('notifications')
+      .select('checklist_item_id')
+      .eq('type', 'checklist_overdue')
+      .in('checklist_item_id', checklistItemIds);
+
+    const alreadyNotifiedChecklist = new Set((existingChecklistNotifs || []).map((n: any) => n.checklist_item_id));
+
+    for (const item of overdueChecklistItems) {
+      if (alreadyNotifiedChecklist.has(item.id)) continue;
+
+      const bc = item.board_cards as any;
+      const userIds = new Set<string>();
+      if (bc.created_by) userIds.add(bc.created_by);
+
+      // Prefer checklist item's own assignees; fall back to parent card's assignees
+      const itemAssignees: string[] = Array.isArray(item.assignees) && item.assignees.length ? item.assignees : [];
+      const assigneeNames: string[] = itemAssignees.length
+        ? itemAssignees
+        : bc.assignees?.length ? bc.assignees : bc.assignee ? [bc.assignee] : [];
+      if (assigneeNames.length > 0) {
+        const { data: profiles } = await db
+          .from('user_profiles')
+          .select('id')
+          .in('name', assigneeNames);
+        if (profiles) {
+          for (const p of profiles) userIds.add(p.id);
+        }
+      }
+
+      const dueDisplay = new Date(item.due_date.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const title = `"${item.title}" checklist item is overdue`;
+      const body = `On "${bc.title}" · Due ${dueDisplay}`;
+
+      for (const userId of userIds) {
+        checklistNotifications.push({
+          user_id: userId,
+          board_id: bc.board_id,
+          card_id: item.card_id,
+          checklist_item_id: item.id,
+          type: 'checklist_overdue',
+          title,
+          body,
+        });
+        checklistPushTargets.push({ user_id: userId, title, body, type: 'checklist_overdue', board_id: bc.board_id, card_id: item.card_id });
+      }
+    }
+
+    if (checklistNotifications.length > 0) {
+      const { error: insertErr } = await db.from('notifications').insert(checklistNotifications);
+      if (insertErr) {
+        console.error('[check-overdue] Failed to insert checklist notifications:', insertErr.message);
+      }
+    }
+  }
+
   // Send push notifications (fire-and-forget, don't block response)
   const pushUrl = `${process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/push/send`;
   const pushSecret = process.env.PUSH_WEBHOOK_SECRET;
 
+  const allPushTargets = [...pushTargets, ...checklistPushTargets];
+
   if (pushSecret) {
-    for (const target of pushTargets) {
+    for (const target of allPushTargets) {
       try {
         await fetch(pushUrl, {
           method: 'POST',
@@ -164,6 +249,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     checked: cards.length,
     notified: newOverdue.length,
-    pushSent: pushTargets.length,
+    checklistNotified: checklistNotifications.length,
+    pushSent: allPushTargets.length,
   });
 }

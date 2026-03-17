@@ -309,6 +309,7 @@ export const kanbanStyles = `
     align-items: center;
   }
   .kb-btn-icon-sm:hover { background: #1f2937 !important; color: #9ca3af !important; }
+  .kb-btn-automation-active { color: #818cf8 !important; }
 
   /* ── Dropdown ── */
   .kb-click-away { position: fixed; inset: 0; z-index: 999; }
@@ -433,6 +434,26 @@ export const kanbanStyles = `
     gap: 2px;
     justify-content: flex-end;
   }
+  .kb-column-actions .kb-btn-icon-sm {
+    position: relative;
+  }
+  .kb-column-actions .kb-btn-icon-sm[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #111827;
+    color: #e5e7eb;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    padding: 4px 8px;
+    border-radius: 5px;
+    border: 1px solid #374151;
+    pointer-events: none;
+    z-index: 200;
+  }
   .kb-column-dot {
     width: 8px;
     height: 8px;
@@ -539,7 +560,7 @@ export const kanbanStyles = `
     font-size: 13px !important;
     font-weight: 500 !important;
     color: #e5e7eb !important;
-    margin: 0 0 8px 0 !important;
+    margin: 0 !important;
     line-height: 1.4 !important;
     word-break: break-word;
   }
@@ -627,6 +648,22 @@ export const kanbanStyles = `
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .kb-card-timestamps {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: #9ca3af;
+    margin-top: 6px;
+  }
+  .kb-card-timestamps span {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .kb-card-updated {
+    color: #d1d5db;
   }
   .kb-card-assignee {
     display: flex;
@@ -1068,6 +1105,132 @@ export const kanbanStyles = `
     from { opacity: 0; transform: translateY(20px) scale(0.97); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
+  /* Generic small modal shell */
+  .kb-modal {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 14px;
+    width: 100%;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+    animation: kb-modal-in 0.2s ease;
+    overflow: hidden;
+  }
+  .kb-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #2a2d3a;
+    font-size: 13px;
+    font-weight: 600;
+    color: #e5e7eb;
+  }
+  .kb-modal-header .kb-modal-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    display: flex;
+    padding: 2px;
+  }
+  .kb-modal-header .kb-modal-close:hover { color: #e5e7eb; }
+  .kb-modal-body { padding: 16px; }
+  .kb-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid #2a2d3a;
+  }
+  /* Automation styles */
+  .kb-automation-hint {
+    font-size: 11px;
+    color: #6b7280;
+    margin: 0 0 12px;
+  }
+  .kb-automation-empty {
+    font-size: 12px;
+    color: #4b5563;
+    margin: 0 0 12px;
+  }
+  .kb-automation-list {
+    list-style: none;
+    margin: 0 0 14px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .kb-automation-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #111318;
+    border: 1px solid #2a2d3a;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .kb-automation-type { color: #9ca3af; flex-shrink: 0; }
+  .kb-automation-value { color: #e5e7eb; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kb-automation-remove {
+    background: none;
+    border: none;
+    color: #4b5563;
+    cursor: pointer;
+    display: flex;
+    padding: 2px;
+    flex-shrink: 0;
+  }
+  .kb-automation-remove:hover { color: #ef4444; }
+  .kb-automation-add {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 10px;
+    border-top: 1px solid #2a2d3a;
+    flex-wrap: wrap;
+  }
+  .kb-automation-select {
+    background: #111318;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    color: #e5e7eb;
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+  .kb-automation-input {
+    background: #111318;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    color: #e5e7eb;
+    font-size: 12px;
+    padding: 5px 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .kb-automation-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    flex: 1;
+  }
+  .kb-automation-chip {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .kb-automation-chip.selected {
+    background: #4f46e5;
+    border-color: #4f46e5;
+    color: #fff;
+  }
   .kb-detail-close {
     position: static;
     background: none !important;
@@ -1197,6 +1360,37 @@ export const kanbanStyles = `
   }
 
   /* ── Checklist ── */
+  .kb-checklist-section { margin-bottom: 14px; }
+  .kb-checklist-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .kb-checklist-group-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e5e7eb;
+    cursor: default;
+    flex: 1;
+  }
+  .kb-checklist-group-title[title] { cursor: pointer; }
+  .kb-checklist-group-title-input {
+    flex: 1;
+    background: #1a1d2e;
+    border: 1px solid #6366f1;
+    border-radius: 5px;
+    color: #e5e7eb;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 6px;
+    outline: none;
+  }
+  .kb-checklist-group-count {
+    font-size: 11px;
+    color: #6b7280;
+    white-space: nowrap;
+  }
   .kb-checklist-progress { margin-bottom: 10px; }
   .kb-checklist-bar {
     height: 6px;
@@ -1237,9 +1431,148 @@ export const kanbanStyles = `
     border-color: #6366f1;
     color: #fff;
   }
-  .kb-checklist-text { font-size: 13px; color: #d1d5db; flex: 1; }
+  .kb-checklist-text { font-size: 13px; color: #d1d5db; flex: 1; cursor: default; }
   .kb-checklist-text.completed { text-decoration: line-through; color: #6b7280; }
+  .kb-checklist-edit-input {
+    flex: 1;
+    background: #1e2130;
+    border: 1px solid #6366f1;
+    border-radius: 5px;
+    color: #e5e7eb;
+    font-size: 13px;
+    padding: 2px 7px;
+    outline: none;
+  }
   .kb-checklist-add { display: flex; gap: 8px; align-items: center; }
+  .kb-checklist-due-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #1e2130;
+    color: #9ca3af;
+    border: 1px solid #374151;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .kb-checklist-due-badge:hover { background: #252836; }
+  .kb-checklist-due-badge.overdue { background: #3b1f1f; color: #f87171; border-color: #7f1d1d; }
+  .kb-checklist-due-badge.due-today { background: #2d2010; color: #fb923c; border-color: #7c3f00; }
+  .kb-checklist-due-clear {
+    background: transparent;
+    border: none;
+    color: inherit;
+    opacity: 0.6;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+  }
+  .kb-checklist-due-clear:hover { opacity: 1; }
+  .kb-checklist-due-add {
+    background: transparent;
+    border: none;
+    color: #4b5563;
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    border-radius: 4px;
+    opacity: 0;
+    flex-shrink: 0;
+    transition: opacity 0.15s, color 0.15s;
+  }
+  .kb-checklist-item:hover .kb-checklist-due-add { opacity: 1; }
+  .kb-checklist-due-add:hover { color: #6366f1; }
+  .kb-checklist-date-input {
+    font-size: 11px;
+    background: #1e2130;
+    border: 1px solid #6366f1;
+    border-radius: 4px;
+    color: #d1d5db;
+    padding: 2px 4px;
+    flex-shrink: 0;
+    width: 110px;
+    outline: none;
+  }
+  .kb-checklist-assignees {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .kb-checklist-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #374151;
+    color: #d1d5db;
+    font-size: 10px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .kb-checklist-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .kb-checklist-assign-btn {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px dashed #4b5563;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+    padding: 0;
+  }
+  .kb-checklist-item:hover .kb-checklist-assign-btn,
+  .kb-checklist-assignees:has(.kb-checklist-avatar) .kb-checklist-assign-btn { opacity: 1; }
+  .kb-checklist-assign-btn:hover { color: #6366f1; border-color: #6366f1; }
+  .kb-checklist-assignee-backdrop { position: fixed; inset: 0; z-index: 49; }
+  .kb-checklist-assignee-picker {
+    position: absolute;
+    top: 26px;
+    right: 0;
+    z-index: 50;
+    background: #1a1d2e;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 4px;
+    min-width: 130px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .kb-checklist-assignee-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: background 0.12s, color 0.12s;
+  }
+  .kb-checklist-assignee-option:hover { background: #252836; color: #f3f4f6; }
+  .kb-checklist-assignee-option.selected { color: #a5b4fc; }
 
   /* ── Checklist Templates ── */
   .kb-template-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
@@ -1283,6 +1616,48 @@ export const kanbanStyles = `
   .kb-template-apply:hover { background: rgba(99, 102, 241, 0.1) !important; }
   .kb-template-name { flex: 1; }
   .kb-template-count { font-size: 11px; color: #6b7280; }
+  /* Template inline edit */
+  .kb-template-edit {
+    padding: 10px;
+    border-bottom: 1px solid #1e2130;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .kb-template-edit:last-child { border-bottom: none; }
+  .kb-template-edit-name {
+    background: #1e2130;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    color: #e5e7eb;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 5px 8px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .kb-template-edit-items { display: flex; flex-direction: column; gap: 4px; }
+  .kb-template-edit-item { display: flex; align-items: center; gap: 4px; }
+  .kb-template-edit-item-input {
+    flex: 1;
+    background: #1e2130;
+    border: 1px solid #2a2d3a;
+    border-radius: 5px;
+    color: #d1d5db;
+    font-size: 12px;
+    padding: 4px 7px;
+  }
+  .kb-template-edit-item-input:focus { border-color: #6366f1; outline: none; }
+  .kb-template-edit-remove {
+    background: none; border: none; color: #4b5563; cursor: pointer; display: flex; padding: 2px; flex-shrink: 0;
+  }
+  .kb-template-edit-remove:hover { color: #ef4444; }
+  .kb-template-edit-add-item {
+    background: none; border: 1px dashed #374151; border-radius: 5px; color: #6b7280;
+    font-size: 11px; padding: 3px 8px; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-top: 2px;
+  }
+  .kb-template-edit-add-item:hover { border-color: #6366f1; color: #a5b4fc; }
+  .kb-template-edit-actions { display: flex; justify-content: flex-end; gap: 6px; }
 
   /* ── Import Modal ── */
   .kb-import-modal {

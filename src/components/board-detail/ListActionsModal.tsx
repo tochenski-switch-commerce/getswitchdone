@@ -5,7 +5,7 @@ import type { BoardCard, BoardColumn, CardPriority, ChecklistTemplate, UserProfi
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   CalendarDays, User, Flag, Tag, ArrowDownAZ,
-  CheckSquare, FolderKanban, Trash2, X, Zap,
+  CheckSquare, FolderKanban, Trash2, X, Zap, Check,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import { PRIORITY_CONFIG } from './helpers';
@@ -205,6 +205,32 @@ export default function ListActionsModal({
                     onClick={() => apply('Sort Z→A', async () => { await onSortCards(column.id, 'desc'); })}
                   >
                     Z → A
+                  </button>
+                </div>
+              </div>
+
+              {/* Mark as Complete */}
+              <div className="kb-list-action-row">
+                <div className="kb-list-action-label"><Check size={13} /> Mark as Complete</div>
+                <div className="kb-list-action-controls">
+                  <button
+                    className="kb-btn kb-btn-primary kb-btn-sm"
+                    disabled={applying}
+                    onClick={() => apply('Marked complete', async () => {
+                      for (const card of cards) await onUpdateCard(card.id, { is_complete: true });
+                    })}
+                  >
+                    Mark All Complete
+                  </button>
+                  <button
+                    className="kb-btn kb-btn-sm"
+                    style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151' }}
+                    disabled={applying}
+                    onClick={() => apply('Marked incomplete', async () => {
+                      for (const card of cards) await onUpdateCard(card.id, { is_complete: false });
+                    })}
+                  >
+                    Mark All Incomplete
                   </button>
                 </div>
               </div>

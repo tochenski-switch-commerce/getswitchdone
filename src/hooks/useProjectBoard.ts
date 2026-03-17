@@ -18,6 +18,7 @@ import type {
   BoardLabel,
   CardComment,
   CardChecklist,
+  CardChecklistGroup,
   CardPriority,
   ChecklistTemplate,
   UserProfile,
@@ -29,6 +30,7 @@ import type {
   BoardLink,
   BoardSummaryStats,
   CardLink,
+  TemplateData,
 } from '@/types/board-types';
 
 // ── Full board shape ──
@@ -130,6 +132,105 @@ export function useProjectBoard() {
     }
   }, []);
 
+  const createBoardFromTemplate = useCallback(async (
+    title: string,
+    templateData: TemplateData,
+    description?: string,
+    icon?: string,
+    icon_color?: string,
+    team_id?: string,
+  ) => {
+    setError(null);
+    try {
+      const user = await getCachedUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Create board
+      const { data: boardData, error: boardErr } = await supabase
+        .from('project_boards')
+        .insert([{ title: title.trim(), description: description?.trim() || null, icon: icon || null, icon_color: icon_color || null, user_id: user.id, team_id: team_id || null }])
+        .select()
+        .single();
+      if (boardErr) throw boardErr;
+
+      const boardId = boardData.id;
+
+      // Insert columns from template
+      const cols = templateData.columns.map(c => ({
+        board_id: boardId,
+        title: c.title,
+        color: c.color,
+        position: c.position,
+        automations: c.automations,
+      }));
+      await supabase.from('board_columns').insert(cols);
+
+      // Insert labels from template
+      if (templateData.labels.length > 0) {
+        const labels = templateData.labels.map(l => ({ board_id: boardId, name: l.name, color: l.color }));
+        await supabase.from('board_labels').insert(labels);
+      }
+
+      // Insert custom fields from template
+      if (templateData.custom_fields.length > 0) {
+        const fields = templateData.custom_fields.map(f => ({
+          board_id: boardId,
+          title: f.name,
+          field_type: f.field_type,
+          options: f.options,
+          position: f.position,
+        }));
+        await supabase.from('board_custom_fields').insert(fields);
+      }
+
+      // Insert checklist templates from template
+      if (templateData.checklist_templates.length > 0) {
+        const checklists = templateData.checklist_templates.map(ct => ({
+          user_id: user.id,
+          board_id: boardId,
+          name: ct.name,
+          items: ct.items,
+        }));
+        await supabase.from('checklist_templates').insert(checklists);
+      }
+
+      // Insert sample cards if present (look up column ids by position)
+      if (templateData.sample_cards.length > 0) {
+        const { data: createdCols } = await supabase
+          .from('board_columns')
+          .select('id, position')
+          .eq('board_id', boardId);
+
+        if (createdCols && createdCols.length > 0) {
+          const colByPosition = new Map(createdCols.map(c => [c.position, c.id]));
+          const cards = templateData.sample_cards
+            .map((sc, i) => {
+              const colId = colByPosition.get(sc.column_position);
+              if (!colId) return null;
+              return {
+                board_id: boardId,
+                column_id: colId,
+                title: sc.title,
+                description: sc.description || null,
+                position: i,
+                priority: sc.priority ?? null,
+              };
+            })
+            .filter(Boolean);
+          if (cards.length > 0) {
+            await supabase.from('board_cards').insert(cards);
+          }
+        }
+      }
+
+      setBoards(prev => [boardData, ...prev]);
+      return boardData as ProjectBoard;
+    } catch (err: any) {
+      setError(err.message);
+      return null;
+    }
+  }, []);
+
   // ─── Single board ──────────────────────────────────────────
   const fetchBoard = useCallback(async (boardId: string, background = false) => {
     if (!background) setLoading(true);
@@ -172,15 +273,17 @@ export function useProjectBoard() {
 
       let allComments: any[] = [];
       let allChecklists: any[] = [];
+      let allChecklistGroups: CardChecklistGroup[] = [];
       let allAssignments: any[] = [];
       let allCfValues: CardCustomFieldValue[] = [];
       let allCardLinks: CardLink[] = [];
 
       if (cardIds.length > 0) {
-        // Indices 1-6: card-scoped queries
+        // Indices 1-7: card-scoped queries
         phase2.push(
           supabase.from('card_comments').select('*').in('card_id', cardIds).order('created_at', { ascending: true }),
           supabase.from('card_checklists').select('*').in('card_id', cardIds).order('position'),
+          supabase.from('card_checklist_groups').select('*').in('card_id', cardIds).order('position'),
           supabase.from('card_label_assignments').select('*').in('card_id', cardIds),
           supabase.from('card_custom_field_values').select('*').in('card_id', cardIds),
           supabase.from('card_links').select('*, target_card:board_cards!target_card_id(id, title, board_id, column_id, is_archived)').in('source_card_id', cardIds),
@@ -193,12 +296,13 @@ export function useProjectBoard() {
       const boardLinkStats = (phase2Results[0]?.data || []) as BoardSummaryStats[];
 
       if (cardIds.length > 0) {
-        const [, commentsRes, checklistsRes, assignmentsRes, cfValuesRes, cardLinksSourceRes, cardLinksTargetRes] = phase2Results;
+        const [, commentsRes, checklistsRes, checklistGroupsRes, assignmentsRes, cfValuesRes, cardLinksSourceRes, cardLinksTargetRes] = phase2Results;
         allComments = (commentsRes.data || []).map((cm: any) => ({
           ...cm,
           user_profiles: profiles.find(p => p.id === cm.user_id) ? { name: profiles.find(p => p.id === cm.user_id)!.name } : { name: 'Unknown' },
         }));
         allChecklists = checklistsRes.data || [];
+        allChecklistGroups = (checklistGroupsRes.data || []) as CardChecklistGroup[];
         allAssignments = assignmentsRes.data || [];
         allCfValues = (cfValuesRes.data || []) as CardCustomFieldValue[];
 
@@ -217,10 +321,11 @@ export function useProjectBoard() {
         allCardLinks = Array.from(linkMap.values());
       }
 
-      // Stitch comments, checklists, labels, custom field values, card links onto cards
+      // Stitch comments, checklists, checklist groups, labels, custom field values, card links onto cards
       const cards = (cardsRes.data || []).map(card => ({
         ...card,
         comments: allComments.filter(cm => cm.card_id === card.id),
+        checklist_groups: allChecklistGroups.filter(g => g.card_id === card.id),
         checklists: allChecklists.filter(cl => cl.card_id === card.id),
         labels: allAssignments
           .filter(a => a.card_id === card.id)
@@ -744,16 +849,20 @@ export function useProjectBoard() {
   }, []);
 
   // ─── Checklists ────────────────────────────────────────────
-  const addChecklistItem = useCallback(async (boardId: string, cardId: string, title: string) => {
+  const addChecklistItem = useCallback(async (boardId: string, cardId: string, title: string, groupId?: string | null) => {
     setError(null);
     try {
-      // Determine next position
+      // Determine next position within the group (or globally if no group)
       const existing = board?.cards.find(c => c.id === cardId)?.checklists || [];
-      const maxPos = existing.reduce((m: number, cl: any) => Math.max(m, cl.position), -1);
+      const scopedItems = groupId ? existing.filter((cl: any) => cl.group_id === groupId) : existing;
+      const maxPos = scopedItems.reduce((m: number, cl: any) => Math.max(m, cl.position), -1);
+
+      const row: any = { card_id: cardId, title, position: maxPos + 1 };
+      if (groupId) row.group_id = groupId;
 
       const { data, error: err } = await supabase
         .from('card_checklists')
-        .insert([{ card_id: cardId, title, position: maxPos + 1 }])
+        .insert([row])
         .select()
         .single();
       if (err) throw err;
@@ -831,6 +940,163 @@ export function useProjectBoard() {
     }
   }, []);
 
+  const updateChecklistItemAssignees = useCallback(async (boardId: string, cardId: string, itemId: string, assignees: string[]) => {
+    setError(null);
+    // Optimistic
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cards: prev.cards.map(c =>
+          c.id === cardId
+            ? {
+                ...c,
+                checklists: (c.checklists || []).map(cl =>
+                  cl.id === itemId ? { ...cl, assignees } : cl
+                ),
+              }
+            : c
+        ),
+      };
+    });
+    try {
+      const { error: err } = await supabase
+        .from('card_checklists')
+        .update({ assignees })
+        .eq('id', itemId);
+      if (err) throw err;
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
+  const editChecklistItem = useCallback(async (boardId: string, cardId: string, itemId: string, title: string) => {
+    setError(null);
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cards: prev.cards.map(c =>
+          c.id === cardId
+            ? { ...c, checklists: (c.checklists || []).map(cl => cl.id === itemId ? { ...cl, title } : cl) }
+            : c
+        ),
+      };
+    });
+    try {
+      const { error: err } = await supabase.from('card_checklists').update({ title }).eq('id', itemId);
+      if (err) throw err;
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
+  const updateChecklistItemDueDate = useCallback(async (boardId: string, cardId: string, itemId: string, dueDate: string | null) => {
+    setError(null);
+    // Optimistic
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cards: prev.cards.map(c =>
+          c.id === cardId
+            ? {
+                ...c,
+                checklists: (c.checklists || []).map(cl =>
+                  cl.id === itemId ? { ...cl, due_date: dueDate } : cl
+                ),
+              }
+            : c
+        ),
+      };
+    });
+    try {
+      const { error: err } = await supabase
+        .from('card_checklists')
+        .update({ due_date: dueDate })
+        .eq('id', itemId);
+      if (err) throw err;
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
+  // ─── Checklist Groups ──────────────────────────────────────
+  const addChecklistGroup = useCallback(async (boardId: string, cardId: string, name: string) => {
+    setError(null);
+    try {
+      const existing = board?.cards.find(c => c.id === cardId)?.checklist_groups || [];
+      const maxPos = existing.reduce((m: number, g: any) => Math.max(m, g.position), -1);
+      const { data, error: err } = await supabase
+        .from('card_checklist_groups')
+        .insert([{ card_id: cardId, name, position: maxPos + 1 }])
+        .select()
+        .single();
+      if (err) throw err;
+      setBoard(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cards: prev.cards.map(c =>
+            c.id === cardId ? { ...c, checklist_groups: [...(c.checklist_groups || []), data] } : c
+          ),
+        };
+      });
+      return data as CardChecklistGroup;
+    } catch (err: any) {
+      setError(err.message);
+      return null;
+    }
+  }, [board?.cards]);
+
+  const updateChecklistGroup = useCallback(async (boardId: string, cardId: string, groupId: string, name: string) => {
+    setError(null);
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cards: prev.cards.map(c =>
+          c.id === cardId
+            ? { ...c, checklist_groups: (c.checklist_groups || []).map(g => g.id === groupId ? { ...g, name } : g) }
+            : c
+        ),
+      };
+    });
+    try {
+      const { error: err } = await supabase.from('card_checklist_groups').update({ name }).eq('id', groupId);
+      if (err) throw err;
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
+  const deleteChecklistGroup = useCallback(async (boardId: string, cardId: string, groupId: string) => {
+    setError(null);
+    try {
+      const { error: err } = await supabase.from('card_checklist_groups').delete().eq('id', groupId);
+      if (err) throw err;
+      setBoard(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cards: prev.cards.map(c =>
+            c.id === cardId
+              ? {
+                  ...c,
+                  checklist_groups: (c.checklist_groups || []).filter(g => g.id !== groupId),
+                  checklists: (c.checklists || []).filter(cl => cl.group_id !== groupId),
+                }
+              : c
+          ),
+        };
+      });
+      return true;
+    } catch (err: any) {
+      setError(err.message);
+      return false;
+    }
+  }, []);
+
   // ─── Checklist Templates ────────────────────────────────────
   const fetchChecklistTemplates = useCallback(async (boardId: string) => {
     try {
@@ -881,29 +1147,65 @@ export function useProjectBoard() {
     }
   }, []);
 
+  const updateChecklistTemplate = useCallback(async (templateId: string, name: string, items: string[]) => {
+    setError(null);
+    try {
+      const { data, error: err } = await supabase
+        .from('checklist_templates')
+        .update({ name, items })
+        .eq('id', templateId)
+        .select()
+        .single();
+      if (err) throw err;
+      setChecklistTemplates(prev => prev.map(t => t.id === templateId ? data : t));
+      return data as ChecklistTemplate;
+    } catch (err: any) {
+      setError(err.message);
+      return null;
+    }
+  }, []);
+
   const applyChecklistTemplate = useCallback(async (boardId: string, cardId: string, templateId: string) => {
     setError(null);
     try {
       const template = checklistTemplates.find(t => t.id === templateId);
       if (!template) throw new Error('Template not found');
-      const existing = board?.cards.find(c => c.id === cardId)?.checklists || [];
-      let maxPos = existing.reduce((m: number, cl: any) => Math.max(m, cl.position), -1);
-      const rows = template.items.map((title: string) => ({
+
+      // Create a new checklist group named after the template
+      const existingGroups = board?.cards.find(c => c.id === cardId)?.checklist_groups || [];
+      const maxGroupPos = existingGroups.reduce((m: number, g: any) => Math.max(m, g.position), -1);
+      const { data: groupData, error: groupErr } = await supabase
+        .from('card_checklist_groups')
+        .insert([{ card_id: cardId, name: template.name, position: maxGroupPos + 1 }])
+        .select()
+        .single();
+      if (groupErr) throw groupErr;
+
+      // Insert items linked to the new group
+      const rows = template.items.map((title: string, idx: number) => ({
         card_id: cardId,
+        group_id: groupData.id,
         title,
-        position: ++maxPos,
+        position: idx,
       }));
       const { data, error: err } = await supabase
         .from('card_checklists')
         .insert(rows)
         .select();
       if (err) throw err;
+
       setBoard(prev => {
         if (!prev) return prev;
         return {
           ...prev,
           cards: prev.cards.map(c =>
-            c.id === cardId ? { ...c, checklists: [...(c.checklists || []), ...(data || [])] } : c
+            c.id === cardId
+              ? {
+                  ...c,
+                  checklist_groups: [...(c.checklist_groups || []), groupData],
+                  checklists: [...(c.checklists || []), ...(data || [])],
+                }
+              : c
           ),
         };
       });
@@ -1117,6 +1419,7 @@ export function useProjectBoard() {
     user_id: string;
     board_id?: string;
     card_id?: string;
+    checklist_item_id?: string;
     type: NotificationType;
     title: string;
     body?: string;
@@ -1451,14 +1754,15 @@ export function useProjectBoard() {
   return {
     boards, board, loading, error, checklistTemplates, userProfiles, boardMembers, notifications,
     boardEmails, unroutedEmails,
-    fetchBoards, createBoard, fetchBoard, updateBoard, deleteBoard, duplicateBoard,
+    fetchBoards, createBoard, createBoardFromTemplate, fetchBoard, updateBoard, deleteBoard, duplicateBoard,
     addColumn, updateColumn, deleteColumn, reorderColumns,
     addBoardLink, removeBoardLink, reorderBoardLinks,
     addCard, updateCard, deleteCard, moveCard, reorderCardsInColumn,
     addCardLink, removeCardLink, searchCards,
     addComment, editComment, deleteComment,
-    addChecklistItem, toggleChecklistItem, deleteChecklistItem,
-    fetchChecklistTemplates, saveChecklistTemplate, deleteChecklistTemplate, applyChecklistTemplate,
+    addChecklistGroup, updateChecklistGroup, deleteChecklistGroup,
+    addChecklistItem, editChecklistItem, toggleChecklistItem, deleteChecklistItem, updateChecklistItemDueDate, updateChecklistItemAssignees,
+    fetchChecklistTemplates, saveChecklistTemplate, updateChecklistTemplate, deleteChecklistTemplate, applyChecklistTemplate,
     addLabel, updateLabel, deleteLabel,
     addCustomField, updateCustomField, deleteCustomField, setCardCustomFieldValue,
     fetchUserProfiles,

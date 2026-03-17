@@ -63,6 +63,13 @@ export interface ProjectBoard {
 
 export type ColumnType = 'normal' | 'board_links';
 
+export type ColumnAutomationAction =
+  | { type: 'set_complete'; value: boolean }
+  | { type: 'set_priority'; value: CardPriority | null }
+  | { type: 'set_assignee'; value: string }
+  | { type: 'set_labels'; value: string[] }
+  | { type: 'add_checklist'; value: string[] };  // array of ChecklistTemplate IDs
+
 export interface BoardColumn {
   id: string;
   board_id: string;
@@ -70,6 +77,7 @@ export interface BoardColumn {
   position: number;
   color: string;
   column_type: ColumnType;
+  automations: ColumnAutomationAction[];
   created_at: string;
 }
 
@@ -94,11 +102,13 @@ export interface BoardCard {
   assignee?: string;
   assignees?: string[];
   created_by?: string;
+  is_complete?: boolean;
   is_archived: boolean;
   created_at: string;
   updated_at: string;
   labels?: BoardLabel[];
   comments?: CardComment[];
+  checklist_groups?: CardChecklistGroup[];
   checklists?: CardChecklist[];
   custom_field_values?: CardCustomFieldValue[];
   card_links?: CardLink[];
@@ -121,12 +131,23 @@ export interface CardComment {
   user_profiles?: { name: string };
 }
 
+export interface CardChecklistGroup {
+  id: string;
+  card_id: string;
+  name: string;
+  position: number;
+  created_at: string;
+}
+
 export interface CardChecklist {
   id: string;
   card_id: string;
+  group_id?: string | null;
   title: string;
   is_completed: boolean;
   position: number;
+  due_date?: string | null;
+  assignees?: string[];
   created_at: string;
 }
 
@@ -141,13 +162,14 @@ export interface ChecklistTemplate {
 
 // ── Notifications ──
 
-export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention';
+export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention' | 'checklist_overdue';
 
 export interface Notification {
   id: string;
   user_id: string;
   board_id?: string;
   card_id?: string;
+  checklist_item_id?: string;
   type: NotificationType;
   title: string;
   body?: string;
@@ -257,4 +279,54 @@ export interface BoardEmail {
   headers?: Record<string, unknown>;
   received_at: string;
   created_at: string;
+}
+
+// ── Board Templates ──
+
+export interface TemplateColumn {
+  title: string;
+  color: string;
+  position: number;
+  automations: ColumnAutomationAction[];
+}
+
+export interface TemplateLabel {
+  name: string;
+  color: string;
+}
+
+export interface TemplateCustomField {
+  name: string;
+  field_type: CustomFieldType;
+  options: string[];
+  position: number;
+}
+
+export interface TemplateSampleCard {
+  title: string;
+  description?: string;
+  column_position: number;
+  priority?: CardPriority | null;
+}
+
+export interface TemplateData {
+  columns: TemplateColumn[];
+  labels: TemplateLabel[];
+  custom_fields: TemplateCustomField[];
+  checklist_templates: { name: string; items: string[] }[];
+  sample_cards: TemplateSampleCard[];
+}
+
+export interface BoardTemplate {
+  id: string;
+  created_by: string | null;
+  team_id: string | null;
+  name: string;
+  description?: string;
+  icon?: string;
+  icon_color?: string;
+  is_preset: boolean;
+  template_data: TemplateData;
+  created_at: string;
+  updated_at: string;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Check, Loader, Trash2, ChevronDown } from '@/components/BoardIcons';
+import { X, Check, Loader, Trash2, ChevronDown, Sparkles } from '@/components/BoardIcons';
 import { PRIORITY_CONFIG } from '@/components/board-detail/helpers';
 import type { BoardColumn, CardPriority, UserProfile } from '@/types/board-types';
 
@@ -144,12 +144,15 @@ export default function MeetingNotesModal({
         <div className="mn-modal" onClick={e => e.stopPropagation()}>
           {/* Header */}
           <div className="mn-header">
-            <h2 className="mn-title">
-              {step === 'input' && 'Paste Meeting Notes'}
-              {step === 'preview' && `Review ${includedCount} Card${includedCount !== 1 ? 's' : ''}`}
-              {step === 'creating' && 'Creating cards…'}
-              {step === 'done' && 'Done!'}
-            </h2>
+            <div className="mn-title-row">
+              <div className="mn-title-icon"><Sparkles size={16} /></div>
+              <h2 className="mn-title">
+                {step === 'input' && 'Paste Meeting Notes'}
+                {step === 'preview' && `Review ${includedCount} Card${includedCount !== 1 ? 's' : ''}`}
+                {step === 'creating' && 'Creating cards…'}
+                {step === 'done' && 'Done!'}
+              </h2>
+            </div>
             <button className="mn-close" onClick={onClose}><X size={18} /></button>
           </div>
 
@@ -162,8 +165,9 @@ export default function MeetingNotesModal({
                 placeholder="Paste meeting notes, call transcript, or bullet points here…"
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                rows={12}
+                rows={8}
               />
+              <p className="mn-hint">Works great with meeting notes, Slack threads, call transcripts, or a quick bullet dump.</p>
               {error && <div className="mn-error">{error}</div>}
               <div className="mn-footer">
                 <button className="mn-btn mn-btn-ghost" onClick={onClose}>Cancel</button>
@@ -337,20 +341,33 @@ const meetingNotesStyles = `
 }
 .mn-modal {
   background: var(--kb-card, #1e1e2e);
-  border: 1px solid var(--kb-border, #333);
+  border: 1px solid rgba(99,102,241,0.25);
   border-radius: 16px;
   width: 100%; max-width: 620px;
   max-height: 85vh;
   display: flex; flex-direction: column;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.1);
+  overflow: hidden;
 }
 .mn-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--kb-border, #333);
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.06) 100%);
+  border-bottom: 1px solid rgba(99,102,241,0.2);
+}
+.mn-title-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.mn-title-icon {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: rgba(99,102,241,0.2);
+  border: 1px solid rgba(99,102,241,0.3);
+  display: flex; align-items: center; justify-content: center;
+  color: #818cf8;
+  flex-shrink: 0;
 }
 .mn-title {
-  font-size: 17px; font-weight: 700; margin: 0;
+  font-size: 16px; font-weight: 700; margin: 0;
   color: var(--kb-text, #e2e2e8);
 }
 .mn-close {
@@ -361,8 +378,9 @@ const meetingNotesStyles = `
 .mn-close:hover { background: var(--kb-hover, rgba(255,255,255,0.06)); }
 .mn-body {
   padding: 16px 20px 20px;
-  overflow-y: auto; flex: 1;
+  overflow-y: auto; overflow-x: hidden; flex: 1;
   display: flex; flex-direction: column; gap: 14px;
+  min-width: 0;
 }
 .mn-center {
   align-items: center; justify-content: center; gap: 16px;
@@ -370,16 +388,21 @@ const meetingNotesStyles = `
   color: var(--kb-muted, #888);
 }
 .mn-textarea {
-  width: 100%; resize: vertical;
-  background: var(--kb-bg, #0f0f17);
+  width: 100%; box-sizing: border-box; resize: vertical;
+  background: rgba(0,0,0,0.25);
   color: var(--kb-text, #e2e2e8);
-  border: 1px solid var(--kb-border, #333);
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 10px; padding: 14px;
   font-size: 14px; line-height: 1.6;
   font-family: inherit;
-  min-height: 200px;
+  min-height: 160px;
+  transition: border-color 0.15s;
 }
-.mn-textarea:focus { outline: none; border-color: #6366f1; }
+.mn-textarea:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+.mn-hint {
+  font-size: 12px; color: var(--kb-muted, #666);
+  margin: 0; line-height: 1.5;
+}
 .mn-error {
   color: #ef4444; font-size: 13px; padding: 8px 12px;
   background: rgba(239,68,68,0.08); border-radius: 8px;
@@ -405,9 +428,10 @@ const meetingNotesStyles = `
 }
 .mn-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .mn-btn-primary {
-  background: #6366f1; color: #fff;
+  background: linear-gradient(135deg, #6366f1, #7c3aed); color: #fff;
+  box-shadow: 0 2px 12px rgba(99,102,241,0.35);
 }
-.mn-btn-primary:hover:not(:disabled) { background: #4f46e5; }
+.mn-btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #4f46e5, #6d28d9); }
 .mn-btn-ghost {
   background: transparent; color: var(--kb-muted, #888);
 }

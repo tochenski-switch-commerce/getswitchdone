@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { BoardCard, CardPriority, ChecklistTemplate, UserProfile, RepeatUnit, RepeatRule, RepeatMode } from '@/types/board-types';
+import type { BoardCard, CardChecklistGroup, CardPriority, ChecklistTemplate, UserProfile, RepeatUnit, RepeatRule, RepeatMode } from '@/types/board-types';
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   Plus, Trash2, Edit3,
@@ -23,12 +23,19 @@ export default function CardDetailModal({
   onAddComment,
   onEditComment,
   onDeleteComment,
+  onAddChecklistGroup,
+  onUpdateChecklistGroup,
+  onDeleteChecklistGroup,
   onAddChecklistItem,
+  onEditChecklistItem,
   onToggleChecklistItem,
   onDeleteChecklistItem,
+  onUpdateChecklistDueDate,
+  onUpdateChecklistAssignees,
   onMoveCard,
   checklistTemplates,
   onSaveTemplate,
+  onEditTemplate,
   onDeleteTemplate,
   onApplyTemplate,
   onDuplicate,
@@ -48,12 +55,19 @@ export default function CardDetailModal({
   onAddComment: (content: string) => Promise<void>;
   onEditComment: (commentId: string, content: string) => Promise<void>;
   onDeleteComment: (commentId: string) => Promise<void>;
-  onAddChecklistItem: (title: string) => Promise<void>;
+  onAddChecklistGroup: (name: string) => Promise<void>;
+  onUpdateChecklistGroup: (groupId: string, name: string) => Promise<void>;
+  onDeleteChecklistGroup: (groupId: string) => Promise<void>;
+  onAddChecklistItem: (title: string, groupId?: string | null) => Promise<void>;
+  onEditChecklistItem: (itemId: string, title: string) => Promise<void>;
   onToggleChecklistItem: (itemId: string, val: boolean) => Promise<void>;
   onDeleteChecklistItem: (itemId: string) => Promise<void>;
+  onUpdateChecklistDueDate: (itemId: string, dueDate: string | null) => Promise<void>;
+  onUpdateChecklistAssignees: (itemId: string, assignees: string[]) => Promise<void>;
   onMoveCard: (newColumnId: string) => Promise<void>;
   checklistTemplates: ChecklistTemplate[];
   onSaveTemplate: (name: string, items: string[]) => Promise<void>;
+  onEditTemplate: (templateId: string, name: string, items: string[]) => Promise<void>;
   onDeleteTemplate: (templateId: string) => Promise<void>;
   onApplyTemplate: (templateId: string) => Promise<void>;
   onDuplicate: () => Promise<void>;
@@ -76,13 +90,25 @@ export default function CardDetailModal({
   const [commentText, setCommentText] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
-  const [checklistText, setChecklistText] = useState('');
+  const [checklistTexts, setChecklistTexts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const [templateName, setTemplateName] = useState('');
-  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [savingTemplateGroupId, setSavingTemplateGroupId] = useState<string | null>(null);
+  const [templateNames, setTemplateNames] = useState<Record<string, string>>({});
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editTemplateName, setEditTemplateName] = useState('');
+  const [editTemplateItems, setEditTemplateItems] = useState<string[]>([]);
+  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
+  const [editingChecklistItemText, setEditingChecklistItemText] = useState('');
+  const [editingDueDateItemId, setEditingDueDateItemId] = useState<string | null>(null);
+  const [assigneePickerItemId, setAssigneePickerItemId] = useState<string | null>(null);
+  // Checklist group state
+  const [addingChecklist, setAddingChecklist] = useState(false);
+  const [newChecklistName, setNewChecklistName] = useState('');
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState('');
   const [cardLinkSearch, setCardLinkSearch] = useState('');
   const [cardLinkResults, setCardLinkResults] = useState<{ id: string; title: string; board_id: string; column_id: string; is_archived: boolean }[]>([]);
   const [cardLinkSearching, setCardLinkSearching] = useState(false);
@@ -366,10 +392,25 @@ export default function CardDetailModal({
     if (commentAddRef.current) commentAddRef.current.innerHTML = '';
   };
 
-  const handleAddChecklist = async () => {
-    if (!checklistText.trim()) return;
-    await onAddChecklistItem(checklistText.trim());
-    setChecklistText('');
+  const handleAddChecklistItem = async (groupId?: string | null) => {
+    const key = groupId ?? '__ungrouped__';
+    const text = (checklistTexts[key] || '').trim();
+    if (!text) return;
+    await onAddChecklistItem(text, groupId);
+    setChecklistTexts(prev => ({ ...prev, [key]: '' }));
+  };
+
+  const handleAddChecklistGroup = async () => {
+    const name = newChecklistName.trim() || 'Checklist';
+    await onAddChecklistGroup(name);
+    setNewChecklistName('');
+    setAddingChecklist(false);
+  };
+
+  const handleCommitGroupName = async (groupId: string) => {
+    const name = editingGroupName.trim();
+    if (name) await onUpdateChecklistGroup(groupId, name);
+    setEditingGroupId(null);
   };
 
   const handleCardLinkSearchChange = (value: string) => {
@@ -401,7 +442,9 @@ export default function CardDetailModal({
 
   const column = board.columns.find(c => c.id === card.column_id);
   const checklists = card.checklists || [];
+  const checklistGroups = card.checklist_groups || [];
   const completedCount = checklists.filter(c => c.is_completed).length;
+  const ungroupedItems = checklists.filter(cl => !cl.group_id);
 
   return (
     <div className="kb-modal-overlay" onMouseDown={handleClose}>
@@ -427,13 +470,42 @@ export default function CardDetailModal({
           {/* Left: Main content */}
           <div className="kb-detail-main">
             {/* Title */}
-            <input
-              ref={titleRef}
-              className="kb-detail-title-input"
-              value={editTitle}
-              onChange={e => setEditTitle(e.target.value)}
-              placeholder="Card title..."
-            />
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <button
+                onClick={async () => { await onUpdate({ is_complete: !card.is_complete }); }}
+                title={card.is_complete ? 'Mark incomplete' : 'Mark complete'}
+                style={{
+                  flexShrink: 0,
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  marginTop: 2,
+                  cursor: 'pointer',
+                  color: card.is_complete ? '#22c55e' : '#4b5563',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                {card.is_complete ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" fill="rgba(34,197,94,0.15)" stroke="#22c55e" />
+                    <polyline points="8 12 11 15 16 9" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                  </svg>
+                )}
+              </button>
+              <input
+                ref={titleRef}
+                className="kb-detail-title-input"
+                value={editTitle}
+                onChange={e => setEditTitle(e.target.value)}
+                placeholder="Card title..."
+                style={card.is_complete ? { textDecoration: 'line-through', opacity: 0.6, flex: 1 } : { flex: 1 }}
+              />
+            </div>
 
             {/* Column badge */}
             {column && (
@@ -539,130 +611,407 @@ export default function CardDetailModal({
               )}
             </div>
 
-            {/* Checklist */}
+            {/* Checklists */}
             <div style={{ marginBottom: 16 }}>
-              <div className="kb-detail-section-label">
-                <CheckSquare size={13} />
-                Checklist {checklists.length > 0 && `(${completedCount}/${checklists.length})`}
-              </div>
-              {checklists.length > 0 && (
-                <div className="kb-checklist-progress">
-                  <div className="kb-checklist-bar">
-                    <div
-                      className="kb-checklist-fill"
-                      style={{ width: `${checklists.length > 0 ? (completedCount / checklists.length) * 100 : 0}%` }}
-                    />
-                  </div>
+              {/* Section header */}
+              <div className="kb-detail-section-label" style={{ justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <CheckSquare size={13} />
+                  Checklists {checklists.length > 0 && `(${completedCount}/${checklists.length})`}
                 </div>
-              )}
-              <div className="kb-checklist-items">
-                {checklists.map(item => (
-                  <div key={item.id} className="kb-checklist-item">
-                    <button
-                      className={`kb-checkbox ${item.is_completed ? 'checked' : ''}`}
-                      onClick={() => onToggleChecklistItem(item.id, !item.is_completed)}
-                    >
-                      {item.is_completed && <Check size={11} />}
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {checklistTemplates.length > 0 && (
+                    <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={() => setShowTemplatePicker(!showTemplatePicker)}>
+                      Apply Template <ChevronDown size={11} />
                     </button>
-                    <span className={`kb-checklist-text ${item.is_completed ? 'completed' : ''}`}>
-                      {item.title}
-                    </span>
-                    <button className="kb-btn-icon-sm" onClick={() => onDeleteChecklistItem(item.id)}>
-                      <X size={11} />
+                  )}
+                  {!addingChecklist && (
+                    <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={() => setAddingChecklist(true)}>
+                      <Plus size={11} /> Add Checklist
                     </button>
-                  </div>
-                ))}
-              </div>
-              <div className="kb-checklist-add">
-                <input
-                  className="kb-input"
-                  value={checklistText}
-                  onChange={e => setChecklistText(e.target.value)}
-                  placeholder="Add checklist item..."
-                  onKeyDown={e => e.key === 'Enter' && handleAddChecklist()}
-                  style={{ flex: 1 }}
-                />
-                <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={handleAddChecklist} disabled={!checklistText.trim()}>
-                  Add
-                </button>
+                  )}
+                </div>
               </div>
 
-              {/* Template actions */}
-              <div className="kb-template-actions">
-                {checklists.length > 0 && (
-                  savingTemplate ? (
-                    <div className="kb-template-save-row">
+              {/* New checklist name input */}
+              {addingChecklist && (
+                <div className="kb-checklist-add" style={{ marginBottom: 8 }}>
+                  <input
+                    className="kb-input"
+                    value={newChecklistName}
+                    onChange={e => setNewChecklistName(e.target.value)}
+                    placeholder="Checklist name..."
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleAddChecklistGroup();
+                      if (e.key === 'Escape') { setAddingChecklist(false); setNewChecklistName(''); }
+                    }}
+                    style={{ flex: 1 }}
+                  />
+                  <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={handleAddChecklistGroup}>Add</button>
+                  <button className="kb-btn kb-btn-sm" onClick={() => { setAddingChecklist(false); setNewChecklistName(''); }}>Cancel</button>
+                </div>
+              )}
+
+              {/* Template picker */}
+              {showTemplatePicker && checklistTemplates.length > 0 && (
+                <div className="kb-template-picker">
+                  {checklistTemplates.map(t => {
+                    const isEditing = editingTemplateId === t.id;
+                    if (isEditing) {
+                      return (
+                        <div key={t.id} className="kb-template-edit">
+                          <input
+                            className="kb-template-edit-name"
+                            value={editTemplateName}
+                            onChange={e => setEditTemplateName(e.target.value)}
+                            placeholder="Template name"
+                            autoFocus
+                          />
+                          <div className="kb-template-edit-items">
+                            {editTemplateItems.map((item, idx) => (
+                              <div key={idx} className="kb-template-edit-item">
+                                <input
+                                  className="kb-template-edit-item-input"
+                                  value={item}
+                                  onChange={e => {
+                                    const next = [...editTemplateItems];
+                                    next[idx] = e.target.value;
+                                    setEditTemplateItems(next);
+                                  }}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const next = [...editTemplateItems];
+                                      next.splice(idx + 1, 0, '');
+                                      setEditTemplateItems(next);
+                                    } else if (e.key === 'Backspace' && item === '' && editTemplateItems.length > 1) {
+                                      e.preventDefault();
+                                      setEditTemplateItems(prev => prev.filter((_, i) => i !== idx));
+                                    }
+                                  }}
+                                  placeholder={`Item ${idx + 1}`}
+                                />
+                                <button
+                                  className="kb-template-edit-remove"
+                                  onClick={() => setEditTemplateItems(prev => prev.filter((_, i) => i !== idx))}
+                                  tabIndex={-1}
+                                >
+                                  <X size={10} />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              className="kb-template-edit-add-item"
+                              onClick={() => setEditTemplateItems(prev => [...prev, ''])}
+                            >
+                              <Plus size={11} /> Add item
+                            </button>
+                          </div>
+                          <div className="kb-template-edit-actions">
+                            <button className="kb-btn kb-btn-sm kb-btn-secondary" onClick={() => setEditingTemplateId(null)}>
+                              Cancel
+                            </button>
+                            <button
+                              className="kb-btn kb-btn-sm kb-btn-primary"
+                              onClick={async () => {
+                                const trimmedItems = editTemplateItems.map(s => s.trim()).filter(Boolean);
+                                await onEditTemplate(t.id, editTemplateName.trim() || t.name, trimmedItems);
+                                setEditingTemplateId(null);
+                              }}
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={t.id} className="kb-template-item">
+                        <button
+                          className="kb-template-apply"
+                          onClick={() => { onApplyTemplate(t.id); setShowTemplatePicker(false); }}
+                          onDoubleClick={e => {
+                            e.preventDefault();
+                            setEditingTemplateId(t.id);
+                            setEditTemplateName(t.name);
+                            setEditTemplateItems(t.items.length > 0 ? [...t.items] : ['']);
+                          }}
+                          title="Click to apply · Double-click to edit"
+                        >
+                          <CheckSquare size={12} />
+                          <span className="kb-template-name">{t.name}</span>
+                          <span className="kb-template-count">{t.items.length} items</span>
+                        </button>
+                        <button
+                          className="kb-btn-icon-sm"
+                          onClick={() => {
+                            setEditingTemplateId(t.id);
+                            setEditTemplateName(t.name);
+                            setEditTemplateItems(t.items.length > 0 ? [...t.items] : ['']);
+                          }}
+                          title="Edit template"
+                        >
+                          <Edit3 size={11} />
+                        </button>
+                        <button className="kb-btn-icon-sm" onClick={() => onDeleteTemplate(t.id)} title="Delete template">
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Render each checklist section (ungrouped first for backward compat, then named groups) */}
+              {[
+                ...(ungroupedItems.length > 0 ? [{ id: null as string | null, name: 'Checklist', items: ungroupedItems }] : []),
+                ...checklistGroups.map(g => ({ id: g.id, name: g.name, items: checklists.filter(cl => cl.group_id === g.id) })),
+              ].map(section => {
+                const sectionKey = section.id ?? '__ungrouped__';
+                const sectionItems = section.items;
+                const sectionCompleted = sectionItems.filter(i => i.is_completed).length;
+                const sectionText = checklistTexts[sectionKey] || '';
+                const isSavingTemplate = savingTemplateGroupId === sectionKey;
+                const sectionTemplateName = templateNames[sectionKey] || '';
+                return (
+                  <div key={sectionKey} className="kb-checklist-section">
+                    {/* Group title row */}
+                    <div className="kb-checklist-group-header">
+                      {editingGroupId === section.id && section.id ? (
+                        <input
+                          className="kb-checklist-group-title-input"
+                          value={editingGroupName}
+                          autoFocus
+                          onChange={e => setEditingGroupName(e.target.value)}
+                          onBlur={() => handleCommitGroupName(section.id!)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleCommitGroupName(section.id!);
+                            if (e.key === 'Escape') setEditingGroupId(null);
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className="kb-checklist-group-title"
+                          onDoubleClick={() => {
+                            if (section.id) { setEditingGroupId(section.id); setEditingGroupName(section.name); }
+                          }}
+                          title={section.id ? 'Double-click to rename' : undefined}
+                        >
+                          {section.name}
+                        </span>
+                      )}
+                      <span className="kb-checklist-group-count">{sectionCompleted}/{sectionItems.length}</span>
+                      {section.id && (
+                        <button className="kb-btn-icon-sm" onClick={() => onDeleteChecklistGroup(section.id!)} title="Delete checklist">
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Per-group progress bar */}
+                    {sectionItems.length > 0 && (
+                      <div className="kb-checklist-progress">
+                        <div className="kb-checklist-bar">
+                          <div
+                            className="kb-checklist-fill"
+                            style={{ width: `${(sectionCompleted / sectionItems.length) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Items */}
+                    <div className="kb-checklist-items">
+                      {sectionItems.map(item => {
+                        const dueDateVal = item.due_date ? item.due_date.slice(0, 10) : '';
+                        const isOverdue = dueDateVal && !item.is_completed && dueDateVal < new Date().toISOString().slice(0, 10);
+                        const isDueToday = dueDateVal && dueDateVal === new Date().toISOString().slice(0, 10);
+                        return (
+                          <div key={item.id} className="kb-checklist-item">
+                            <button
+                              className={`kb-checkbox ${item.is_completed ? 'checked' : ''}`}
+                              onClick={() => onToggleChecklistItem(item.id, !item.is_completed)}
+                            >
+                              {item.is_completed && <Check size={11} />}
+                            </button>
+                            {editingChecklistItemId === item.id ? (
+                              <input
+                                className="kb-checklist-edit-input"
+                                value={editingChecklistItemText}
+                                autoFocus
+                                onChange={e => setEditingChecklistItemText(e.target.value)}
+                                onBlur={() => {
+                                  const trimmed = editingChecklistItemText.trim();
+                                  if (trimmed && trimmed !== item.title) onEditChecklistItem(item.id, trimmed);
+                                  setEditingChecklistItemId(null);
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') { e.currentTarget.blur(); }
+                                  if (e.key === 'Escape') { setEditingChecklistItemId(null); }
+                                }}
+                              />
+                            ) : (
+                              <span
+                                className={`kb-checklist-text ${item.is_completed ? 'completed' : ''}`}
+                                onDoubleClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistItemText(item.title); }}
+                                title="Double-click to edit"
+                              >
+                                {item.title}
+                              </span>
+                            )}
+                            {editingDueDateItemId === item.id ? (
+                              <input
+                                type="date"
+                                className="kb-checklist-date-input"
+                                defaultValue={dueDateVal}
+                                autoFocus
+                                onChange={e => { onUpdateChecklistDueDate(item.id, e.target.value || null); setEditingDueDateItemId(null); }}
+                                onBlur={() => setEditingDueDateItemId(null)}
+                                onKeyDown={e => { if (e.key === 'Escape') setEditingDueDateItemId(null); }}
+                              />
+                            ) : dueDateVal ? (
+                              <span
+                                className={`kb-checklist-due-badge ${isOverdue ? 'overdue' : isDueToday ? 'due-today' : ''}`}
+                                onClick={() => setEditingDueDateItemId(item.id)}
+                                title="Click to change due date"
+                              >
+                                <CalendarDays size={10} />
+                                {new Date(dueDateVal + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                <button
+                                  className="kb-checklist-due-clear"
+                                  onClick={e => { e.stopPropagation(); onUpdateChecklistDueDate(item.id, null); }}
+                                  title="Remove due date"
+                                >
+                                  <X size={9} />
+                                </button>
+                              </span>
+                            ) : (
+                              <button className="kb-checklist-due-add" onClick={() => setEditingDueDateItemId(item.id)} title="Add due date">
+                                <CalendarDays size={11} />
+                              </button>
+                            )}
+                            {/* Assignees */}
+                            <div className="kb-checklist-assignees">
+                              {(item.assignees || []).map(name => {
+                                const profile = userProfiles.find(p => p.name === name);
+                                return (
+                                  <div key={name} className="kb-checklist-avatar" title={name}>
+                                    {profile?.avatar_url ? <img src={profile.avatar_url} alt={name} /> : name.slice(0, 1).toUpperCase()}
+                                  </div>
+                                );
+                              })}
+                              <button
+                                className="kb-checklist-assign-btn"
+                                onClick={() => setAssigneePickerItemId(assigneePickerItemId === item.id ? null : item.id)}
+                                title="Assign"
+                              >
+                                <User size={11} />
+                              </button>
+                              {assigneePickerItemId === item.id && (
+                                <>
+                                  <div className="kb-checklist-assignee-backdrop" onClick={() => setAssigneePickerItemId(null)} />
+                                  <div className="kb-checklist-assignee-picker">
+                                    {userProfiles.filter(p => p.name).map(p => {
+                                      const assigned = (item.assignees || []).includes(p.name!);
+                                      return (
+                                        <button
+                                          key={p.id}
+                                          className={`kb-checklist-assignee-option ${assigned ? 'selected' : ''}`}
+                                          onClick={() => {
+                                            const current = item.assignees || [];
+                                            const next = assigned ? current.filter(n => n !== p.name) : [...current, p.name!];
+                                            onUpdateChecklistAssignees(item.id, next);
+                                          }}
+                                        >
+                                          {assigned && <Check size={10} />}
+                                          @{p.name}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                            <button className="kb-btn-icon-sm" onClick={() => onDeleteChecklistItem(item.id)}>
+                              <X size={11} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Add item row */}
+                    <div className="kb-checklist-add">
                       <input
                         className="kb-input"
-                        value={templateName}
-                        onChange={e => setTemplateName(e.target.value)}
-                        placeholder="Template name..."
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && templateName.trim()) {
-                            onSaveTemplate(templateName.trim(), checklists.map(c => c.title));
-                            setTemplateName('');
-                            setSavingTemplate(false);
-                          }
-                          if (e.key === 'Escape') setSavingTemplate(false);
-                        }}
-                        autoFocus
+                        value={sectionText}
+                        onChange={e => setChecklistTexts(prev => ({ ...prev, [sectionKey]: e.target.value }))}
+                        placeholder="Add checklist item..."
+                        onKeyDown={e => e.key === 'Enter' && handleAddChecklistItem(section.id)}
                         style={{ flex: 1 }}
                       />
                       <button
                         className="kb-btn kb-btn-primary kb-btn-sm"
-                        onClick={() => {
-                          if (templateName.trim()) {
-                            onSaveTemplate(templateName.trim(), checklists.map(c => c.title));
-                            setTemplateName('');
-                            setSavingTemplate(false);
-                          }
-                        }}
-                        disabled={!templateName.trim()}
+                        onClick={() => handleAddChecklistItem(section.id)}
+                        disabled={!sectionText.trim()}
                       >
-                        Save
-                      </button>
-                      <button className="kb-btn kb-btn-sm" onClick={() => setSavingTemplate(false)}>
-                        Cancel
+                        Add
                       </button>
                     </div>
-                  ) : (
-                    <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={() => setSavingTemplate(true)}>
-                      Save as Template
-                    </button>
-                  )
-                )}
-                {checklistTemplates.length > 0 && (
-                  <button
-                    className="kb-btn kb-btn-sm kb-btn-ghost"
-                    onClick={() => setShowTemplatePicker(!showTemplatePicker)}
-                  >
-                    Apply Template <ChevronDown size={11} />
-                  </button>
-                )}
-              </div>
-              {showTemplatePicker && checklistTemplates.length > 0 && (
-                <div className="kb-template-picker">
-                  {checklistTemplates.map(t => (
-                    <div key={t.id} className="kb-template-item">
-                      <button
-                        className="kb-template-apply"
-                        onClick={() => { onApplyTemplate(t.id); setShowTemplatePicker(false); }}
-                      >
-                        <CheckSquare size={12} />
-                        <span className="kb-template-name">{t.name}</span>
-                        <span className="kb-template-count">{t.items.length} items</span>
-                      </button>
-                      <button
-                        className="kb-btn-icon-sm"
-                        onClick={() => onDeleteTemplate(t.id)}
-                        title="Delete template"
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+
+                    {/* Save as template (pre-filled with group name) */}
+                    {sectionItems.length > 0 && (
+                      <div className="kb-template-actions">
+                        {isSavingTemplate ? (
+                          <div className="kb-template-save-row">
+                            <input
+                              className="kb-input"
+                              value={sectionTemplateName}
+                              onChange={e => setTemplateNames(prev => ({ ...prev, [sectionKey]: e.target.value }))}
+                              placeholder="Template name..."
+                              autoFocus
+                              onKeyDown={e => {
+                                if (e.key === 'Enter' && sectionTemplateName.trim()) {
+                                  onSaveTemplate(sectionTemplateName.trim(), sectionItems.map(c => c.title));
+                                  setTemplateNames(prev => ({ ...prev, [sectionKey]: '' }));
+                                  setSavingTemplateGroupId(null);
+                                }
+                                if (e.key === 'Escape') setSavingTemplateGroupId(null);
+                              }}
+                              style={{ flex: 1 }}
+                            />
+                            <button
+                              className="kb-btn kb-btn-primary kb-btn-sm"
+                              onClick={() => {
+                                if (sectionTemplateName.trim()) {
+                                  onSaveTemplate(sectionTemplateName.trim(), sectionItems.map(c => c.title));
+                                  setTemplateNames(prev => ({ ...prev, [sectionKey]: '' }));
+                                  setSavingTemplateGroupId(null);
+                                }
+                              }}
+                              disabled={!sectionTemplateName.trim()}
+                            >
+                              Save
+                            </button>
+                            <button className="kb-btn kb-btn-sm" onClick={() => setSavingTemplateGroupId(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <button
+                            className="kb-btn kb-btn-sm kb-btn-ghost"
+                            onClick={() => {
+                              setSavingTemplateGroupId(sectionKey);
+                              setTemplateNames(prev => ({ ...prev, [sectionKey]: section.name }));
+                            }}
+                          >
+                            Save as Template
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Linked Cards */}
