@@ -28,7 +28,9 @@ function AuthForm() {
   const returnTo = searchParams.get('returnTo') || '/boards';
   const inviteParam = searchParams.get('invite') || '';
   const { user, loading, createUser } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup'>(
+    searchParams.get('tab') === 'signup' ? 'signup' : 'signin'
+  );
   const joinFlowActive = returnTo.startsWith('/join/');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

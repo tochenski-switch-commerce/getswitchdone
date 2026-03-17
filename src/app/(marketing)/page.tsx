@@ -340,7 +340,7 @@ export default function Home() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
             <Link href="#pricing" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>Pricing</Link>
             <Link href="/auth" className="nav-signin" style={{ color: 'rgba(255,255,255,0.75)', textDecoration: 'none', fontSize: 15, fontWeight: 500 }}>Sign In</Link>
-            <Link href="/auth" className="cta-btn" style={{ background: '#fa420f', color: '#fff', textDecoration: 'none', fontSize: 14, fontWeight: 700, padding: '8px 18px', borderRadius: 8, boxShadow: '0 0 20px rgba(250,66,15,0.2)' }}>
+            <Link href="/auth?tab=signup" className="cta-btn" style={{ background: '#fa420f', color: '#fff', textDecoration: 'none', fontSize: 14, fontWeight: 700, padding: '8px 18px', borderRadius: 8, boxShadow: '0 0 20px rgba(250,66,15,0.2)' }}>
               Get Started
             </Link>
           </div>
@@ -370,7 +370,7 @@ export default function Home() {
           Lumio keeps your team aligned with kanban boards, AI that surfaces what matters, and a native mobile app for wherever work happens.
         </p>
         <div className="fade-up fade-up-4" style={{ marginTop: 44, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <Link href="/auth" className="cta-btn" style={{ display: 'inline-block', padding: '16px 40px', background: '#fa420f', color: '#fff', borderRadius: 10, fontSize: 17, fontWeight: 700, textDecoration: 'none', letterSpacing: '0.01em', boxShadow: '0 0 40px rgba(250,66,15,0.35)' }}>
+          <Link href="/auth?tab=signup" className="cta-btn" style={{ display: 'inline-block', padding: '16px 40px', background: '#fa420f', color: '#fff', borderRadius: 10, fontSize: 17, fontWeight: 700, textDecoration: 'none', letterSpacing: '0.01em', boxShadow: '0 0 40px rgba(250,66,15,0.35)' }}>
             Get Started Free
           </Link>
         </div>
@@ -521,7 +521,7 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <Link href="/auth" style={{ display: 'block', textAlign: 'center', padding: '14px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: 10, fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
+              <Link href="/auth?tab=signup" style={{ display: 'block', textAlign: 'center', padding: '14px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: 10, fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
                 Get started free
               </Link>
             </div>
@@ -544,7 +544,7 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <Link href="/auth" className="cta-white" style={{ display: 'block', textAlign: 'center', padding: '14px', background: '#fff', color: '#fa420f', borderRadius: 10, fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
+              <Link href="/auth?tab=signup" className="cta-white" style={{ display: 'block', textAlign: 'center', padding: '14px', background: '#fff', color: '#fa420f', borderRadius: 10, fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
                 Start free trial
               </Link>
             </div>
@@ -582,7 +582,7 @@ export default function Home() {
         <p style={{ margin: '0 0 36px', fontSize: 17, color: 'rgba(255,255,255,0.75)', fontWeight: 400 }}>
           Join 500+ teams already doing it.
         </p>
-        <Link href="/auth" className="cta-white" style={{ display: 'inline-block', padding: '16px 40px', background: '#fff', color: '#fa420f', borderRadius: 10, fontSize: 16, fontWeight: 700, textDecoration: 'none' }}>
+        <Link href="/auth?tab=signup" className="cta-white" style={{ display: 'inline-block', padding: '16px 40px', background: '#fff', color: '#fa420f', borderRadius: 10, fontSize: 16, fontWeight: 700, textDecoration: 'none' }}>
           Create your free account
         </Link>
       </section>
@@ -604,7 +604,7 @@ export default function Home() {
 
       {/* ── Mobile sticky CTA ── */}
       <div className="mobile-cta" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, padding: '12px 16px 28px', background: 'linear-gradient(to top, #0f0f0f 60%, transparent)', display: 'none', flexDirection: 'column', gap: 8 }}>
-        <Link href="/auth" style={{ display: 'block', textAlign: 'center', padding: '16px', background: '#fa420f', color: '#fff', borderRadius: 12, fontSize: 16, fontWeight: 700, textDecoration: 'none', boxShadow: '0 0 32px rgba(250,66,15,0.4)' }}>
+        <Link href="/auth?tab=signup" style={{ display: 'block', textAlign: 'center', padding: '16px', background: '#fa420f', color: '#fff', borderRadius: 12, fontSize: 16, fontWeight: 700, textDecoration: 'none', boxShadow: '0 0 32px rgba(250,66,15,0.4)' }}>
           Get Started Free
         </Link>
       </div>
