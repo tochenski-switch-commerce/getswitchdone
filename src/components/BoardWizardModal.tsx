@@ -435,14 +435,9 @@ export default function BoardWizardModal({
                 <span className="bw-template-summary-name">
                   {selected.type === 'preset' ? selected.template.name : selected.template.name}
                 </span>
-                {selected.type !== 'blank' && (
-                  <span className="bw-template-summary-cols">
-                    {selected.type === 'preset'
-                      ? selected.template.template_data.columns.map(c => c.title).join(' → ')
-                      : selected.template.template_data.columns.map(c => c.title).join(' → ')
-                    }
-                  </span>
-                )}
+                <span className="bw-template-summary-cols">
+                  {selected.template.template_data.columns.map(c => c.title).join(' → ')}
+                </span>
               </div>
             )}
 
