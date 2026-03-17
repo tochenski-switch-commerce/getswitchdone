@@ -321,9 +321,11 @@ export const kanbanStyles = `
     border: 1px solid #2a2d3a;
     border-radius: 12px;
     padding: 6px;
-    min-width: 180px;
+    min-width: 220px;
+    max-width: 260px;
     box-shadow: 0 12px 32px rgba(0,0,0,0.4);
     z-index: 1000;
+    overflow: hidden;
   }
   .kb-dropdown-item {
     display: flex;
@@ -2910,9 +2912,9 @@ export const kanbanStyles = `
     color: #ef4444;
   }
 
-  /* ── Mobile FAB (floating action button) ── */
+  /* ── FAB (floating action button) ── */
   .kb-mobile-fab {
-    display: none;
+    display: flex;
     position: fixed;
     bottom: max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px));
     right: 20px;
@@ -2935,9 +2937,9 @@ export const kanbanStyles = `
     box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3), 0 1px 4px rgba(0,0,0,0.2);
   }
 
-  /* ── Mobile bottom sheet backdrop ── */
+  /* ── Add card sheet backdrop ── */
   .kb-mobile-sheet-backdrop {
-    display: none;
+    display: block;
     position: fixed;
     inset: 0;
     z-index: 1100;
@@ -2945,29 +2947,26 @@ export const kanbanStyles = `
     animation: kb-sheet-fade-in 0.2s ease;
   }
 
-  /* ── Mobile bottom sheet ── */
+  /* ── Add card sheet (centered modal on desktop, bottom sheet on mobile) ── */
   .kb-mobile-sheet {
-    display: none;
+    display: flex;
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(480px, calc(100vw - 32px));
     z-index: 1101;
     background: #1a1d2e;
-    border-radius: 20px 20px 0 0;
-    padding: 12px 20px max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+    border-radius: 16px;
+    padding: 20px;
     flex-direction: column;
     gap: 16px;
-    animation: kb-sheet-slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-    box-shadow: 0 -4px 30px rgba(0,0,0,0.4);
+    animation: kb-sheet-fade-in 0.2s ease;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    box-sizing: border-box;
   }
   .kb-mobile-sheet-handle {
-    width: 36px;
-    height: 4px;
-    border-radius: 2px;
-    background: #3b3f52;
-    align-self: center;
-    flex-shrink: 0;
+    display: none;
   }
   .kb-mobile-sheet-header {
     display: flex;
@@ -3031,6 +3030,7 @@ export const kanbanStyles = `
     outline: none;
     transition: border-color 0.15s ease;
     -webkit-appearance: none;
+    box-sizing: border-box;
   }
   .kb-mobile-sheet-input::placeholder { color: #4b5563; }
   .kb-mobile-sheet-input:focus { border-color: #6366f1; }
@@ -3070,8 +3070,26 @@ export const kanbanStyles = `
   }
 
   @media (max-width: 768px) {
-    .kb-mobile-fab { display: flex; }
-    .kb-mobile-sheet-backdrop { display: block; }
-    .kb-mobile-sheet { display: flex; }
+    .kb-mobile-sheet {
+      top: auto;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      transform: none;
+      width: 100%;
+      border-radius: 20px 20px 0 0;
+      padding: 12px 20px max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+      animation: kb-sheet-slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+      box-shadow: 0 -4px 30px rgba(0,0,0,0.4);
+    }
+    .kb-mobile-sheet-handle {
+      display: block;
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: #3b3f52;
+      align-self: center;
+      flex-shrink: 0;
+    }
   }
 `;

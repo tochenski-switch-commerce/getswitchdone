@@ -475,9 +475,9 @@ function BoardPage() {
   };
 
   // ── Mobile add card ──
-  const openMobileAdd = useCallback(() => {
+  const openMobileAdd = useCallback((colId?: string) => {
     const normalCols = board?.columns.filter(c => c.column_type !== 'board_links').sort((a, b) => a.position - b.position) || [];
-    const defaultCol = (zoomedColId && normalCols.find(c => c.id === zoomedColId)) ? zoomedColId : normalCols[0]?.id || null;
+    const defaultCol = colId || ((zoomedColId && normalCols.find(c => c.id === zoomedColId)) ? zoomedColId : normalCols[0]?.id || null);
     setMobileAddColId(defaultCol);
     setMobileAddTitle('');
     setMobileAddOpen(true);
@@ -539,11 +539,7 @@ function BoardPage() {
   // Auto-open "add card" from widget deep link ?addCard=1
   useEffect(() => {
     if (searchParams.get('addCard') === '1' && board && board.columns.length > 0) {
-      if (window.innerWidth <= 768) {
-        openMobileAdd();
-      } else {
-        setAddingCardCol(board.columns[0].id);
-      }
+      openMobileAdd();
       router.replace(`/boards/${boardId}`);
     }
   }, [searchParams, board, boardId, router, openMobileAdd]);
@@ -909,7 +905,7 @@ function BoardPage() {
                   <div className="kb-dropdown-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6, cursor: 'default' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={14} /> Timezone</span>
                     <select
-                      style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid var(--kb-border)', background: 'var(--kb-bg)', color: 'var(--kb-text)', fontSize: 13 }}
+                      style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid var(--kb-border)', background: 'var(--kb-bg)', color: 'var(--kb-text)', fontSize: 13, boxSizing: 'border-box' }}
                       value={board.timezone || ''}
                       onChange={async (e) => {
                         const val = e.target.value || null;
@@ -1443,12 +1439,10 @@ function BoardPage() {
                     </div>
 
                     {/* Add card button at bottom */}
-                    {addingCardCol !== col.id && (
-                      <button className="kb-add-card-btn" onClick={() => setAddingCardCol(col.id)}>
-                        <Plus size={14} />
-                        Add a card
-                      </button>
-                    )}
+                    <button className="kb-add-card-btn" onClick={() => setAddingCardCol(col.id)}>
+                      <Plus size={14} />
+                      Add a card
+                    </button>
                   </>
                 )}
               </div>
@@ -1962,7 +1956,7 @@ function BoardPage() {
       {!activeCard && !showAiPanel && !showNotePanel && (
         <button
           className="kb-mobile-fab"
-          onClick={openMobileAdd}
+          onClick={() => openMobileAdd()}
           aria-label="Add card"
         >
           <Plus size={28} />
