@@ -44,8 +44,6 @@ export default function CardDetailModal({
   onRemoveCardLink,
   onSearchCards,
   userProfiles,
-  onNavigatePrev,
-  onNavigateNext,
 }: {
   card: BoardCard;
   board: FullBoard;
