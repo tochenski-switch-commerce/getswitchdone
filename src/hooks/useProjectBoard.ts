@@ -848,6 +848,88 @@ export function useProjectBoard() {
     }
   }, []);
 
+  // ─── Checklist Groups ───────────────────────────────────────
+  const addChecklistGroup = useCallback(async (boardId: string, cardId: string, name: string) => {
+    setError(null);
+    try {
+      const existing = board?.cards.find(c => c.id === cardId)?.checklist_groups || [];
+      const maxPos = existing.reduce((m: number, g: any) => Math.max(m, g.position), -1);
+      const { data, error: err } = await supabase
+        .from('card_checklist_groups')
+        .insert([{ card_id: cardId, name, position: maxPos + 1 }])
+        .select()
+        .single();
+      if (err) throw err;
+      setBoard(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cards: prev.cards.map(c =>
+            c.id === cardId
+              ? { ...c, checklist_groups: [...(c.checklist_groups || []), data] }
+              : c
+          ),
+        };
+      });
+      return data as CardChecklistGroup;
+    } catch (err: any) {
+      setError(err.message);
+      return null;
+    }
+  }, [board?.cards]);
+
+  const updateChecklistGroup = useCallback(async (boardId: string, cardId: string, groupId: string, name: string) => {
+    setError(null);
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cards: prev.cards.map(c =>
+          c.id === cardId
+            ? { ...c, checklist_groups: (c.checklist_groups || []).map(g => g.id === groupId ? { ...g, name } : g) }
+            : c
+        ),
+      };
+    });
+    try {
+      const { error: err } = await supabase
+        .from('card_checklist_groups')
+        .update({ name })
+        .eq('id', groupId);
+      if (err) throw err;
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
+  const deleteChecklistGroup = useCallback(async (boardId: string, cardId: string, groupId: string) => {
+    setError(null);
+    try {
+      const { error: err } = await supabase
+        .from('card_checklist_groups')
+        .delete()
+        .eq('id', groupId);
+      if (err) throw err;
+      setBoard(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cards: prev.cards.map(c =>
+            c.id === cardId
+              ? {
+                  ...c,
+                  checklist_groups: (c.checklist_groups || []).filter(g => g.id !== groupId),
+                  checklists: (c.checklists || []).filter(cl => cl.group_id !== groupId),
+                }
+              : c
+          ),
+        };
+      });
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
   // ─── Checklists ────────────────────────────────────────────
   const addChecklistItem = useCallback(async (boardId: string, cardId: string, title: string, groupId?: string | null) => {
     setError(null);
@@ -1018,82 +1100,6 @@ export function useProjectBoard() {
       if (err) throw err;
     } catch (err: any) {
       setError(err.message);
-    }
-  }, []);
-
-  // ─── Checklist Groups ──────────────────────────────────────
-  const addChecklistGroup = useCallback(async (boardId: string, cardId: string, name: string) => {
-    setError(null);
-    try {
-      const existing = board?.cards.find(c => c.id === cardId)?.checklist_groups || [];
-      const maxPos = existing.reduce((m: number, g: any) => Math.max(m, g.position), -1);
-      const { data, error: err } = await supabase
-        .from('card_checklist_groups')
-        .insert([{ card_id: cardId, name, position: maxPos + 1 }])
-        .select()
-        .single();
-      if (err) throw err;
-      setBoard(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          cards: prev.cards.map(c =>
-            c.id === cardId ? { ...c, checklist_groups: [...(c.checklist_groups || []), data] } : c
-          ),
-        };
-      });
-      return data as CardChecklistGroup;
-    } catch (err: any) {
-      setError(err.message);
-      return null;
-    }
-  }, [board?.cards]);
-
-  const updateChecklistGroup = useCallback(async (boardId: string, cardId: string, groupId: string, name: string) => {
-    setError(null);
-    setBoard(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        cards: prev.cards.map(c =>
-          c.id === cardId
-            ? { ...c, checklist_groups: (c.checklist_groups || []).map(g => g.id === groupId ? { ...g, name } : g) }
-            : c
-        ),
-      };
-    });
-    try {
-      const { error: err } = await supabase.from('card_checklist_groups').update({ name }).eq('id', groupId);
-      if (err) throw err;
-    } catch (err: any) {
-      setError(err.message);
-    }
-  }, []);
-
-  const deleteChecklistGroup = useCallback(async (boardId: string, cardId: string, groupId: string) => {
-    setError(null);
-    try {
-      const { error: err } = await supabase.from('card_checklist_groups').delete().eq('id', groupId);
-      if (err) throw err;
-      setBoard(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          cards: prev.cards.map(c =>
-            c.id === cardId
-              ? {
-                  ...c,
-                  checklist_groups: (c.checklist_groups || []).filter(g => g.id !== groupId),
-                  checklists: (c.checklists || []).filter(cl => cl.group_id !== groupId),
-                }
-              : c
-          ),
-        };
-      });
-      return true;
-    } catch (err: any) {
-      setError(err.message);
-      return false;
     }
   }, []);
 

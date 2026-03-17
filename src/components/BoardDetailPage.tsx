@@ -1556,16 +1556,6 @@ function BoardPage() {
 
       {/* ── Card detail modal ── */}
       {activeCard && (() => {
-        const colCards = board.cards
-          .filter(c => c.column_id === activeCard.column_id && !c.is_archived)
-          .sort((a, b) => {
-            const pw = (PRIORITY_WEIGHT[a.priority || 'none'] ?? 4) - (PRIORITY_WEIGHT[b.priority || 'none'] ?? 4);
-            if (pw !== 0) return pw;
-            return a.position - b.position;
-          });
-        const idx = colCards.findIndex(c => c.id === activeCard.id);
-        const hasPrev = idx > 0;
-        const hasNext = idx < colCards.length - 1;
         return (
         <CardDetailModal
           card={activeCard}
@@ -1706,8 +1696,6 @@ function BoardPage() {
           onAddCardLink={async (targetCardId) => { await addCardLink(activeCard.id, targetCardId); }}
           onRemoveCardLink={async (linkId) => { await removeCardLink(linkId); }}
           onSearchCards={async (query) => searchCards(boardId, query)}
-          onNavigatePrev={hasPrev ? () => navigateCard('prev') : undefined}
-          onNavigateNext={hasNext ? () => navigateCard('next') : undefined}
         />
         );
       })()}

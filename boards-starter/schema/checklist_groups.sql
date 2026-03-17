@@ -19,3 +19,9 @@ ALTER TABLE card_checklists
   ADD COLUMN IF NOT EXISTS group_id uuid REFERENCES card_checklist_groups(id) ON DELETE CASCADE;
 
 CREATE INDEX IF NOT EXISTS idx_card_checklists_group_id ON card_checklists(group_id);
+
+-- 3. Enable RLS and add policies (same pattern as card_checklists)
+ALTER TABLE card_checklist_groups ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "View checklist groups" ON card_checklist_groups FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Manage checklist groups" ON card_checklist_groups FOR ALL TO authenticated USING (true);

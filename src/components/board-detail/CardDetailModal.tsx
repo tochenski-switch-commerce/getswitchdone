@@ -76,8 +76,6 @@ export default function CardDetailModal({
   onRemoveCardLink: (linkId: string) => Promise<void>;
   onSearchCards: (query: string) => Promise<{ id: string; title: string; board_id: string; column_id: string; is_archived: boolean }[]>;
   userProfiles: UserProfile[];
-  onNavigatePrev?: () => void;
-  onNavigateNext?: () => void;
 }) {
   const [editTitle, setEditTitle] = useState(card.title);
   const [editDesc, setEditDesc] = useState(card.description || '');
@@ -449,20 +447,8 @@ export default function CardDetailModal({
   return (
     <div className="kb-modal-overlay" onMouseDown={handleClose}>
       <div className="kb-detail-modal" onMouseDown={e => e.stopPropagation()}>
-        {/* Close + Nav */}
+        {/* Close */}
         <div className="kb-detail-header-actions">
-          <div className="kb-detail-nav">
-            {onNavigatePrev && (
-              <button className="kb-detail-nav-btn" onClick={onNavigatePrev} title="Previous card (Alt+←)">
-                <ChevronLeft size={16} />
-              </button>
-            )}
-            {onNavigateNext && (
-              <button className="kb-detail-nav-btn" onClick={onNavigateNext} title="Next card (Alt+→)">
-                <ChevronRight size={16} />
-              </button>
-            )}
-          </div>
           <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={handleClose}><X size={18} /></button>
         </div>
 
