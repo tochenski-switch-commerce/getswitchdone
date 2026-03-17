@@ -657,6 +657,28 @@ function BoardPage() {
 
   const columns = [...board.columns].sort((a, b) => a.position - b.position);
 
+  const runColumnAutomations = async (cardId: string, destColId: string) => {
+    const destCol = columns.find(c => c.id === destColId);
+    const automations = destCol?.automations ?? [];
+    if (automations.length === 0) return;
+    const cardUpdates: Record<string, unknown> = {};
+    for (const action of automations) {
+      if (action.type === 'set_complete') cardUpdates.is_complete = action.value;
+      else if (action.type === 'set_priority') cardUpdates.priority = action.value;
+      else if (action.type === 'set_assignee') cardUpdates.assignee = action.value;
+      else if (action.type === 'set_labels') cardUpdates.label_ids = action.value;
+    }
+    if (Object.keys(cardUpdates).length > 0) {
+      await updateCard(boardId, cardId, cardUpdates);
+    }
+    const checklistAction = automations.find(a => a.type === 'add_checklist');
+    if (checklistAction && checklistAction.type === 'add_checklist') {
+      for (const templateId of checklistAction.value) {
+        await applyChecklistTemplate(boardId, cardId, templateId);
+      }
+    }
+  };
+
   return (
     <div className="kb-root">
       <style>{kanbanStyles}</style>
@@ -1406,6 +1428,7 @@ function BoardPage() {
                               if (!nextCol) return undefined;
                               return async () => {
                                 await moveCard(boardId, card.id, nextCol.id, 0);
+                                await runColumnAutomations(card.id, nextCol.id);
                               };
                             })()}
                           />
