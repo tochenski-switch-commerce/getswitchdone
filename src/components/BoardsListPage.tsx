@@ -28,7 +28,7 @@ import {
 } from '@/components/BoardIcons';
 import type { BoardIconKey } from '@/components/BoardIcons';
 import BoardWizardModal from '@/components/BoardWizardModal';
-import UpgradeBanner from '@/components/UpgradeBanner';
+// import UpgradeBanner from '@/components/UpgradeBanner';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTemplates } from '@/hooks/useTemplates';
 import type { TemplateData } from '@/types/board-types';
@@ -479,9 +479,11 @@ function BoardsListPage() {
           </div>
         ) : (
           <>
+            {/* TODO: re-enable when paywall is ready to ship
             {!canCreateBoard(boards.length) && (
               <UpgradeBanner message="You've reached the free plan limit. Upgrade to Pro for unlimited boards." />
             )}
+            */}
             {/* My Boards */}
             {(() => {
               const myBoards = boards.filter(b => !b.team_id);
