@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 /* AUTH: Replace with your auth hook */
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,30 +14,95 @@ import {
   Plus,
   LayoutDashboard,
   Trash2,
-  Calendar,
   FolderKanban,
   Globe,
   User,
   Users,
   FileText,
   Copy,
+  ChevronDown,
+  Flag,
+  Clock,
   getBoardIcon,
   DEFAULT_ICON_COLOR,
 } from '@/components/BoardIcons';
 import type { BoardIconKey } from '@/components/BoardIcons';
 import BoardWizardModal from '@/components/BoardWizardModal';
+import UpgradeBanner from '@/components/UpgradeBanner';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useTemplates } from '@/hooks/useTemplates';
 import type { TemplateData } from '@/types/board-types';
+import { supabase } from '@/lib/supabase';
 
+// ── Types ────────────────────────────────────────────────────────────────────
+type CardRow = {
+  id: string;
+  board_id: string;
+  due_date: string | null;
+  is_complete: boolean;
+  priority: string;
+  updated_at: string;
+};
+
+type ChecklistRow = {
+  card_id: string;
+  due_date: string | null;
+  is_completed: boolean;
+};
+
+type BoardStats = {
+  totalCards: number;
+  completedCards: number;
+  overdue: number;
+  dueToday: number;
+  dueThisWeek: number;
+  highPriority: number;
+  checklistOverdue: number;
+  checklistDueToday: number;
+  checklistDueThisWeek: number;
+  lastActivity: string;
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function relativeTime(isoStr: string): string {
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks}w ago`;
+  return new Date(isoStr).toLocaleDateString();
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 function BoardsListPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { boards, fetchBoards, createBoard, createBoardFromTemplate, deleteBoard, duplicateBoard, loading } = useProjectBoard();
   const { teamTemplates, fetchTeamTemplates } = useTemplates();
+  const { canCreateBoard, showPaywall } = useSubscription();
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
 
+  // ── Stats state ────────────────────────────────────────────────────────────
+  const [rawCards, setRawCards] = useState<CardRow[]>([]);
+  const [rawChecklists, setRawChecklists] = useState<ChecklistRow[]>([]);
+  const [statsLoaded, setStatsLoaded] = useState(false);
+
+  // Global expand/collapse — persisted to localStorage as an array of board IDs
+  const [statsExpanded, setStatsExpanded] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('boards-expanded-stats');
+      return saved ? (JSON.parse(saved) as string[]).length > 0 : false;
+    } catch {
+      return false;
+    }
+  });
 
   const { teams, fetchTeams } = useTeams();
 
@@ -72,67 +137,277 @@ function BoardsListPage() {
     }
   }, [teams, user, fetchTeamTemplates]);
 
-  const renderBoardCard = (board: typeof boards[0], teamName?: string) => (
-    <div
-      key={board.id}
-      className="kb-board-card"
-      onClick={() => { hapticLight(); router.push(`/boards/${board.id}`); }}
-    >
-      <div className="kb-board-card-header">
-        {React.createElement(getBoardIcon(board.icon), { size: 20, style: { color: board.icon_color || DEFAULT_ICON_COLOR } })}
-        <h3 className="kb-board-card-title">{board.title}</h3>
-        {board.is_public && (
-          <span className="kb-visibility-badge public"><Globe size={10} /> Public</span>
+  // ── Fetch stats (once, after boards load) ─────────────────────────────────
+  useEffect(() => {
+    if (statsLoaded || boards.length === 0 || !supabase) return;
+    setStatsLoaded(true);
+
+    const boardIds = boards.map(b => b.id);
+
+    Promise.all([
+      supabase
+        .from('board_cards')
+        .select('id, board_id, due_date, is_complete, priority, updated_at')
+        .in('board_id', boardIds)
+        .eq('is_archived', false),
+      supabase
+        .from('card_checklists')
+        .select('card_id, due_date, is_completed'),
+    ]).then(([cardsRes, checklistsRes]) => {
+      if (cardsRes.data) setRawCards(cardsRes.data as CardRow[]);
+      if (checklistsRes.data) setRawChecklists(checklistsRes.data as ChecklistRow[]);
+    });
+  }, [boards, statsLoaded]);
+
+  // Reset stats guard when boards list itself changes (e.g. after delete/create)
+  useEffect(() => {
+    setStatsLoaded(false);
+  }, [boards.length]);
+
+  // ── Compute per-board stats ────────────────────────────────────────────────
+  const boardStatsMap = useMemo<Map<string, BoardStats>>(() => {
+    const map = new Map<string, BoardStats>();
+    if (rawCards.length === 0 && rawChecklists.length === 0) return map;
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayStr = todayStart.toISOString().slice(0, 10);
+
+    // Saturday of current Sun–Sat week
+    const saturday = new Date(todayStart);
+    saturday.setDate(todayStart.getDate() + (6 - todayStart.getDay()));
+    const saturdayStr = saturday.toISOString().slice(0, 10);
+
+    // Build lookup structures
+    const cardBoardMap = new Map<string, string>();
+    const cardsByBoard = new Map<string, CardRow[]>();
+
+    for (const card of rawCards) {
+      cardBoardMap.set(card.id, card.board_id);
+      let arr = cardsByBoard.get(card.board_id);
+      if (!arr) { arr = []; cardsByBoard.set(card.board_id, arr); }
+      arr.push(card);
+    }
+
+    const checklistsByBoard = new Map<string, ChecklistRow[]>();
+    for (const cl of rawChecklists) {
+      const boardId = cardBoardMap.get(cl.card_id);
+      if (!boardId) continue;
+      let arr = checklistsByBoard.get(boardId);
+      if (!arr) { arr = []; checklistsByBoard.set(boardId, arr); }
+      arr.push(cl);
+    }
+
+    for (const board of boards) {
+      const cards = cardsByBoard.get(board.id) ?? [];
+      const checklists = checklistsByBoard.get(board.id) ?? [];
+      const incomplete = cards.filter(c => !c.is_complete);
+      const incompleteChk = checklists.filter(cl => !cl.is_completed);
+
+      // Last activity = most recent card updated_at, falling back to board.updated_at
+      let lastActivity = board.updated_at;
+      for (const c of cards) {
+        if (c.updated_at > lastActivity) lastActivity = c.updated_at;
+      }
+
+      map.set(board.id, {
+        totalCards: cards.length,
+        completedCards: cards.filter(c => c.is_complete).length,
+        overdue: incomplete.filter(c => c.due_date && c.due_date < todayStr).length,
+        dueToday: incomplete.filter(c => c.due_date === todayStr).length,
+        dueThisWeek: incomplete.filter(c => c.due_date && c.due_date > todayStr && c.due_date <= saturdayStr).length,
+        highPriority: incomplete.filter(c => c.priority === 'high' || c.priority === 'urgent').length,
+        checklistOverdue: incompleteChk.filter(cl => cl.due_date && cl.due_date < todayStr).length,
+        checklistDueToday: incompleteChk.filter(cl => cl.due_date === todayStr).length,
+        checklistDueThisWeek: incompleteChk.filter(cl => cl.due_date && cl.due_date > todayStr && cl.due_date <= saturdayStr).length,
+        lastActivity,
+      });
+    }
+
+    return map;
+  }, [rawCards, rawChecklists, boards]);
+
+  // ── Toggle expand (global — all cards together) ────────────────────────────
+  const toggleStats = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStatsExpanded(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem(
+          'boards-expanded-stats',
+          JSON.stringify(next ? boards.map(b => b.id) : []),
+        );
+      } catch { /* ignore */ }
+      return next;
+    });
+  }, [boards]);
+
+  // ── Board card renderer ────────────────────────────────────────────────────
+  const renderBoardCard = (board: typeof boards[0], teamName?: string) => {
+    const stats = boardStatsMap.get(board.id);
+    const totalOverdue = stats ? stats.overdue + stats.checklistOverdue : 0;
+    const totalDueToday = stats ? stats.dueToday + stats.checklistDueToday : 0;
+    const progressPct = stats && stats.totalCards > 0
+      ? Math.round((stats.completedCards / stats.totalCards) * 100)
+      : 0;
+    const hasChecklistDue = stats && (
+      stats.checklistOverdue > 0 || stats.checklistDueToday > 0 || stats.checklistDueThisWeek > 0
+    );
+
+    return (
+      <div
+        key={board.id}
+        className="kb-board-card"
+        onClick={() => { hapticLight(); router.push(`/boards/${board.id}`); }}
+      >
+        <div className="kb-board-card-header">
+          {React.createElement(getBoardIcon(board.icon), { size: 20, style: { color: board.icon_color || DEFAULT_ICON_COLOR } })}
+          <h3 className="kb-board-card-title">{board.title}</h3>
+          {board.is_public && (
+            <span className="kb-visibility-badge public"><Globe size={10} /> Public</span>
+          )}
+        </div>
+        {teamName && (
+          <div className="kb-shared-by"><Users size={11} /> {teamName}</div>
         )}
-      </div>
-      {teamName && (
-        <div className="kb-shared-by"><Users size={11} /> {teamName}</div>
-      )}
-      {!teamName && board.user_id !== user?.id && (
-        <div className="kb-shared-by"><User size={11} /> Shared board</div>
-      )}
-      {board.description && (
-        <p className="kb-board-card-desc">{board.description}</p>
-      )}
-      <div className="kb-board-card-footer">
-        <span className="kb-board-card-date">
-          <Calendar size={12} />
-          {new Date(board.created_at).toLocaleDateString()}
-        </span>
-        {board.user_id === user?.id && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {!teamName && board.user_id !== user?.id && (
+          <div className="kb-shared-by"><User size={11} /> Shared board</div>
+        )}
+        {board.description && (
+          <p className="kb-board-card-desc">{board.description}</p>
+        )}
+
+        {/* ── Stats pills ─────────────────────────────────────────────────── */}
+        {stats && (
+          <div className="kb-stats-row" onClick={e => e.stopPropagation()}>
+            <div className="kb-stats-pills">
+              {/* Done pill with mini progress bar */}
+              <span className="kb-pill kb-pill-done">
+                <span
+                  className="kb-pill-bar"
+                  style={{ width: `${progressPct}%` }}
+                />
+                <span className="kb-pill-text">{stats.completedCards}/{stats.totalCards} done</span>
+              </span>
+              {/* Overdue */}
+              {totalOverdue > 0 && (
+                <span className="kb-pill kb-pill-overdue">{totalOverdue} overdue</span>
+              )}
+              {/* Due today */}
+              {totalDueToday > 0 && (
+                <span className="kb-pill kb-pill-today">{totalDueToday} today</span>
+              )}
+              {/* High / urgent priority */}
+              {stats.highPriority > 0 && (
+                <span className="kb-pill kb-pill-priority">
+                  <Flag size={9} />
+                  {stats.highPriority}
+                </span>
+              )}
+            </div>
             <button
-              className="kb-btn-icon"
-              onClick={async e => {
-                e.stopPropagation();
-                setDuplicatingId(board.id);
-                const dup = await duplicateBoard(board.id);
-                setDuplicatingId(null);
-                if (dup) router.push(`/boards/${dup.id}`);
-              }}
-              title="Duplicate board"
-              disabled={duplicatingId === board.id}
-              style={duplicatingId === board.id ? { opacity: 0.5 } : undefined}
+              className={`kb-stats-chevron${statsExpanded ? ' expanded' : ''}`}
+              onClick={toggleStats}
+              title={statsExpanded ? 'Collapse stats' : 'Expand stats'}
             >
-              <Copy size={14} />
-            </button>
-            <button
-              className="kb-btn-icon kb-btn-icon-danger"
-              onClick={e => {
-                e.stopPropagation();
-                if (confirm('Delete this board? This cannot be undone.')) {
-                  deleteBoard(board.id);
-                }
-              }}
-              title="Delete board"
-            >
-              <Trash2 size={14} />
+              <ChevronDown size={13} />
             </button>
           </div>
         )}
+
+        {/* ── Expanded detail grid ─────────────────────────────────────────── */}
+        {stats && (
+          <div className={`kb-stats-detail${statsExpanded ? ' expanded' : ''}`}>
+            <div className="kb-stats-section-label">Cards</div>
+            <div className="kb-stats-grid">
+              <div className="kb-stat-cell">
+                <span className="kb-stat-label">Total</span>
+                <span className="kb-stat-value">{stats.totalCards}</span>
+              </div>
+              <div className="kb-stat-cell">
+                <span className="kb-stat-label">Completed</span>
+                <span className="kb-stat-value kb-stat-green">{stats.completedCards}</span>
+              </div>
+              <div className="kb-stat-cell">
+                <span className="kb-stat-label">Overdue</span>
+                <span className="kb-stat-value kb-stat-red">{stats.overdue}</span>
+              </div>
+              <div className="kb-stat-cell">
+                <span className="kb-stat-label">Due Today</span>
+                <span className="kb-stat-value kb-stat-amber">{stats.dueToday}</span>
+              </div>
+              <div className="kb-stat-cell">
+                <span className="kb-stat-label">This Week</span>
+                <span className="kb-stat-value kb-stat-blue">{stats.dueThisWeek}</span>
+              </div>
+              <div className="kb-stat-cell">
+                <span className="kb-stat-label">High/Urgent</span>
+                <span className="kb-stat-value kb-stat-amber">{stats.highPriority}</span>
+              </div>
+            </div>
+
+            {hasChecklistDue && (
+              <>
+                <div className="kb-stats-section-label" style={{ marginTop: 10 }}>Checklist Items</div>
+                <div className="kb-stats-grid kb-stats-grid-3">
+                  <div className="kb-stat-cell">
+                    <span className="kb-stat-label">Overdue</span>
+                    <span className="kb-stat-value kb-stat-red">{stats.checklistOverdue}</span>
+                  </div>
+                  <div className="kb-stat-cell">
+                    <span className="kb-stat-label">Due Today</span>
+                    <span className="kb-stat-value kb-stat-amber">{stats.checklistDueToday}</span>
+                  </div>
+                  <div className="kb-stat-cell">
+                    <span className="kb-stat-label">This Week</span>
+                    <span className="kb-stat-value kb-stat-blue">{stats.checklistDueThisWeek}</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="kb-board-card-footer">
+          <span className="kb-board-card-date">
+            <Clock size={12} />
+            {stats ? relativeTime(stats.lastActivity) : new Date(board.created_at).toLocaleDateString()}
+          </span>
+          {board.user_id === user?.id && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <button
+                className="kb-btn-icon"
+                onClick={async e => {
+                  e.stopPropagation();
+                  setDuplicatingId(board.id);
+                  const dup = await duplicateBoard(board.id);
+                  setDuplicatingId(null);
+                  if (dup) router.push(`/boards/${dup.id}`);
+                }}
+                title="Duplicate board"
+                disabled={duplicatingId === board.id}
+                style={duplicatingId === board.id ? { opacity: 0.5 } : undefined}
+              >
+                <Copy size={14} />
+              </button>
+              <button
+                className="kb-btn-icon kb-btn-icon-danger"
+                onClick={e => {
+                  e.stopPropagation();
+                  if (confirm('Delete this board? This cannot be undone.')) {
+                    deleteBoard(board.id);
+                  }
+                }}
+                title="Delete board"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="kb-root">
@@ -150,7 +425,10 @@ function BoardsListPage() {
               <FileText size={16} />
               Forms
             </button>
-            <button className="kb-btn kb-btn-primary" onClick={() => setShowWizard(true)}>
+            <button className="kb-btn kb-btn-primary" onClick={() => {
+              if (!canCreateBoard(boards.length)) { showPaywall(); return; }
+              setShowWizard(true);
+            }}>
               <Plus size={16} />
               New Board
             </button>
@@ -188,13 +466,19 @@ function BoardsListPage() {
             <LayoutDashboard size={48} style={{ color: '#4b5563', marginBottom: '16px' }} />
             <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>No boards yet</h3>
             <p style={{ color: '#9ca3af', fontSize: '14px', marginBottom: '20px' }}>Create your first project board to get started.</p>
-            <button className="kb-btn kb-btn-primary" onClick={() => setShowWizard(true)}>
+            <button className="kb-btn kb-btn-primary" onClick={() => {
+              if (!canCreateBoard(boards.length)) { showPaywall(); return; }
+              setShowWizard(true);
+            }}>
               <Plus size={16} />
               Create Board
             </button>
           </div>
         ) : (
           <>
+            {!canCreateBoard(boards.length) && (
+              <UpgradeBanner message="You've reached the free plan limit. Upgrade to Pro for unlimited boards." />
+            )}
             {/* My Boards */}
             {(() => {
               const myBoards = boards.filter(b => !b.team_id);
@@ -425,6 +709,155 @@ const boardsListStyles = `
     font-size: 12px;
     color: #6b7280;
   }
+
+  /* ── Stats pills ──────────────────────────────────────────────────────── */
+  .kb-stats-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 10px 0 8px;
+  }
+  .kb-stats-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+  }
+  .kb-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    overflow: hidden;
+    white-space: nowrap;
+    flex-shrink: 0;
+    z-index: 0;
+  }
+  .kb-pill-text {
+    position: relative;
+    z-index: 1;
+  }
+  /* Done pill — dark bg with green progress bar fill */
+  .kb-pill-done {
+    background: rgba(255,255,255,0.06);
+    color: #d1d5db;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .kb-pill-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: rgba(34,197,94,0.25);
+    border-radius: 20px 0 0 20px;
+    transition: width 0.4s ease;
+    z-index: 0;
+  }
+  /* Overdue — red */
+  .kb-pill-overdue {
+    background: rgba(239,68,68,0.12);
+    color: #f87171;
+    border: 1px solid rgba(239,68,68,0.22);
+  }
+  /* Due today — amber */
+  .kb-pill-today {
+    background: rgba(245,158,11,0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245,158,11,0.22);
+  }
+  /* High/urgent priority — orange flag */
+  .kb-pill-priority {
+    background: rgba(249,115,22,0.12);
+    color: #fb923c;
+    border: 1px solid rgba(249,115,22,0.22);
+  }
+  /* Expand / collapse chevron */
+  .kb-stats-chevron {
+    background: none !important;
+    border: 1px solid #2a2d3a !important;
+    border-radius: 6px;
+    padding: 3px 5px;
+    color: #6b7280;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    transition: color 0.15s ease, background 0.15s ease, transform 0.2s ease;
+  }
+  .kb-stats-chevron:hover {
+    background: #23263a !important;
+    color: #e5e7eb;
+  }
+  .kb-stats-chevron.expanded svg {
+    transform: rotate(180deg);
+    transition: transform 0.2s ease;
+  }
+  .kb-stats-chevron svg {
+    transition: transform 0.2s ease;
+  }
+
+  /* ── Expanded detail grid ─────────────────────────────────────────────── */
+  .kb-stats-detail {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: max-height 0.25s ease, opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+  }
+  .kb-stats-detail.expanded {
+    max-height: 300px;
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    margin-bottom: 10px;
+  }
+  .kb-stats-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 6px;
+  }
+  .kb-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .kb-stats-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .kb-stat-cell {
+    background: rgba(255,255,255,0.035);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 7px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .kb-stat-label {
+    font-size: 10px;
+    color: #6b7280;
+    font-weight: 500;
+  }
+  .kb-stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #e5e7eb;
+    line-height: 1;
+  }
+  .kb-stat-green  { color: #4ade80; }
+  .kb-stat-red    { color: #f87171; }
+  .kb-stat-amber  { color: #fbbf24; }
+  .kb-stat-blue   { color: #60a5fa; }
 
   /* Modal */
   .kb-modal-overlay {
