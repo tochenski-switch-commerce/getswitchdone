@@ -89,6 +89,9 @@ function BoardsListPage() {
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
 
+  // ── Stats flag (set to true when ready to ship) ───────────────────────────
+  const STATS_ENABLED = false;
+
   // ── Stats state ────────────────────────────────────────────────────────────
   const [rawCards, setRawCards] = useState<CardRow[]>([]);
   const [rawChecklists, setRawChecklists] = useState<ChecklistRow[]>([]);
@@ -139,7 +142,7 @@ function BoardsListPage() {
 
   // ── Fetch stats (once, after boards load) ─────────────────────────────────
   useEffect(() => {
-    if (statsLoaded || boards.length === 0 || !supabase) return;
+    if (!STATS_ENABLED || statsLoaded || boards.length === 0 || !supabase) return;
     setStatsLoaded(true);
 
     const boardIds = boards.map(b => b.id);
@@ -278,7 +281,7 @@ function BoardsListPage() {
         )}
 
         {/* ── Stats pills ─────────────────────────────────────────────────── */}
-        {stats && (
+        {STATS_ENABLED && stats && (
           <div className="kb-stats-row" onClick={e => e.stopPropagation()}>
             <div className="kb-stats-pills">
               {/* Done pill with mini progress bar */}
@@ -316,7 +319,7 @@ function BoardsListPage() {
         )}
 
         {/* ── Expanded detail grid ─────────────────────────────────────────── */}
-        {stats && (
+        {STATS_ENABLED && stats && (
           <div className={`kb-stats-detail${statsExpanded ? ' expanded' : ''}`}>
             <div className="kb-stats-section-label">Cards</div>
             <div className="kb-stats-grid">
@@ -371,7 +374,7 @@ function BoardsListPage() {
         <div className="kb-board-card-footer">
           <span className="kb-board-card-date">
             <Clock size={12} />
-            {stats ? relativeTime(stats.lastActivity) : new Date(board.created_at).toLocaleDateString()}
+            {STATS_ENABLED && stats ? relativeTime(stats.lastActivity) : new Date(board.created_at).toLocaleDateString()}
           </span>
           {board.user_id === user?.id && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
