@@ -90,7 +90,7 @@ function BoardsListPage() {
   const [showWizard, setShowWizard] = useState(false);
 
   // ── Stats flag (set to true when ready to ship) ───────────────────────────
-  const STATS_ENABLED = false;
+  const STATS_ENABLED = true;
 
   // ── Stats state ────────────────────────────────────────────────────────────
   const [rawCards, setRawCards] = useState<CardRow[]>([]);
