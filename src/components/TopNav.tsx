@@ -2,11 +2,20 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { prefetchBoard } from '@/hooks/useProjectBoard';
 import { setBadgeCount } from '@/lib/badge';
-import { Bell, LogOut, Settings } from '@/components/BoardIcons';
+import { Bell, LogOut, Settings, Search, X } from '@/components/BoardIcons';
 import type { Notification } from '@/types/board-types';
+
+type SearchResult = {
+  id: string;
+  title: string;
+  boardId: string;
+  boardTitle: string;
+  columnTitle: string;
+};
 import dynamic from 'next/dynamic';
 
 const InboxPanel = dynamic(() => import('@/components/InboxPanel'), { ssr: false });
@@ -25,6 +34,73 @@ export default function TopNav() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showInbox, setShowInbox] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+
+  const [cardSearch, setCardSearch] = useState('');
+  const [cardSearchResults, setCardSearchResults] = useState<SearchResult[]>([]);
+  const [cardSearchIdx, setCardSearchIdx] = useState(0);
+  const searchBarRef = useRef<HTMLDivElement>(null);
+
+  // Detect if we're on a board page and extract the boardId
+  const boardMatch = pathname.match(/^\/boards\/([a-f0-9-]{36})/);
+  const currentBoardId = boardMatch?.[1] ?? null;
+
+  // When on a board page, fire a custom event so BoardDetailPage can filter columns live
+  useEffect(() => {
+    if (!currentBoardId) return;
+    window.dispatchEvent(new CustomEvent('lumio:board-search', { detail: cardSearch }));
+  }, [cardSearch, currentBoardId]);
+
+  // Clear board filter when leaving a board page
+  useEffect(() => {
+    if (!currentBoardId) {
+      window.dispatchEvent(new CustomEvent('lumio:board-search', { detail: '' }));
+    }
+  }, [currentBoardId]);
+
+  // Debounced global card search — always queries all boards; split in the UI when on a board page
+  useEffect(() => {
+    if (!cardSearch.trim()) { setCardSearchResults([]); return; }
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from('board_cards')
+        .select('id, title, board_id, column_id, board_columns(title), project_boards(title)')
+        .ilike('title', `%${cardSearch.trim()}%`)
+        .eq('is_archived', false)
+        .limit(12);
+      const results: SearchResult[] = (data || []).map((card: Record<string, unknown>) => ({
+        id: card.id as string,
+        title: card.title as string,
+        boardId: card.board_id as string,
+        boardTitle: (card.project_boards as { title?: string } | null)?.title ?? 'Unknown Board',
+        columnTitle: (card.board_columns as { title?: string } | null)?.title ?? 'Unknown Column',
+      }));
+      setCardSearchResults(results);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [cardSearch]);
+
+  // Click-outside to dismiss search
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchBarRef.current && !searchBarRef.current.contains(e.target as Node)) {
+        setCardSearchResults([]);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function handleSelectResult(result: SearchResult) {
+    setCardSearchResults([]);
+    if (currentBoardId && result.boardId === currentBoardId) {
+      // Same board — keep filter active, open card via router (layout state is preserved on soft nav)
+      router.push(`/boards/${result.boardId}?card=${result.id}`, { scroll: false });
+    } else {
+      // Different board — clear search (leaving this board) and navigate
+      setCardSearch('');
+      router.push(`/boards/${result.boardId}?card=${result.id}`);
+    }
+  }
 
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
@@ -195,6 +271,98 @@ export default function TopNav() {
         .kb-profile-dropdown-item.danger { color: #ef4444; }
         .kb-profile-dropdown-item.danger:hover { background: rgba(239,68,68,0.1); }
         .kb-profile-backdrop { position: fixed; inset: 0; z-index: 999; }
+        .kb-global-search {
+          position: relative;
+          flex: 1;
+          max-width: 280px;
+          margin: 0 8px;
+        }
+        .kb-global-search-input-wrap {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid transparent;
+          border-radius: 8px;
+          padding: 0 10px;
+          height: 30px;
+          transition: border-color 0.15s, background 0.15s;
+        }
+        .kb-global-search-input-wrap:focus-within {
+          border-color: rgba(255,255,255,0.15);
+          background: rgba(255,255,255,0.09);
+        }
+        .kb-global-search-input {
+          flex: 1;
+          background: none;
+          border: none;
+          outline: none;
+          color: #e5e7eb;
+          font-size: 13px;
+          min-width: 0;
+        }
+        .kb-global-search-input::placeholder { color: #4b5563; }
+        .kb-global-search-clear {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #6b7280;
+          padding: 2px;
+          display: flex;
+          align-items: center;
+          border-radius: 4px;
+          flex-shrink: 0;
+        }
+        .kb-global-search-clear:hover { color: #d1d5db; }
+        .kb-global-search-dropdown {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          right: 0;
+          z-index: 1001;
+          background: #1a1d27;
+          border: 1px solid #2a2d3a;
+          border-radius: 10px;
+          padding: 4px;
+          box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+        }
+        .kb-global-search-label {
+          padding: 6px 10px 4px;
+          font-size: 10px;
+          font-weight: 700;
+          color: #4b5563;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+        }
+        .kb-global-search-item {
+          padding: 8px 10px;
+          border-radius: 7px;
+          cursor: pointer;
+          transition: background 0.1s;
+        }
+        .kb-global-search-item.selected,
+        .kb-global-search-item:hover {
+          background: rgba(255,255,255,0.06);
+        }
+        .kb-global-search-item-title {
+          color: #e5e7eb;
+          font-size: 13px;
+          font-weight: 500;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .kb-global-search-item-meta {
+          color: #6b7280;
+          font-size: 11px;
+          margin-top: 2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        @media (max-width: 600px) {
+          .kb-global-search { max-width: 140px; }
+        }
       `}</style>
       <nav className="kb-top-nav">
         {/* Lumio wordmark + flame */}
@@ -219,6 +387,89 @@ export default function TopNav() {
             {t.label}
           </button>
         ))}
+
+        {/* Global card search */}
+        <div className="kb-global-search" ref={searchBarRef}>
+          <div className="kb-global-search-input-wrap">
+            <Search size={13} style={{ color: '#4b5563', flexShrink: 0 }} />
+            <input
+              className="kb-global-search-input"
+              placeholder="Search cards…"
+              value={cardSearch}
+              onChange={e => {
+                setCardSearch(e.target.value);
+                setCardSearchIdx(0);
+                setShowInbox(false);
+                setShowProfile(false);
+              }}
+              onKeyDown={e => {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setCardSearchIdx(i => Math.min(i + 1, cardSearchResults.length - 1)); }
+                if (e.key === 'ArrowUp') { e.preventDefault(); setCardSearchIdx(i => Math.max(i - 1, 0)); }
+                if (e.key === 'Enter' && cardSearchResults[cardSearchIdx]) handleSelectResult(cardSearchResults[cardSearchIdx]);
+                if (e.key === 'Escape') { setCardSearch(''); setCardSearchResults([]); }
+              }}
+            />
+            {cardSearch && (
+              <button className="kb-global-search-clear" onClick={() => { setCardSearch(''); setCardSearchResults([]); }}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          {cardSearchResults.length > 0 && (() => {
+            const thisBoardResults = currentBoardId
+              ? cardSearchResults.filter(r => r.boardId === currentBoardId)
+              : [];
+            const otherResults = currentBoardId
+              ? cardSearchResults.filter(r => r.boardId !== currentBoardId)
+              : cardSearchResults;
+            // flat index for keyboard nav: this-board results come first
+            const allOrdered = [...thisBoardResults, ...otherResults];
+            return (
+              <div className="kb-global-search-dropdown">
+                {thisBoardResults.length > 0 && (
+                  <>
+                    <div className="kb-global-search-label">This board</div>
+                    {thisBoardResults.map(result => {
+                      const i = allOrdered.indexOf(result);
+                      return (
+                        <div
+                          key={result.id}
+                          className={`kb-global-search-item${i === cardSearchIdx ? ' selected' : ''}`}
+                          onMouseEnter={() => setCardSearchIdx(i)}
+                          onClick={() => handleSelectResult(result)}
+                        >
+                          <div className="kb-global-search-item-title">{result.title}</div>
+                          <div className="kb-global-search-item-meta">{result.columnTitle}</div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {otherResults.length > 0 && (
+                  <>
+                    <div className="kb-global-search-label" style={thisBoardResults.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
+                      {currentBoardId ? 'Other boards' : 'Cards'}
+                    </div>
+                    {otherResults.map(result => {
+                      const i = allOrdered.indexOf(result);
+                      return (
+                        <div
+                          key={result.id}
+                          className={`kb-global-search-item${i === cardSearchIdx ? ' selected' : ''}`}
+                          onMouseEnter={() => { setCardSearchIdx(i); prefetchBoard(result.boardId); }}
+                          onClick={() => handleSelectResult(result)}
+                        >
+                          <div className="kb-global-search-item-title">{result.title}</div>
+                          <div className="kb-global-search-item-meta">{result.boardTitle} · {result.columnTitle}</div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            );
+          })()}
+        </div>
 
         <div className="kb-nav-right">
           {/* Inbox bell — same as was in board toolbar */}

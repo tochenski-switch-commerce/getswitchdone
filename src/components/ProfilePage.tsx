@@ -8,13 +8,17 @@ import { supabase } from '@/lib/supabase';
 import {
   User, Mail, Key, Bell, Shield, Users, LogOut, Trash2,
   Check, X, Eye, EyeOff, LinkIcon, AlertCircle, Settings,
-  ArrowLeft,
+  ArrowLeft, Sparkles,
 } from '@/components/BoardIcons';
+import { useSubscription } from '@/hooks/useSubscription';
+import { isNative, restorePurchases, manageSubscription, hasProEntitlement } from '@/lib/revenuecat';
 
 export default function ProfilePage() {
   const { user, profile, signOut, updatePassword, updateProfileName, loading: authLoading } = useAuth();
   const router = useRouter();
   const { teams, fetchTeams, leaveTeam, joinTeam } = useTeams();
+  const { isProUser: isPro, status: subStatus, currentPeriodEnd, isStaffGrant, showPaywall, refresh: refreshSub } = useSubscription();
+  const [restoringPurchases, setRestoringPurchases] = useState(false);
 
   // ── Display name ──
   const [name, setName] = useState('');
@@ -191,6 +195,62 @@ export default function ProfilePage() {
           </div>
           <h1 className="pf-title">Profile & Settings</h1>
         </div>
+
+        {/* ── Subscription ── */}
+        <section className="pf-section">
+          <div className="pf-section-header">
+            <Sparkles size={18} style={{ color: '#818cf8' }} />
+            <h2 className="pf-section-title">Subscription</h2>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <span style={{
+              display: 'inline-block', padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+              background: isPro ? 'rgba(99,102,241,0.2)' : 'rgba(107,114,128,0.2)',
+              color: isPro ? '#a5b4fc' : '#9ca3af',
+            }}>
+              {isPro ? 'Pro' : 'Free'}
+            </span>
+            {isStaffGrant && (
+              <span style={{ fontSize: 11, color: '#6b7280' }}>Staff grant</span>
+            )}
+            {subStatus === 'canceled' && (
+              <span style={{ fontSize: 12, color: '#f59e0b' }}>Cancels at period end</span>
+            )}
+          </div>
+          {isPro && currentPeriodEnd && !isStaffGrant && (
+            <p className="pf-hint" style={{ marginBottom: 8 }}>
+              {subStatus === 'canceled' ? 'Access until' : 'Renews'}: {new Date(currentPeriodEnd).toLocaleDateString()}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {!isPro && (
+              <button className="pf-btn pf-btn-primary" onClick={showPaywall}>
+                Upgrade to Pro
+              </button>
+            )}
+            {isPro && !isStaffGrant && isNative() && (
+              <button className="pf-btn pf-btn-ghost" onClick={() => manageSubscription()}>
+                Manage Subscription
+              </button>
+            )}
+            {isNative() && (
+              <button
+                className="pf-btn pf-btn-ghost"
+                disabled={restoringPurchases}
+                onClick={async () => {
+                  setRestoringPurchases(true);
+                  try {
+                    const info = await restorePurchases();
+                    if (info && hasProEntitlement(info)) await refreshSub();
+                  } catch {}
+                  setRestoringPurchases(false);
+                }}
+              >
+                {restoringPurchases ? 'Restoring...' : 'Restore Purchases'}
+              </button>
+            )}
+          </div>
+        </section>
 
         {/* ── Display Name ── */}
         <section className="pf-section">

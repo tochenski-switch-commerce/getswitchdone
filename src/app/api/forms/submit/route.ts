@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (cardErr) {
+      console.error('[form-submit] Failed to create card:', cardErr);
       return NextResponse.json({ error: 'Failed to create card' }, { status: 500 });
     }
 

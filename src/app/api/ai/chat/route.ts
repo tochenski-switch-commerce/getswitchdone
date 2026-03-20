@@ -3,6 +3,7 @@ import { streamText, tool, stepCountIs } from 'ai';
 import { z } from 'zod';
 import { gsdModel } from '@/lib/ai';
 import { createClient } from '@supabase/supabase-js';
+import { isProUser } from '@/lib/subscription-helpers';
 
 /* ── Supabase clients ── */
 const supabaseAnon = createClient(
@@ -86,6 +87,10 @@ export async function POST(req: NextRequest) {
   try {
     const user = await verifyAuth(req);
     if (!user) return new Response('Unauthorized', { status: 401 });
+
+    if (!(await isProUser(user.id))) {
+      return new Response('AI features require a Pro subscription.', { status: 403 });
+    }
 
     const { messages, boardId } = await req.json();
     if (!boardId) return new Response('boardId required', { status: 400 });

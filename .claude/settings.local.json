@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"board_columns\\\\|column_type\\\\|ColumnType\" /Users/tripochenski/Documents/Projects/gsd-boards/boards-starter/schema/*.sql)",
+      "Bash(grep -n \"color\\\\|color.*edit\\\\|color.*picker\" /Users/tripochenski/Documents/Projects/gsd-boards/src/components/board-detail/*.tsx)",
+      "Bash(grep -E \"\\\\.\\(sql|ts|js\\)$\")",
+      "Bash(npx tsc:*)",
+      "Bash(grep -l \"color\\\\|Color\\\\|COLOR\" /Users/tripochenski/Documents/Projects/gsd-boards/src/components/*.tsx)",
+      "Bash(grep \"\\\\.sql$\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(grep -n \"interface BoardCard\\\\|type BoardCard\" /Users/tripochenski/Documents/Projects/gsd-boards/src/types/*.ts)",
+      "Bash(find /Users/tripochenski/Documents/Projects/gsd-boards/src -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.js \\\\\\))",
+      "Bash(grep -r \"subscription\\\\|billing\\\\|payment\\\\|stripe\\\\|pricing\" /Users/tripochenski/Documents/Projects/gsd-boards --include=*.ts --include=*.tsx --include=*.json --include=*.js --exclude-dir=node_modules)",
+      "Bash(find /Users/tripochenski/Documents/Projects/gsd-boards -maxdepth 2 -type f -name *.swift)",
+      "Bash(xargs basename:*)",
+      "Bash(grep -r \"import.*Store\\\\|in.app\\\\|purchase\" /Users/tripochenski/Documents/Projects/gsd-boards/ios/App --include=*.swift)",
+      "Bash(ls -la /Users/tripochenski/Documents/Projects/gsd-boards/ios/App/*.xcodeproj/)",
+      "Bash(ls /Users/tripochenski/Documents/Projects/gsd-boards/ios/App/*.xcodeproj)",
+      "WebFetch(domain:www.revenuecat.com)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm run:*)",
+      "Bash(find /Users/tripochenski/Documents/Projects/gsd-boards -maxdepth 2 -type d -not -path */.* -not -path */node_modules)",
+      "Bash(head -30 /Users/tripochenski/Documents/Projects/gsd-boards/src/app/\\\\\\(app\\\\\\)/boards/page.tsx)",
+      "Bash(head -30 /Users/tripochenski/Documents/Projects/gsd-boards/src/app/\\\\\\(app\\\\\\)/teams/page.tsx)",
+      "Bash(npx next:*)",
+      "Bash(node -e \":*)",
+      "Bash(grep -n \"is_complete\" /Users/tripochenski/Documents/Projects/gsd-boards/boards-starter/schema/*.sql)",
+      "Bash(pkill -f \"next dev\")"
+    ],
+    "additionalDirectories": [
+      "/Users/tripochenski/Documents/Projects/gsd-boards/373s|href=\"\"\"\"/auth\"\"\"\"|href=\"\"\"\""
+    ]
+  }
+}

@@ -10,26 +10,35 @@ export interface RealtimeToast {
   timestamp: number;
 }
 
+type GranularUpdateFn = (
+  table: string,
+  eventType: string,
+  payload: { new?: Record<string, unknown>; old?: Record<string, unknown> },
+) => void;
+
 interface UseRealtimeBoardOptions {
   boardId: string | null;
   currentUserId: string | null;
   cardIds: string[];
   onRemoteChange: () => void;
+  onGranularUpdate?: GranularUpdateFn;
   onNotification?: () => void;
 }
 
-export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChange, onNotification }: UseRealtimeBoardOptions) {
+export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChange, onGranularUpdate, onNotification }: UseRealtimeBoardOptions) {
   const [toasts, setToasts] = useState<RealtimeToast[]>([]);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const cardIdsRef = useRef<Set<string>>(new Set());
   const recentlyUpdatedByMeRef = useRef<Set<string>>(new Set());
   const onRemoteChangeRef = useRef(onRemoteChange);
+  const onGranularUpdateRef = useRef(onGranularUpdate);
   const onNotificationRef = useRef(onNotification);
 
   // Keep refs in sync without re-subscribing
   useEffect(() => { cardIdsRef.current = new Set(cardIds); }, [cardIds]);
   useEffect(() => { onRemoteChangeRef.current = onRemoteChange; }, [onRemoteChange]);
+  useEffect(() => { onGranularUpdateRef.current = onGranularUpdate; }, [onGranularUpdate]);
   useEffect(() => { onNotificationRef.current = onNotification; }, [onNotification]);
 
   const dismissToast = useCallback((id: string) => {
@@ -72,64 +81,80 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
       return record.user_id === currentUserId || record.created_by === currentUserId;
     };
 
-    // Handler for board-scoped tables — filter by board_id in handler
-    // (server-side filters don't work for DELETE events with default replica identity)
+    // Handler for board-scoped tables
     const handleBoardScoped = (payload: any) => {
       const record = payload.new || payload.old;
       const recordBoardId = record?.board_id || record?.id;
       if (recordBoardId && recordBoardId !== boardId) return;
       if (isOwnChange(payload)) return;
 
-      // Suppress toast for cards we just updated locally
       const table = payload.table as string;
       const eventType = payload.eventType as string;
-      if (table === 'board_cards' && eventType === 'UPDATE' && record?.id && recentlyUpdatedByMeRef.current.has(record.id)) {
-        scheduleRefetch();
-        return;
-      }
 
-      scheduleRefetch();
-
+      // board_cards: apply granularly for all event types.
+      // For our own recently-updated cards, skip entirely — we already applied locally.
       if (table === 'board_cards') {
+        if (eventType === 'UPDATE' && record?.id && recentlyUpdatedByMeRef.current.has(record.id)) return;
+        onGranularUpdateRef.current?.(table, eventType, payload);
         if (eventType === 'INSERT') addToast('A new card was added');
         else if (eventType === 'UPDATE') {
           const title = (payload.new?.title || '').slice(0, 40);
           addToast(title ? `Card "${title}" was updated` : 'A card was updated');
         } else if (eventType === 'DELETE') addToast('A card was removed');
-      } else if (table === 'board_columns') {
-        if (eventType === 'INSERT') addToast('A new column was added');
-        else if (eventType === 'UPDATE') addToast('A column was updated');
-        else if (eventType === 'DELETE') addToast('A column was removed');
-      } else if (table === 'project_boards') {
-        addToast('Board details were updated');
-      } else if (table === 'board_labels') {
-        addToast('Labels were updated');
-      } else if (table === 'board_custom_fields') {
-        addToast('Custom fields were updated');
+        return;
       }
+
+      // board_columns UPDATE: granular. INSERT/DELETE: full refetch (structural change).
+      if (table === 'board_columns') {
+        if (eventType === 'UPDATE') {
+          onGranularUpdateRef.current?.(table, eventType, payload);
+          addToast('A column was updated');
+        } else {
+          scheduleRefetch();
+          addToast(eventType === 'INSERT' ? 'A new column was added' : 'A column was removed');
+        }
+        return;
+      }
+
+      // board_labels UPDATE: granular. INSERT/DELETE: full refetch.
+      if (table === 'board_labels') {
+        if (eventType === 'UPDATE') {
+          onGranularUpdateRef.current?.(table, eventType, payload);
+        } else {
+          scheduleRefetch();
+          addToast('Labels were updated');
+        }
+        return;
+      }
+
+      // Everything else (project_boards, board_custom_fields): full refetch.
+      scheduleRefetch();
+      if (table === 'project_boards') addToast('Board details were updated');
+      else if (table === 'board_custom_fields') addToast('Custom fields were updated');
     };
 
-    // Handler for card-scoped tables (no board_id filter, need to check card membership)
+    // Handler for card-scoped tables (no board_id, filtered by card membership)
     const handleCardScoped = (payload: any) => {
       const record = payload.new || payload.old;
       if (!record?.card_id || !cardIdsRef.current.has(record.card_id)) return;
       if (isOwnChange(payload)) return;
-      // Suppress events for cards we just updated locally
-      if (recentlyUpdatedByMeRef.current.has(record.card_id)) {
-        scheduleRefetch();
-        return;
-      }
-      scheduleRefetch();
 
       const table = payload.table as string;
       const eventType = payload.eventType as string;
 
-      if (table === 'card_comments' && eventType === 'INSERT') {
-        addToast('A new comment was added');
-      } else if (table === 'card_checklists') {
-        addToast('A checklist was updated');
+      // Our own changes are already reflected locally — skip entirely.
+      if (recentlyUpdatedByMeRef.current.has(record.card_id)) return;
+
+      // Label assignments and checklists: apply granularly.
+      if (table === 'card_label_assignments' || table === 'card_checklists') {
+        onGranularUpdateRef.current?.(table, eventType, payload);
+        if (table === 'card_checklists') addToast('A checklist was updated');
+        return;
       }
-      // label assignments and custom field values: refetch is enough, no toast needed
+
+      // Comments and custom field values: full refetch + toast.
+      scheduleRefetch();
+      if (table === 'card_comments' && eventType === 'INSERT') addToast('A new comment was added');
     };
 
     // Handler for notifications (user-scoped)
@@ -144,18 +169,15 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
 
     const channel = supabase
       .channel(`board-realtime-${boardId}`)
-      // Board-scoped tables (no server filter — DELETE events lack board_id with default replica identity)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'board_cards' }, handleBoardScoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'board_columns' }, handleBoardScoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'board_labels' }, handleBoardScoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_boards' }, handleBoardScoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'board_custom_fields' }, handleBoardScoped)
-      // Card-scoped tables (filter in handler by card membership)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'card_comments' }, handleCardScoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'card_checklists' }, handleCardScoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'card_label_assignments' }, handleCardScoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'card_custom_field_values' }, handleCardScoped)
-      // Notifications (user-scoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, handleNotification)
       .subscribe();
 

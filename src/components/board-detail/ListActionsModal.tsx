@@ -106,18 +106,28 @@ export default function ListActionsModal({
               {/* Set Assignee */}
               <div className="kb-list-action-row">
                 <div className="kb-list-action-label"><User size={13} /> Set Assignee</div>
-                <div className="kb-list-action-controls">
-                  <select
-                    className="kb-input"
-                    value={bulkAssignee}
-                    onChange={e => setBulkAssignee(e.target.value)}
-                    style={{ flex: 1 }}
-                  >
-                    <option value="">Choose a user...</option>
+                <div className="kb-list-action-controls" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {userProfiles.filter(p => p.name).map(p => (
-                      <option key={p.id} value={p.name}>@{p.name}</option>
+                      <button
+                        key={p.id}
+                        onClick={() => setBulkAssignee(bulkAssignee === p.name ? '' : p.name)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          fontSize: 11, padding: '4px 9px', borderRadius: 5, cursor: 'pointer',
+                          background: bulkAssignee === p.name ? '#1f2937' : 'transparent',
+                          color: bulkAssignee === p.name ? '#d1d5db' : '#6b7280',
+                          border: `1px solid ${bulkAssignee === p.name ? '#4b5563' : '#374151'}`,
+                          transition: 'all 0.1s',
+                        }}
+                      >
+                        <User size={10} />@{p.name}
+                      </button>
                     ))}
-                  </select>
+                    {userProfiles.filter(p => p.name).length === 0 && (
+                      <span style={{ fontSize: 11, color: '#4b5563' }}>No team members</span>
+                    )}
+                  </div>
                   <button
                     className="kb-btn kb-btn-primary kb-btn-sm"
                     disabled={!bulkAssignee.trim() || applying}
@@ -133,19 +143,32 @@ export default function ListActionsModal({
               {/* Set Priority */}
               <div className="kb-list-action-row">
                 <div className="kb-list-action-label"><Flag size={13} /> Set Priority</div>
-                <div className="kb-list-action-controls">
-                  <select
-                    className="kb-input"
-                    value={bulkPriority}
-                    onChange={e => setBulkPriority(e.target.value)}
-                    style={{ flex: 1 }}
-                  >
-                    <option value="">Choose a priority...</option>
-                    <option value="none">None</option>
-                    {(Object.keys(PRIORITY_CONFIG) as CardPriority[]).map(p => (
-                      <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
+                <div className="kb-list-action-controls" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    {([
+                      { val: 'none', label: 'None', color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
+                      ...(Object.keys(PRIORITY_CONFIG) as CardPriority[]).map(p => ({
+                        val: p,
+                        label: PRIORITY_CONFIG[p].label,
+                        color: PRIORITY_CONFIG[p].color,
+                        bg: PRIORITY_CONFIG[p].bg,
+                      })),
+                    ]).map(({ val, label, color, bg }) => (
+                      <button
+                        key={val}
+                        onClick={() => setBulkPriority(bulkPriority === val ? '' : val)}
+                        style={{
+                          fontSize: 11, fontWeight: 600, padding: '4px 9px', borderRadius: 5, cursor: 'pointer',
+                          background: bulkPriority === val ? bg : 'transparent',
+                          color: bulkPriority === val ? color : '#6b7280',
+                          border: `1px solid ${bulkPriority === val ? color + '66' : '#374151'}`,
+                          transition: 'all 0.1s',
+                        }}
+                      >
+                        {label}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                   <button
                     className="kb-btn kb-btn-primary kb-btn-sm"
                     disabled={!bulkPriority || applying}
@@ -163,13 +186,24 @@ export default function ListActionsModal({
               {board.labels.length > 0 && (
                 <div className="kb-list-action-row">
                   <div className="kb-list-action-label"><Tag size={13} /> Add Label</div>
-                  <div className="kb-list-action-controls">
-                    <select className="kb-input kb-import-select" value={bulkLabel} onChange={e => setBulkLabel(e.target.value)} style={{ flex: 1 }}>
-                      <option value="">Choose a label...</option>
+                  <div className="kb-list-action-controls" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       {board.labels.map(l => (
-                        <option key={l.id} value={l.id}>{l.name}</option>
+                        <button
+                          key={l.id}
+                          onClick={() => setBulkLabel(bulkLabel === l.id ? '' : l.id)}
+                          style={{
+                            fontSize: 11, fontWeight: 600, padding: '4px 9px', borderRadius: 5, cursor: 'pointer',
+                            background: bulkLabel === l.id ? l.color : 'transparent',
+                            color: bulkLabel === l.id ? '#fff' : l.color,
+                            border: `1px solid ${l.color}${bulkLabel === l.id ? '' : '66'}`,
+                            transition: 'all 0.1s',
+                          }}
+                        >
+                          {l.name}
+                        </button>
                       ))}
-                    </select>
+                    </div>
                     <button
                       className="kb-btn kb-btn-primary kb-btn-sm"
                       disabled={!bulkLabel || applying}
@@ -286,13 +320,29 @@ export default function ListActionsModal({
               {otherColumns.length > 0 && (
                 <div className="kb-list-action-row">
                   <div className="kb-list-action-label"><FolderKanban size={13} /> Move All Cards</div>
-                  <div className="kb-list-action-controls">
-                    <select className="kb-input kb-import-select" value={bulkMoveCol} onChange={e => setBulkMoveCol(e.target.value)} style={{ flex: 1 }}>
-                      <option value="">Choose a list...</option>
+                  <div className="kb-list-action-controls" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       {otherColumns.map(c => (
-                        <option key={c.id} value={c.id}>{c.title}</option>
+                        <button
+                          key={c.id}
+                          onClick={() => setBulkMoveCol(bulkMoveCol === c.id ? '' : c.id)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            fontSize: 11, padding: '4px 9px', borderRadius: 5, cursor: 'pointer',
+                            background: bulkMoveCol === c.id ? '#1f2937' : 'transparent',
+                            color: bulkMoveCol === c.id ? '#e5e7eb' : '#6b7280',
+                            border: `1px solid ${bulkMoveCol === c.id ? '#374151' : '#374151'}`,
+                            transition: 'all 0.1s',
+                          }}
+                        >
+                          <span style={{
+                            width: 7, height: 7, borderRadius: '50%',
+                            background: c.color, flexShrink: 0,
+                          }} />
+                          {c.title}
+                        </button>
                       ))}
-                    </select>
+                    </div>
                     <button
                       className="kb-btn kb-btn-primary kb-btn-sm"
                       disabled={!bulkMoveCol || applying}

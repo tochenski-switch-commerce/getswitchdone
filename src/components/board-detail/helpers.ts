@@ -92,7 +92,11 @@ export function sanitizeRichText(html: string): string {
     .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
     .replace(/\son\w+\s*=\s*\S+/gi, '')
     .replace(/javascript\s*:/gi, 'blocked:')
-    .replace(/data\s*:/gi, 'blocked:');
+    .replace(/data\s*:/gi, 'blocked:')
+    .replace(/<a\s+([^>]*href="https?:\/\/[^"]*"[^>]*)>/gi, (match, attrs) => {
+      if (/target=/i.test(attrs)) return match;
+      return `<a ${attrs} target="_blank" rel="noopener noreferrer">`;
+    });
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -138,7 +142,11 @@ export function sanitizeEmailHtml(html: string): string {
     .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
     .replace(/\son\w+\s*=\s*\S+/gi, '')
     .replace(/javascript\s*:/gi, 'blocked:')
-    .replace(/data\s*:/gi, 'blocked:');
+    .replace(/data\s*:/gi, 'blocked:')
+    .replace(/<a\s+([^>]*href="https?:\/\/[^"]*"[^>]*)>/gi, (match, attrs) => {
+      if (/target=/i.test(attrs)) return match;
+      return `<a ${attrs} target="_blank" rel="noopener noreferrer">`;
+    });
 }
 
 export function emailTimeAgo(dateStr: string): string {

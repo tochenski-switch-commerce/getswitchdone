@@ -3,6 +3,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { gsdModel } from '@/lib/ai';
 import { createClient } from '@supabase/supabase-js';
+import { isProUser } from '@/lib/subscription-helpers';
 
 /* ── Supabase ── */
 const supabaseAnon = createClient(
@@ -206,6 +207,10 @@ Focus on: what's moving, what's stuck, and what's coming up.`,
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (!(await isProUser(user.id))) {
+    return NextResponse.json({ error: 'AI features require a Pro subscription.' }, { status: 403 });
+  }
 
   const { boardId, includeStandup } = await req.json();
   if (!boardId) return NextResponse.json({ error: 'boardId required' }, { status: 400 });

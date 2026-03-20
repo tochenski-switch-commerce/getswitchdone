@@ -381,6 +381,43 @@ export const kanbanStyles = `
     border-color: #6366f1 !important;
     box-shadow: 0 0 0 2px rgba(99,102,241,0.2) inset;
   }
+  .kb-column.kb-col-dragging {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  .kb-col-drop-indicator {
+    flex-shrink: 0;
+    width: 4px;
+    min-width: 4px;
+    border-radius: 2px;
+    background: #FF6B35;
+    align-self: stretch;
+    min-height: 120px;
+    box-shadow: 0 0 10px rgba(255,107,53,0.5);
+    animation: kb-drop-indicator-pop 0.15s ease;
+  }
+  @keyframes kb-drop-indicator-pop {
+    from { opacity: 0; transform: scaleY(0.7); }
+    to { opacity: 1; transform: scaleY(1); }
+  }
+  .kb-col-drag-handle {
+    display: flex;
+    align-items: center;
+    cursor: grab;
+    color: #4b5563;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+  .kb-col-drag-handle:hover {
+    color: #9ca3af;
+  }
+  .kb-col-drag-handle:active {
+    cursor: grabbing;
+  }
+  .kb-column-header:hover .kb-col-drag-handle {
+    opacity: 1;
+  }
 
   /* ── Collapsed column ── */
   .kb-column.kb-column-collapsed {

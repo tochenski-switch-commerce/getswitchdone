@@ -58,11 +58,31 @@ export interface ProjectBoard {
   is_public: boolean;
   timezone?: string;
   team_id?: string | null;
+  automations?: BoardAutomationRule[];
   created_at: string;
   updated_at: string;
 }
 
 export type ColumnType = 'normal' | 'board_links';
+
+// ── Board-level automations ──
+
+export type BoardAutomationTrigger =
+  | 'card_completed'       // When card.is_complete becomes true
+  | 'assignee_added'       // When a new assignee is added to a card
+  | 'start_date_arrived'   // When card.start_date equals today (checked on board load)
+  | 'due_date_overdue';    // When card.due_date <= today (checked on board load)
+
+export type BoardAutomationAction =
+  | { type: 'move_to_column'; column_id: string }  // move card to this column
+  | { type: 'move_to_top' };                        // move card to top of its current column
+
+export interface BoardAutomationRule {
+  id: string;
+  trigger: BoardAutomationTrigger;
+  action: BoardAutomationAction;
+  enabled: boolean;
+}
 
 export type ColumnAutomationAction =
   | { type: 'set_complete'; value: boolean }

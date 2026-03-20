@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { registerPushNotifications, unregisterPushNotifications } from '@/lib/push-notifications';
 import { deleteLoginCredentials } from '@/lib/biometric';
 import { syncSessionToWidget, clearWidgetSession } from '@/lib/widget-bridge';
+import { configureRevenueCat, loginRevenueCat, logoutRevenueCat } from '@/lib/revenuecat';
+import { loginRevenueCatWeb, logoutRevenueCatWeb } from '@/lib/revenuecat-web';
 import type { User, Session } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types/board-types';
 
@@ -57,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         fetchProfile(session.user.id);
         syncSessionToWidget(session.access_token, session.refresh_token, session.user.id);
+        configureRevenueCat().then(() => loginRevenueCat(session.user.id));
+        loginRevenueCatWeb(session.user.id);
       }
       setLoading(false);
     });
@@ -69,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchProfile(session.user.id);
         registerPushNotifications(session.user.id);
         syncSessionToWidget(session.access_token, session.refresh_token, session.user.id);
+        configureRevenueCat().then(() => loginRevenueCat(session.user.id));
+        loginRevenueCatWeb(session.user.id);
       } else {
         setProfile(null);
         clearWidgetSession();
@@ -88,6 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) await unregisterPushNotifications(user.id);
     await deleteLoginCredentials();
     await clearWidgetSession();
+    await logoutRevenueCat();
+    await logoutRevenueCatWeb();
     await supabase.auth.signOut();
   };
 

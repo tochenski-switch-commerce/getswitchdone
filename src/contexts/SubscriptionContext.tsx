@@ -48,7 +48,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         .from('user_subscriptions')
         .select('entitlement, status, current_period_end, is_staff_grant')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (data) {
         setPlan(data.entitlement as PlanTier);

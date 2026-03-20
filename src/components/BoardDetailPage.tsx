@@ -6,7 +6,8 @@ import { useProjectBoard } from '@/hooks/useProjectBoard';
 import { useRealtimeBoard } from '@/hooks/useRealtimeBoard';
 import { useTeams } from '@/hooks/useTeams';
 import { useAuth } from '@/contexts/AuthContext';
-import type { BoardCard, CardPriority, BoardEmail } from '@/types/board-types';
+import { useSubscription } from '@/hooks/useSubscription';
+import type { BoardCard, CardPriority, BoardEmail, BoardAutomationRule, BoardAutomationTrigger } from '@/types/board-types';
 import {
   Plus, ArrowLeft, Search, MoreHorizontal, Trash2, Pencil,
   Tag, X, ChevronLeft, ChevronRight, User, Users,
@@ -14,7 +15,7 @@ import {
   Zap, Bold, Italic, Underline, Strikethrough,
   LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, FileText, Mail, Clock,
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
-  BotMessageSquare,
+  BotMessageSquare, GripVertical,
 } from '@/components/BoardIcons';
 import dynamic from 'next/dynamic';
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
@@ -35,6 +36,7 @@ const LabelManagerModal = dynamic(() => import('./board-detail/LabelManagerModal
 const ListActionsModal = dynamic(() => import('./board-detail/ListActionsModal'), { ssr: false });
 const CustomFieldManagerModal = dynamic(() => import('./board-detail/CustomFieldManagerModal'), { ssr: false });
 const ColumnAutomationsModal = dynamic(() => import('./board-detail/ColumnAutomationsModal'), { ssr: false });
+const BoardAutomationsModal = dynamic(() => import('./board-detail/BoardAutomationsModal'), { ssr: false });
 import { kanbanStyles } from './board-detail/kanban-styles';
 import { hapticLight, hapticMedium, hapticHeavy, hapticSelection } from '@/lib/haptics';
 
@@ -66,7 +68,7 @@ function BoardPage() {
     checklistTemplates,
     addLabel, updateLabel, deleteLabel,
     addCustomField, updateCustomField, deleteCustomField, setCardCustomFieldValue,
-    userProfiles, boardMembers, fetchUserProfiles,
+    userProfiles, boardMembers,
     notifications, fetchNotifications, createNotification, markNotificationRead, markCardNotificationsRead, markAllNotificationsRead, deleteNotification, clearAllNotifications,
     addCardLink, removeCardLink, searchCards,
     boardEmails, unroutedEmails, fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
@@ -74,11 +76,21 @@ function BoardPage() {
   } = useProjectBoard();
 
   const { teams, fetchTeams } = useTeams();
+  const { canCreateCard, canUseAI, showPaywall } = useSubscription();
 
   const [search, setSearch] = useState('');
   const [filterPriority, setFilterPriority] = useState<CardPriority | 'none' | ''>('');
   const [filterLabel, setFilterLabel] = useState('');
   const [filterDate, setFilterDate] = useState('');
+
+  // Sync search state from the TopNav global search bar
+  useEffect(() => {
+    function onBoardSearch(e: Event) {
+      setSearch((e as CustomEvent<string>).detail);
+    }
+    window.addEventListener('lumio:board-search', onBoardSearch);
+    return () => window.removeEventListener('lumio:board-search', onBoardSearch);
+  }, []);
   const [selectedCard, setSelectedCard] = useState<BoardCard | null>(null);
   const closedCardRef = useRef<string | null>(null);
   const [addingCardCol, setAddingCardCol] = useState<string | null>(null);
@@ -137,8 +149,13 @@ function BoardPage() {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
   const [dragOverPos, setDragOverPos] = useState<'above' | 'below'>('below');
+  const [dragColId, setDragColId] = useState<string | null>(null);
+  const dragColIdRef = useRef<string | null>(null);
+  const [dragOverColReorder, setDragOverColReorder] = useState<{ colId: string; side: 'before' | 'after' } | null>(null);
   const [listActionsColId, setListActionsColId] = useState<string | null>(null);
   const [automationsColId, setAutomationsColId] = useState<string | null>(null);
+  const [showBoardAutomations, setShowBoardAutomations] = useState(false);
+  const boardAutoRanRef = useRef<string | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [zoomedColId, setZoomedColId] = useState<string | null>(null);
   const lastTapRef = useRef<{ colId: string; time: number } | null>(null);
@@ -185,13 +202,58 @@ function BoardPage() {
       Promise.all([
         fetchBoard(boardId),
         fetchChecklistTemplates(boardId),
-        fetchUserProfiles(),
         fetchNotifications(),
         fetchBoards(),
         fetchTeams(),
       ]);
     }
-  }, [boardId, fetchBoard, fetchChecklistTemplates, fetchUserProfiles, fetchNotifications, fetchBoards, fetchTeams]);
+  }, [boardId, fetchBoard, fetchChecklistTemplates, fetchNotifications, fetchBoards, fetchTeams]);
+
+  // Run date-based board automations once per board load
+  useEffect(() => {
+    if (!board || boardAutoRanRef.current === board.id) return;
+    boardAutoRanRef.current = board.id;
+
+    const rules: BoardAutomationRule[] = (board.automations as BoardAutomationRule[] | undefined) ?? [];
+    if (rules.length === 0) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const runDateAutomations = async () => {
+      for (const rule of rules) {
+        if (!rule.enabled) continue;
+        if (rule.trigger !== 'start_date_arrived' && rule.trigger !== 'due_date_overdue') continue;
+
+        for (const card of board.cards) {
+          if (card.is_archived || card.is_complete) continue;
+
+          const matches =
+            (rule.trigger === 'start_date_arrived' && card.start_date === todayStr) ||
+            (rule.trigger === 'due_date_overdue' && !!card.due_date && card.due_date <= todayStr);
+
+          if (!matches) continue;
+
+          if (rule.action.type === 'move_to_column') {
+            const targetColId = rule.action.column_id;
+            if (card.column_id === targetColId) continue;
+            const maxPos = board.cards
+              .filter(c => c.column_id === targetColId && !c.is_archived)
+              .reduce((m, c) => Math.max(m, c.position), -1);
+            await moveCard(boardId, card.id, targetColId, maxPos + 1);
+          } else if (rule.action.type === 'move_to_top') {
+            const colCards = board.cards
+              .filter(c => c.column_id === card.column_id && !c.is_archived)
+              .sort((a, b) => a.position - b.position);
+            if (colCards[0]?.id === card.id) continue;
+            const orderedIds = [card.id, ...colCards.filter(c => c.id !== card.id).map(c => c.id)];
+            await reorderCardsInColumn(boardId, card.column_id, orderedIds);
+          }
+        }
+      }
+    };
+
+    runDateAutomations();
+  }, [board, boardId, moveCard, reorderCardsInColumn]);
 
   // Sync note content when board loads
   useEffect(() => {
@@ -433,26 +495,7 @@ function BoardPage() {
       }
 
       // Fire column automations
-      const destCol = columns.find(c => c.id === colId);
-      const automations = destCol?.automations ?? [];
-      if (automations.length > 0) {
-        const cardUpdates: Record<string, unknown> = {};
-        for (const action of automations) {
-          if (action.type === 'set_complete') cardUpdates.is_complete = action.value;
-          else if (action.type === 'set_priority') cardUpdates.priority = action.value;
-          else if (action.type === 'set_assignee') cardUpdates.assignee = action.value;
-          else if (action.type === 'set_labels') cardUpdates.label_ids = action.value;
-        }
-        if (Object.keys(cardUpdates).length > 0) {
-          await updateCard(boardId, dragCardId, cardUpdates);
-        }
-        const checklistAction = automations.find(a => a.type === 'add_checklist');
-        if (checklistAction && checklistAction.type === 'add_checklist') {
-          for (const templateId of checklistAction.value) {
-            await applyChecklistTemplate(boardId, dragCardId, templateId);
-          }
-        }
-      }
+      await runColumnAutomations(dragCardId, colId);
     }
 
     setDragCardId(null);
@@ -465,9 +508,67 @@ function BoardPage() {
     setDragExpandedCol(null);
   };
 
+  // ── Column reorder drag ──
+  const handleColDragStart = (e: React.DragEvent, colId: string) => {
+    e.stopPropagation();
+    hapticLight();
+    dragColIdRef.current = colId;
+    setDragColId(colId);
+    e.dataTransfer.effectAllowed = 'move';
+    // Custom drag ghost — lifted/rotated look
+    const colEl = (e.currentTarget as HTMLElement).closest('.kb-column') as HTMLElement;
+    if (colEl) {
+      const ghost = colEl.cloneNode(true) as HTMLElement;
+      ghost.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${colEl.offsetWidth}px;transform:rotate(2deg) scale(0.97);opacity:0.9;box-shadow:0 24px 60px rgba(0,0,0,0.7);border-radius:14px;pointer-events:none;`;
+      document.body.appendChild(ghost);
+      e.dataTransfer.setDragImage(ghost, colEl.offsetWidth / 2, 40);
+      requestAnimationFrame(() => document.body.removeChild(ghost));
+    }
+  };
+
+  const handleColDragOver = (e: React.DragEvent, colId: string) => {
+    if (!dragColIdRef.current || dragColIdRef.current === colId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const side = e.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
+    setDragOverColReorder(prev => (prev?.colId === colId && prev.side === side ? prev : { colId, side }));
+  };
+
+  const handleColDrop = async (e: React.DragEvent, targetColId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const draggingId = dragColIdRef.current;
+    const side = dragOverColReorder?.side ?? 'after';
+    dragColIdRef.current = null;
+    setDragColId(null);
+    setDragOverColReorder(null);
+    if (!draggingId || draggingId === targetColId || !board) return;
+    const sorted = [...columns];
+    const fromIdx = sorted.findIndex(c => c.id === draggingId);
+    if (fromIdx === -1) return;
+    const [moved] = sorted.splice(fromIdx, 1);
+    let toIdx = sorted.findIndex(c => c.id === targetColId);
+    if (toIdx === -1) return;
+    if (side === 'after') toIdx++;
+    sorted.splice(toIdx, 0, moved);
+    const newOrder = sorted.map((c, i) => ({ id: c.id, position: i }));
+    hapticMedium();
+    await reorderColumns(boardId, newOrder);
+  };
+
+  const handleColDragEnd = () => {
+    dragColIdRef.current = null;
+    setDragColId(null);
+    setDragOverColReorder(null);
+  };
+
   // ── Quick add card ──
+  const activeCardCount = board?.cards?.filter(c => !c.is_archived).length ?? 0;
+
   const handleQuickAddCard = async (colId: string) => {
     if (!newCardTitle.trim()) return;
+    if (!canCreateCard(activeCardCount)) { showPaywall(); return; }
     await addCard(boardId, { column_id: colId, title: newCardTitle });
     hapticMedium();
     setNewCardTitle('');
@@ -486,6 +587,7 @@ function BoardPage() {
 
   const handleMobileAddCard = async () => {
     if (!mobileAddTitle.trim() || !mobileAddColId) return;
+    if (!canCreateCard(activeCardCount)) { showPaywall(); return; }
     await addCard(boardId, { column_id: mobileAddColId, title: mobileAddTitle });
     hapticMedium();
     setMobileAddTitle('');
@@ -596,9 +698,13 @@ function BoardPage() {
           assignees: card.assignees || (card.assignee ? [card.assignee] : []),
           label_ids: (card.labels || []).map(l => l.id),
         }).then(newCard => {
-          if (newCard && card.checklists?.length) {
+          if (!newCard) return;
+          if (card.checklists?.length) {
             card.checklists.forEach(item => addChecklistItem(boardId, newCard.id, item.title));
           }
+          const todayStr = new Date().toISOString().split('T')[0];
+          if (newCard.due_date && newCard.due_date <= todayStr) runBoardAutomation(newCard, 'due_date_overdue');
+          else if (newCard.start_date === todayStr) runBoardAutomation(newCard, 'start_date_arrived');
         });
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
@@ -611,6 +717,7 @@ function BoardPage() {
         const newDueDate = card.due_date ? null : today;
         markCardUpdated(card.id);
         updateCard(boardId, card.id, { due_date: newDueDate });
+        if (newDueDate) runBoardAutomation(card, 'due_date_overdue');
       } else if (e.key === 'm') {
         e.preventDefault();
         const myName = profile?.name;
@@ -620,6 +727,9 @@ function BoardPage() {
           const newAssignees = isAssigned ? currentAssignees.filter(a => a.toLowerCase() !== myName.toLowerCase()) : [...currentAssignees, myName];
           markCardUpdated(card.id);
           updateCard(boardId, card.id, { assignee: newAssignees[0] || null, assignees: newAssignees });
+          if (!isAssigned) {
+            runBoardAutomation(card, 'assignee_added');
+          }
         }
       } else if (e.key === 'Enter') {
         e.preventDefault();
@@ -676,6 +786,30 @@ function BoardPage() {
       for (const templateId of checklistAction.value) {
         await applyChecklistTemplate(boardId, cardId, templateId);
       }
+    }
+  };
+
+  // Execute a board-level automation rule for the given trigger
+  const runBoardAutomation = async (card: BoardCard, trigger: BoardAutomationTrigger) => {
+    const rules: BoardAutomationRule[] = (board.automations as BoardAutomationRule[] | undefined) ?? [];
+    const rule = rules.find(r => r.enabled && r.trigger === trigger);
+    if (!rule) return;
+
+    if (rule.action.type === 'move_to_column') {
+      const { column_id: targetColId } = rule.action;
+      if (!targetColId || card.column_id === targetColId) return;
+      const maxPos = board.cards
+        .filter(c => c.column_id === targetColId && !c.is_archived)
+        .reduce((m, c) => Math.max(m, c.position), -1);
+      await moveCard(boardId, card.id, targetColId, maxPos + 1);
+      await runColumnAutomations(card.id, targetColId);
+    } else if (rule.action.type === 'move_to_top') {
+      const colCards = board.cards
+        .filter(c => c.column_id === card.column_id && !c.is_archived)
+        .sort((a, b) => a.position - b.position);
+      if (colCards[0]?.id === card.id) return;
+      const orderedIds = [card.id, ...colCards.filter(c => c.id !== card.id).map(c => c.id)];
+      await reorderCardsInColumn(boardId, card.column_id, orderedIds);
     }
   };
 
@@ -813,20 +947,6 @@ function BoardPage() {
         </div>
 
         <div className="kb-topbar-right">
-          {/* Search */}
-          <div className="kb-search-box">
-            <Search size={14} style={{ color: '#6b7280' }} />
-            <input
-              className="kb-search-input"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search cards..."
-            />
-            {search && (
-              <button className="kb-btn-icon-sm" onClick={() => setSearch('')}><X size={12} /></button>
-            )}
-          </div>
-
           {/* Filters — inline on desktop, toggle on mobile */}
           <div className="kb-filters-inline">
             <select
@@ -892,7 +1012,10 @@ function BoardPage() {
           {/* GSD AI */}
           <button
             className={`kb-btn-icon ${showAiPanel ? 'kb-btn-icon-active' : ''}`}
-            onClick={() => setShowAiPanel(!showAiPanel)}
+            onClick={() => {
+              if (!canUseAI) { showPaywall(); return; }
+              setShowAiPanel(!showAiPanel);
+            }}
             title="GSD AI"
           >
             <BotMessageSquare size={16} />
@@ -918,6 +1041,9 @@ function BoardPage() {
                   </button>
                   <button className="kb-dropdown-item" onClick={() => { setShowBoardMenu(false); setShowCustomFieldManager(true); }}>
                     <SlidersHorizontal size={14} /> Custom Fields
+                  </button>
+                  <button className="kb-dropdown-item" onClick={() => { setShowBoardMenu(false); setShowBoardAutomations(true); }}>
+                    <Zap size={14} /> Board Automations
                   </button>
                   <button className="kb-dropdown-item" onClick={() => { setShowBoardMenu(false); router.push(`/forms?board=${boardId}`); }}>
                     <FileText size={14} /> Forms
@@ -1164,12 +1290,19 @@ function BoardPage() {
             }
 
             return (
+              <React.Fragment key={col.id}>
+                {dragColId && dragOverColReorder?.colId === col.id && dragOverColReorder.side === 'before' && (
+                  <div className="kb-col-drop-indicator" />
+                )}
               <div
-                key={col.id}
-                className={`kb-column ${dragOverCol === col.id ? 'drag-over' : ''} ${isLinkCol ? 'kb-column-links' : ''} ${zoomedColId === col.id ? 'kb-column-zoomed' : ''}`}
-                onDragOver={e => handleDragOver(e, col.id)}
-                onDragLeave={() => setDragOverCol(null)}
-                onDrop={e => handleDrop(e, col.id)}
+                className={`kb-column ${dragColId === col.id ? 'kb-col-dragging' : ''} ${!dragColId && dragOverCol === col.id ? 'drag-over' : ''} ${isLinkCol ? 'kb-column-links' : ''} ${zoomedColId === col.id ? 'kb-column-zoomed' : ''}`}
+                onDragOver={e => { if (dragColIdRef.current) handleColDragOver(e, col.id); else handleDragOver(e, col.id); }}
+                onDragLeave={e => {
+                  if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) return;
+                  setDragOverCol(null);
+                  setDragOverColReorder(null);
+                }}
+                onDrop={e => { if (dragColIdRef.current) handleColDrop(e, col.id); else handleDrop(e, col.id); }}
               >
                 {/* Column header */}
                 <div className="kb-column-header" onTouchEnd={e => {
@@ -1188,6 +1321,15 @@ function BoardPage() {
                   }
                 }}>
                   <div className="kb-column-title-row">
+                    <span
+                      className="kb-col-drag-handle"
+                      draggable
+                      onDragStart={e => handleColDragStart(e, col.id)}
+                      onDragEnd={handleColDragEnd}
+                      title="Drag to reorder"
+                    >
+                      <GripVertical size={13} />
+                    </span>
                     <span className="kb-column-dot" style={{ background: col.color }} />
                     {isLinkCol && <LinkIcon size={13} style={{ color: col.color, marginRight: 2, flexShrink: 0 }} />}
                     <InlineEdit
@@ -1420,7 +1562,11 @@ function BoardPage() {
                               await updateCard(boardId, card.id, { priority: p });
                             }}
                             onToggleComplete={async () => {
-                              await updateCard(boardId, card.id, { is_complete: !card.is_complete });
+                              const wasComplete = card.is_complete;
+                              await updateCard(boardId, card.id, { is_complete: !wasComplete });
+                              if (!wasComplete) {
+                                await runBoardAutomation(card, 'card_completed');
+                              }
                             }}
                             onMoveToNext={(() => {
                               const colIdx = columns.indexOf(col);
@@ -1469,6 +1615,10 @@ function BoardPage() {
                   </>
                 )}
               </div>
+                {dragColId && dragOverColReorder?.colId === col.id && dragOverColReorder.side === 'after' && (
+                  <div className="kb-col-drop-indicator" />
+                )}
+              </React.Fragment>
             );
           })}
 
@@ -1594,8 +1744,24 @@ function BoardPage() {
           onUpdate={async (updates) => {
             const oldAssignees = new Set((activeCard.assignees || (activeCard.assignee ? [activeCard.assignee] : [])).map(a => a.toLowerCase()));
             const newAssignees: string[] = updates.assignees || [];
+            const wasComplete = activeCard.is_complete;
             markCardUpdated(activeCard.id);
             await updateCard(boardId, activeCard.id, updates);
+            // Fire board automations for relevant field changes
+            if (updates.is_complete === true && !wasComplete) {
+              await runBoardAutomation(activeCard, 'card_completed');
+            }
+            const assigneeAdded = newAssignees.some(n => !oldAssignees.has(n.toLowerCase()));
+            if (assigneeAdded) {
+              await runBoardAutomation(activeCard, 'assignee_added');
+            }
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (updates.due_date !== undefined && updates.due_date && updates.due_date <= todayStr) {
+              await runBoardAutomation(activeCard, 'due_date_overdue');
+            }
+            if (updates.start_date !== undefined && updates.start_date === todayStr) {
+              await runBoardAutomation(activeCard, 'start_date_arrived');
+            }
             // Notify newly added assignees
             for (const name of newAssignees) {
               if (!oldAssignees.has(name.toLowerCase())) {
@@ -1689,7 +1855,10 @@ function BoardPage() {
               }
             }
           }}
-          onMoveCard={async (newColumnId) => { await moveCard(boardId, activeCard.id, newColumnId, 0); }}
+          onMoveCard={async (newColumnId) => {
+            await moveCard(boardId, activeCard.id, newColumnId, 0);
+            await runColumnAutomations(activeCard.id, newColumnId);
+          }}
           checklistTemplates={checklistTemplates}
           onSaveTemplate={async (name, items) => { await saveChecklistTemplate(boardId, name, items); }}
           onEditTemplate={async (templateId, name, items) => { await updateChecklistTemplate(templateId, name, items); }}
@@ -1713,6 +1882,11 @@ function BoardPage() {
                 await addChecklistItem(boardId, newCard.id, item.title);
               }
             }
+            if (newCard) {
+              const todayStr = new Date().toISOString().split('T')[0];
+              if (newCard.due_date && newCard.due_date <= todayStr) await runBoardAutomation(newCard, 'due_date_overdue');
+              else if (newCard.start_date === todayStr) await runBoardAutomation(newCard, 'start_date_arrived');
+            }
           }}
           userProfiles={boardMembers}
           onSetCustomFieldValue={setCardCustomFieldValue}
@@ -1735,7 +1909,10 @@ function BoardPage() {
             board={board}
             onUpdateCard={async (cardId, updates) => { markCardUpdated(cardId); await updateCard(boardId, cardId, updates); }}
             onDeleteCard={async (cardId) => { await deleteCard(boardId, cardId); }}
-            onMoveCard={async (cardId, newColId) => { await moveCard(boardId, cardId, newColId, 0); }}
+            onMoveCard={async (cardId, newColId) => {
+              await moveCard(boardId, cardId, newColId, 0);
+              await runColumnAutomations(cardId, newColId);
+            }}
             onAddChecklistItem={async (cardId, title) => { await addChecklistItem(boardId, cardId, title); }}
             checklistTemplates={checklistTemplates}
             onApplyTemplate={async (cardId, templateId) => { await applyChecklistTemplate(boardId, cardId, templateId); }}
@@ -1764,7 +1941,7 @@ function BoardPage() {
           <ColumnAutomationsModal
             column={col}
             labels={board.labels}
-            userProfiles={boardMembers}
+            userProfiles={boardMembers.length > 0 ? boardMembers : userProfiles}
             checklistTemplates={checklistTemplates}
             onSave={async (automations) => {
               await updateColumn(boardId, col.id, { automations } as any);
@@ -1773,6 +1950,18 @@ function BoardPage() {
           />
         );
       })()}
+
+      {/* ── Board Automations Modal ── */}
+      {showBoardAutomations && (
+        <BoardAutomationsModal
+          automations={(board.automations as BoardAutomationRule[] | undefined) ?? []}
+          columns={columns}
+          onSave={async (automations) => {
+            await updateBoard(boardId, { automations } as any);
+          }}
+          onClose={() => setShowBoardAutomations(false)}
+        />
+      )}
 
       {/* ── Email panel (slide-in from right) ── */}
       <div className={`kb-email-panel ${showEmailPanel ? 'open' : ''}`}>

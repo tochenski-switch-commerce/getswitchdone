@@ -3,6 +3,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import { gsdModel } from '@/lib/ai';
 import { createClient } from '@supabase/supabase-js';
+import { isProUser } from '@/lib/subscription-helpers';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,6 +20,10 @@ async function verifyAuth(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (!(await isProUser(user.id))) {
+    return NextResponse.json({ error: 'AI features require a Pro subscription.' }, { status: 403 });
+  }
 
   const { notes, memberNames, boardTitle } = await req.json() as {
     notes: string;
