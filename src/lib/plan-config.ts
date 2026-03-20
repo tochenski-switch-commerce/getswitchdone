@@ -4,7 +4,7 @@ export const PLANS = {
   free: {
     label: 'Free',
     maxBoards: 1,
-    maxActiveCards: 10,
+    maxActiveCards: Infinity,
     teamsEnabled: false,
     aiEnabled: false,
   },
