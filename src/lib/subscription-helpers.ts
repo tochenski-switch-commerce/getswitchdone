@@ -9,7 +9,6 @@ const supabaseAdmin = createClient(
 export interface UserSubscription {
   id: string;
   user_id: string;
-  revenuecat_app_user_id: string | null;
   entitlement: PlanTier;
   product_id: string | null;
   platform: string | null;

@@ -18,7 +18,6 @@
     "@capacitor/haptics": "^8.0.1",
     "@capacitor/ios": "^8.2.0",
     "@capacitor/push-notifications": "^8.0.2",
-    "@revenuecat/purchases-js": "^1.29.0",
     "@supabase/supabase-js": "^2.49.9",
     "ai": "^6.0.116",
     "isomorphic-dompurify": "^3.0.0",

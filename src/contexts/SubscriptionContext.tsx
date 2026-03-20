@@ -3,9 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { PLANS, RC_ENTITLEMENT, type PlanTier, type PlanLimits } from '@/lib/plan-config';
-import { isNative, getCustomerInfo, hasProEntitlement } from '@/lib/revenuecat';
-import { isWeb, getWebCustomerInfo, hasWebProEntitlement, onCustomerInfoUpdated } from '@/lib/revenuecat-web';
+import { PLANS, type PlanTier, type PlanLimits } from '@/lib/plan-config';
 
 interface SubscriptionContextType {
   plan: PlanTier;
@@ -62,18 +60,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setIsStaffGrant(false);
       }
 
-      // Also check RevenueCat SDK for real-time accuracy
-      if (isNative()) {
-        const info = await getCustomerInfo();
-        if (info && hasProEntitlement(info)) {
-          setPlan('pro');
-        }
-      } else if (isWeb()) {
-        const info = await getWebCustomerInfo();
-        if (hasWebProEntitlement(info)) {
-          setPlan('pro');
-        }
-      }
     } catch (err) {
       console.error('Failed to fetch subscription:', err);
     } finally {
@@ -84,17 +70,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     fetchSubscription();
   }, [fetchSubscription]);
-
-  // Listen for real-time customer info updates (web SDK fires this after purchases)
-  useEffect(() => {
-    if (!isWeb()) return;
-    const cleanup = onCustomerInfoUpdated((info) => {
-      if (RC_ENTITLEMENT in info.entitlements.active) {
-        setPlan('pro');
-      }
-    });
-    return cleanup;
-  }, []);
 
   const isProUserValue = plan === 'pro' || isStaffGrant;
   const limits = isProUserValue ? PLANS.pro : PLANS.free;

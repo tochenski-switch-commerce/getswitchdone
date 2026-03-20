@@ -11,15 +11,11 @@ import {
   ArrowLeft, Sparkles,
 } from '@/components/BoardIcons';
 import { useSubscription } from '@/hooks/useSubscription';
-import { isNative, restorePurchases, manageSubscription, hasProEntitlement } from '@/lib/revenuecat';
-
 export default function ProfilePage() {
   const { user, profile, signOut, updatePassword, updateProfileName, loading: authLoading } = useAuth();
   const router = useRouter();
   const { teams, fetchTeams, leaveTeam, joinTeam } = useTeams();
   const { isProUser: isPro, status: subStatus, currentPeriodEnd, isStaffGrant, showPaywall, refresh: refreshSub } = useSubscription();
-  const [restoringPurchases, setRestoringPurchases] = useState(false);
-
   // ── Display name ──
   const [name, setName] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
@@ -226,27 +222,6 @@ export default function ProfilePage() {
             {!isPro && (
               <button className="pf-btn pf-btn-primary" onClick={showPaywall}>
                 Upgrade to Pro
-              </button>
-            )}
-            {isPro && !isStaffGrant && isNative() && (
-              <button className="pf-btn pf-btn-ghost" onClick={() => manageSubscription()}>
-                Manage Subscription
-              </button>
-            )}
-            {isNative() && (
-              <button
-                className="pf-btn pf-btn-ghost"
-                disabled={restoringPurchases}
-                onClick={async () => {
-                  setRestoringPurchases(true);
-                  try {
-                    const info = await restorePurchases();
-                    if (info && hasProEntitlement(info)) await refreshSub();
-                  } catch {}
-                  setRestoringPurchases(false);
-                }}
-              >
-                {restoringPurchases ? 'Restoring...' : 'Restore Purchases'}
               </button>
             )}
           </div>
