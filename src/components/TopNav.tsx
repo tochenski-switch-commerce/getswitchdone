@@ -24,6 +24,7 @@ const tabs = [
   { label: 'Boards', href: '/boards' },
   { label: 'Teams', href: '/teams' },
   { label: 'Forms', href: '/forms' },
+  { label: 'Calendar', href: '/calendar' },
 ] as const;
 
 export default function TopNav() {
