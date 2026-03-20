@@ -37,6 +37,16 @@ export default function KanbanCard({
   const isOverdue = !card.is_complete && daysUntilDue !== null && daysUntilDue < 0;
   const isDueSoon = !card.is_complete && daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 2;
 
+  const nextChecklistDue = !card.is_complete
+    ? (checklists
+        .filter(c => !c.is_completed && c.due_date)
+        .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime())[0] ?? null)
+    : null;
+  const clDueDate = nextChecklistDue?.due_date ? new Date(nextChecklistDue.due_date + 'T00:00:00') : null;
+  const clDaysUntilDue = clDueDate ? Math.ceil((clDueDate.getTime() - now.getTime()) / 86400000) : null;
+  const isClOverdue = clDaysUntilDue !== null && clDaysUntilDue < 0;
+  const isClDueSoon = clDaysUntilDue !== null && clDaysUntilDue >= 0 && clDaysUntilDue <= 2;
+
   return (
     <div
       className={`kb-card ${isDragging ? 'dragging' : ''}`}
@@ -132,6 +142,23 @@ export default function KanbanCard({
             {card.due_date && (
               <span>{isOverdue ? 'Overdue' : isDueSoon ? (daysUntilDue === 0 ? 'Today' : daysUntilDue === 1 ? 'Tomorrow' : 'In 2 days') : new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
             )}
+          </span>
+        )}
+
+        {/* Next checklist item due date */}
+        {clDueDate && (
+          <span
+            className={`kb-card-dates ${isClOverdue ? 'overdue' : ''} ${isClDueSoon ? 'due-soon' : ''}`}
+            title={`Next checklist item due: ${nextChecklistDue!.title}`}
+          >
+            <CheckSquare size={10} />
+            <span>
+              {isClOverdue
+                ? 'Task overdue'
+                : isClDueSoon
+                ? (clDaysUntilDue === 0 ? 'Task today' : clDaysUntilDue === 1 ? 'Task tomorrow' : 'Task in 2 days')
+                : clDueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
           </span>
         )}
 
