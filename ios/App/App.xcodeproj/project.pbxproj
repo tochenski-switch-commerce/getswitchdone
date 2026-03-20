@@ -18,11 +18,6 @@
 		A100000001 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000001 /* ViewController.swift */; };
 		A100000002 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000002 /* SceneDelegate.swift */; };
 		W100000001 /* GSDWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = W200000001 /* GSDWidgetBundle.swift */; };
-		W100000002 /* WidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = W200000002 /* WidgetViews.swift */; };
-		W100000003 /* GSDTimelineProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = W200000003 /* GSDTimelineProvider.swift */; };
-		W100000004 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = W200000004 /* SupabaseClient.swift */; };
-		W100000005 /* WidgetModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = W200000005 /* WidgetModels.swift */; };
-		W100000006 /* SharedConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = W200000006 /* SharedConstants.swift */; };
 		W100000010 /* GSDWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = W300000001 /* GSDWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -64,11 +59,6 @@
 		A200000001 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		A200000002 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		W200000001 /* GSDWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GSDWidgetBundle.swift; sourceTree = "<group>"; };
-		W200000002 /* WidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetViews.swift; sourceTree = "<group>"; };
-		W200000003 /* GSDTimelineProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GSDTimelineProvider.swift; sourceTree = "<group>"; };
-		W200000004 /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClient.swift; sourceTree = "<group>"; };
-		W200000005 /* WidgetModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetModels.swift; sourceTree = "<group>"; };
-		W200000006 /* SharedConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedConstants.swift; sourceTree = "<group>"; };
 		W200000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		W200000008 /* GSDWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GSDWidgetExtension.entitlements; sourceTree = "<group>"; };
 		W300000001 /* GSDWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GSDWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -133,11 +123,6 @@
 			isa = PBXGroup;
 			children = (
 				W200000001 /* GSDWidgetBundle.swift */,
-				W200000002 /* WidgetViews.swift */,
-				W200000003 /* GSDTimelineProvider.swift */,
-				W200000004 /* SupabaseClient.swift */,
-				W200000005 /* WidgetModels.swift */,
-				W200000006 /* SharedConstants.swift */,
 				W200000007 /* Info.plist */,
 				W200000008 /* GSDWidgetExtension.entitlements */,
 			);
@@ -268,11 +253,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				W100000001 /* GSDWidgetBundle.swift in Sources */,
-				W100000002 /* WidgetViews.swift in Sources */,
-				W100000003 /* GSDTimelineProvider.swift in Sources */,
-				W100000004 /* SupabaseClient.swift in Sources */,
-				W100000005 /* WidgetModels.swift in Sources */,
-				W100000006 /* SharedConstants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
