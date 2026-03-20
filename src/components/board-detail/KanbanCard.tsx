@@ -42,7 +42,9 @@ export default function KanbanCard({
         .filter(c => !c.is_completed && c.due_date)
         .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime())[0] ?? null)
     : null;
-  const clDueDate = nextChecklistDue?.due_date ? new Date(nextChecklistDue.due_date + 'T00:00:00') : null;
+  const clDueDate = nextChecklistDue?.due_date
+    ? (() => { const d = new Date(nextChecklistDue.due_date!); d.setHours(0, 0, 0, 0); return d; })()
+    : null;
   const clDaysUntilDue = clDueDate ? Math.ceil((clDueDate.getTime() - now.getTime()) / 86400000) : null;
   const isClOverdue = clDaysUntilDue !== null && clDaysUntilDue < 0;
   const isClDueSoon = clDaysUntilDue !== null && clDaysUntilDue >= 0 && clDaysUntilDue <= 2;
