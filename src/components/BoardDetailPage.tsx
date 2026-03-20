@@ -61,7 +61,7 @@ function BoardPage() {
     addColumn, updateColumn, deleteColumn, reorderColumns,
     addBoardLink, removeBoardLink, reorderBoardLinks,
     addCard, updateCard, deleteCard, moveCard, reorderCardsInColumn,
-    addComment, editComment, deleteComment,
+    addComment, editComment, deleteComment, reactToComment,
     addChecklistGroup, updateChecklistGroup, deleteChecklistGroup,
     addChecklistItem, editChecklistItem, toggleChecklistItem, deleteChecklistItem, updateChecklistItemDueDate, updateChecklistItemAssignees,
     fetchChecklistTemplates, saveChecklistTemplate, updateChecklistTemplate, deleteChecklistTemplate, applyChecklistTemplate,
@@ -1825,6 +1825,23 @@ function BoardPage() {
           }}
           onEditComment={async (commentId, content) => { await editComment(boardId, activeCard.id, commentId, content); }}
           onDeleteComment={async (commentId) => { await deleteComment(boardId, activeCard.id, commentId); }}
+          onReactToComment={async (commentId, reaction) => {
+            const result = await reactToComment(boardId, activeCard.id, commentId, reaction);
+            if (!result) return; // toggled off — no notification
+            const senderName = userProfiles.find(p => p.id === user?.id)?.name || 'someone';
+            const comment = activeCard.comments?.find(c => c.id === commentId);
+            if (comment && comment.user_id !== user?.id) {
+              await createNotification({
+                user_id: comment.user_id,
+                board_id: boardId,
+                card_id: activeCard.id,
+                type: 'comment_reaction',
+                title: `${senderName} ${reaction === 'like' ? 'liked' : 'disliked'} your comment on "${activeCard.title}"`,
+                body: '',
+              });
+            }
+          }}
+          currentUserId={user?.id}
           onAddChecklistGroup={async (name) => { await addChecklistGroup(boardId, activeCard.id, name); }}
           onUpdateChecklistGroup={async (groupId, name) => { await updateChecklistGroup(boardId, activeCard.id, groupId, name); }}
           onDeleteChecklistGroup={async (groupId) => { await deleteChecklistGroup(boardId, activeCard.id, groupId); }}

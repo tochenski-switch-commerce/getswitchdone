@@ -1876,6 +1876,45 @@ export const kanbanStyles = `
   .kb-comment-text { font-size: 13px; color: #d1d5db; margin: 0 !important; line-height: 1.5; }
   .kb-comment-edit { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
   .kb-comment-edit-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .kb-comment-reactions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .kb-reaction-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    border-radius: 12px;
+    border: 1px solid #2a2d3e;
+    background: transparent;
+    color: #6b7280;
+    font-size: 11px;
+    cursor: pointer;
+    transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+    line-height: 1;
+  }
+  .kb-reaction-btn:hover {
+    border-color: #4f6ddc;
+    color: #818cf8;
+  }
+  .kb-reaction-btn-active {
+    border-color: #4f6ddc;
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+  }
+  .kb-reaction-btn-dislike-active {
+    border-color: #dc4f4f;
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+  }
+  .kb-reaction-btn-dislike-active:hover {
+    border-color: #ef4444;
+    color: #f87171;
+  }
+  .kb-reaction-count { font-weight: 600; }
   .kb-mention { color: #60a5fa; font-weight: 600; background: rgba(96, 165, 250, 0.12); padding: 1px 4px; border-radius: 4px; }
   .kb-comment-text .kb-link,
   .kb-desc-display .kb-link {

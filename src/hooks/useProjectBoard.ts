@@ -17,6 +17,7 @@ import type {
   BoardCard,
   BoardLabel,
   CardComment,
+  CommentReaction,
   CardChecklist,
   CardChecklistGroup,
   CardPriority,
@@ -114,7 +115,7 @@ async function _fetchBoardData(boardId: string): Promise<BoardFetchResult | null
 
   if (cardIds.length > 0) {
     phase2.push(
-      supabase.from('card_comments').select('*').in('card_id', cardIds).order('created_at', { ascending: true }),
+      supabase.from('card_comments').select('*, reactions:comment_reactions(*)').in('card_id', cardIds).order('created_at', { ascending: true }),
       supabase.from('card_checklists').select('*').in('card_id', cardIds).order('position'),
       supabase.from('card_checklist_groups').select('*').in('card_id', cardIds).order('position'),
       supabase.from('card_label_assignments').select('*').in('card_id', cardIds),
@@ -132,6 +133,10 @@ async function _fetchBoardData(boardId: string): Promise<BoardFetchResult | null
     allComments = (commentsRes.data || []).map((cm: any) => ({
       ...cm,
       user_profiles: { name: profileById.get(cm.user_id)?.name ?? 'Unknown' },
+      reactions: (cm.reactions || []).map((r: any) => ({
+        ...r,
+        user_profiles: { name: profileById.get(r.user_id)?.name ?? 'Unknown' },
+      })),
     }));
     allChecklists = checklistsRes.data || [];
     allChecklistGroups = (checklistGroupsRes.data || []) as CardChecklistGroup[];
@@ -905,6 +910,80 @@ export function useProjectBoard() {
       return false;
     }
   }, []);
+
+  // reaction_type: 'like' | 'dislike'. Calling with the same type the user already has toggles it off.
+  const reactToComment = useCallback(async (boardId: string, cardId: string, commentId: string, reactionType: 'like' | 'dislike') => {
+    setError(null);
+    try {
+      const user = await getCachedUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const card = board?.cards.find(c => c.id === cardId);
+      const comment = card?.comments?.find(cm => cm.id === commentId);
+      const existing = (comment?.reactions || []).find((r: CommentReaction) => r.user_id === user.id);
+
+      if (existing) {
+        // Same reaction → remove it (toggle off); different → remove old and insert new
+        await supabase.from('comment_reactions').delete().eq('comment_id', commentId).eq('user_id', user.id);
+        if (existing.reaction_type === reactionType) {
+          // toggle off
+          setBoard(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              cards: prev.cards.map(c =>
+                c.id === cardId
+                  ? { ...c, comments: (c.comments || []).map(cm =>
+                      cm.id === commentId
+                        ? { ...cm, reactions: (cm.reactions || []).filter((r: CommentReaction) => r.user_id !== user.id) }
+                        : cm
+                    ) }
+                  : c
+              ),
+            };
+          });
+          return null;
+        }
+        // switching reaction — fall through to insert new one below
+      }
+
+      const profile = userProfiles.find(p => p.id === user.id);
+      const { data, error: err } = await supabase
+        .from('comment_reactions')
+        .insert([{ comment_id: commentId, user_id: user.id, reaction_type: reactionType }])
+        .select('*')
+        .single();
+      if (err) throw err;
+
+      const reactionWithProfile: CommentReaction = {
+        ...data,
+        user_profiles: { name: profile?.name ?? user.email ?? 'Unknown' },
+      };
+
+      setBoard(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          cards: prev.cards.map(c =>
+            c.id === cardId
+              ? { ...c, comments: (c.comments || []).map(cm =>
+                  cm.id === commentId
+                    ? { ...cm, reactions: [
+                        ...(cm.reactions || []).filter((r: CommentReaction) => r.user_id !== user.id),
+                        reactionWithProfile,
+                      ] }
+                    : cm
+                ) }
+              : c
+          ),
+        };
+      });
+      return reactionWithProfile;
+    } catch (err: any) {
+      setError(err.message);
+      return null;
+    }
+  }, [board, userProfiles]);
 
   // ─── Checklist Groups ───────────────────────────────────────
   const addChecklistGroup = useCallback(async (boardId: string, cardId: string, name: string) => {
@@ -1953,7 +2032,7 @@ export function useProjectBoard() {
     addBoardLink, removeBoardLink, reorderBoardLinks,
     addCard, updateCard, deleteCard, moveCard, reorderCardsInColumn,
     addCardLink, removeCardLink, searchCards,
-    addComment, editComment, deleteComment,
+    addComment, editComment, deleteComment, reactToComment,
     addChecklistGroup, updateChecklistGroup, deleteChecklistGroup,
     addChecklistItem, editChecklistItem, toggleChecklistItem, deleteChecklistItem, updateChecklistItemDueDate, updateChecklistItemAssignees,
     fetchChecklistTemplates, saveChecklistTemplate, updateChecklistTemplate, deleteChecklistTemplate, applyChecklistTemplate,

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { BoardCard, CardChecklistGroup, CardPriority, ChecklistTemplate, UserProfile, RepeatUnit, RepeatRule, RepeatMode } from '@/types/board-types';
+import type { BoardCard, CardChecklistGroup, CardPriority, ChecklistTemplate, UserProfile, RepeatUnit, RepeatRule, RepeatMode, CommentReaction } from '@/types/board-types';
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   Plus, Trash2, Edit3,
@@ -9,6 +9,7 @@ import {
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, Pencil,
   Check, Copy, LinkIcon, SlidersHorizontal, Repeat, ClipboardList,
   Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered,
+  ThumbsUp, ThumbsDown,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import CustomFieldInput from './CustomFieldInput';
@@ -23,6 +24,8 @@ export default function CardDetailModal({
   onAddComment,
   onEditComment,
   onDeleteComment,
+  onReactToComment,
+  currentUserId,
   onAddChecklistGroup,
   onUpdateChecklistGroup,
   onDeleteChecklistGroup,
@@ -53,6 +56,8 @@ export default function CardDetailModal({
   onAddComment: (content: string) => Promise<void>;
   onEditComment: (commentId: string, content: string) => Promise<void>;
   onDeleteComment: (commentId: string) => Promise<void>;
+  onReactToComment: (commentId: string, reaction: 'like' | 'dislike') => Promise<void>;
+  currentUserId?: string;
   onAddChecklistGroup: (name: string) => Promise<void>;
   onUpdateChecklistGroup: (groupId: string, name: string) => Promise<void>;
   onDeleteChecklistGroup: (groupId: string) => Promise<void>;
@@ -1139,6 +1144,35 @@ export default function CardDetailModal({
                     ) : (
                       <div className="kb-comment-text kb-rt-display" dangerouslySetInnerHTML={{ __html: sanitizeRichText(comment.content) }} />
                     )}
+                    {/* Reaction bar */}
+                    {editingCommentId !== comment.id && (() => {
+                      const reactions: CommentReaction[] = comment.reactions || [];
+                      const likes = reactions.filter(r => r.reaction_type === 'like');
+                      const dislikes = reactions.filter(r => r.reaction_type === 'dislike');
+                      const myReaction = reactions.find(r => r.user_id === currentUserId)?.reaction_type;
+                      const likeNames = likes.map(r => r.user_profiles?.name || 'Unknown').join(', ');
+                      const dislikeNames = dislikes.map(r => r.user_profiles?.name || 'Unknown').join(', ');
+                      return (
+                        <div className="kb-comment-reactions">
+                          <button
+                            className={`kb-reaction-btn${myReaction === 'like' ? ' kb-reaction-btn-active' : ''}`}
+                            onClick={() => onReactToComment(comment.id, 'like')}
+                            title={likes.length > 0 ? `Liked by: ${likeNames}` : 'Like'}
+                          >
+                            <ThumbsUp size={12} />
+                            {likes.length > 0 && <span className="kb-reaction-count">{likes.length}</span>}
+                          </button>
+                          <button
+                            className={`kb-reaction-btn${myReaction === 'dislike' ? ' kb-reaction-btn-active kb-reaction-btn-dislike-active' : ''}`}
+                            onClick={() => onReactToComment(comment.id, 'dislike')}
+                            title={dislikes.length > 0 ? `Disliked by: ${dislikeNames}` : 'Dislike'}
+                          >
+                            <ThumbsDown size={12} />
+                            {dislikes.length > 0 && <span className="kb-reaction-count">{dislikes.length}</span>}
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

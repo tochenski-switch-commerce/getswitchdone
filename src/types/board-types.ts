@@ -142,6 +142,15 @@ export interface CardLabelAssignment {
   label_id: string;
 }
 
+export interface CommentReaction {
+  id: string;
+  comment_id: string;
+  user_id: string;
+  reaction_type: 'like' | 'dislike';
+  created_at: string;
+  user_profiles?: { name: string };
+}
+
 export interface CardComment {
   id: string;
   card_id: string;
@@ -150,6 +159,7 @@ export interface CardComment {
   created_at: string;
   updated_at: string;
   user_profiles?: { name: string };
+  reactions?: CommentReaction[];
 }
 
 export interface CardChecklistGroup {
@@ -183,7 +193,7 @@ export interface ChecklistTemplate {
 
 // ── Notifications ──
 
-export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention' | 'checklist_overdue';
+export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention' | 'checklist_overdue' | 'comment_reaction';
 
 export interface Notification {
   id: string;
