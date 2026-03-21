@@ -22,9 +22,9 @@ const InboxPanel = dynamic(() => import('@/components/InboxPanel'), { ssr: false
 
 const tabs = [
   { label: 'Boards', href: '/boards' },
+  { label: 'Calendar', href: '/calendar' },
   { label: 'Teams', href: '/teams' },
   { label: 'Forms', href: '/forms' },
-  { label: 'Calendar', href: '/calendar' },
 ] as const;
 
 export default function TopNav() {
@@ -362,7 +362,45 @@ export default function TopNav() {
           text-overflow: ellipsis;
         }
         @media (max-width: 600px) {
-          .kb-global-search { max-width: 140px; }
+          .kb-top-nav {
+            padding: 6px 8px;
+            gap: 0;
+          }
+          .kb-nav-tab {
+            padding: 6px 10px;
+            font-size: 12px;
+          }
+          .kb-global-search {
+            max-width: none;
+            flex: 1;
+            min-width: 0;
+            margin: 0 4px;
+          }
+          .kb-global-search-input-wrap {
+            height: 28px;
+            padding: 0 8px;
+          }
+          .kb-global-search-input {
+            font-size: 12px;
+          }
+          .kb-nav-right {
+            gap: 0;
+          }
+          .kb-nav-profile-btn {
+            width: 24px;
+            height: 24px;
+            font-size: 10px;
+            margin-left: 2px;
+          }
+        }
+        @media (max-width: 380px) {
+          .kb-nav-tab {
+            padding: 5px 7px;
+            font-size: 11px;
+          }
+          .kb-global-search {
+            margin: 0 2px;
+          }
         }
       `}</style>
       <nav className="kb-top-nav">

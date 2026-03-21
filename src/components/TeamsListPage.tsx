@@ -7,6 +7,7 @@ import { useTeams } from '@/hooks/useTeams';
 import { useSubscription } from '@/hooks/useSubscription';
 import UpgradeBanner from '@/components/UpgradeBanner';
 import { Plus, Users, X, ArrowLeft } from '@/components/BoardIcons';
+import FlameLoader from '@/components/FlameLoader';
 
 export default function TeamsListPage() {
   const { user, loading: authLoading } = useAuth();
@@ -46,7 +47,14 @@ export default function TeamsListPage() {
     }
   };
 
-  if (authLoading || !user) return null;
+  if (authLoading || !user) return (
+    <div className="kb-root">
+      <style>{teamsStyles}</style>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <FlameLoader delay={400} size={56} />
+      </div>
+    </div>
+  );
 
   return (
     <div className="kb-root">
@@ -97,10 +105,8 @@ export default function TeamsListPage() {
         )}
 
         {loading && teams.length === 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-            {[0, 1, 2].map(i => (
-              <div key={i} style={{ height: 100, background: '#1a1d21', borderRadius: 12, opacity: 0.7 - i * 0.1 }} />
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 20px' }}>
+            <FlameLoader delay={300} size={48} />
           </div>
         ) : teams.length === 0 ? (
           <div className="kb-empty">

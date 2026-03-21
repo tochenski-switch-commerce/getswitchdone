@@ -9,6 +9,7 @@ import {
   FileText, Plus, Trash2, Edit3, Calendar, ExternalLink,
   Eye, ToggleLeft, ToggleRight, FolderKanban, ArrowLeft, ListBullet,
 } from '@/components/BoardIcons';
+import FlameLoader from '@/components/FlameLoader';
 
 export default function FormsListPage() {
   const { user, loading: authLoading } = useAuth();
@@ -197,7 +198,9 @@ export default function FormsListPage() {
       <div className="kb-root">
         <style>{formsListStyles}</style>
         <div className="kb-container">
-          <p style={{ color: '#9ca3af', textAlign: 'center', marginTop: 80 }}>Loading…</p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 20px' }}>
+            <FlameLoader delay={400} size={56} />
+          </div>
         </div>
       </div>
     );
@@ -299,7 +302,9 @@ export default function FormsListPage() {
 
         {/* Forms list */}
         {loading ? (
-          <p style={{ color: '#9ca3af', textAlign: 'center', marginTop: 40 }}>Loading forms…</p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 20px' }}>
+            <FlameLoader delay={300} size={48} />
+          </div>
         ) : forms.length === 0 ? (
           <div className="kb-empty">
             <FileText size={48} style={{ color: '#374151' }} />

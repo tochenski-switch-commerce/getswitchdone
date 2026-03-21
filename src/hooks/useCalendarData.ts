@@ -4,6 +4,11 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { CardPriority } from '@/types/board-types';
 
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 export type CalendarEventType = 'card' | 'checklist';
 
 export interface CalendarEvent {
@@ -39,6 +44,7 @@ export interface CalendarData {
   refresh: () => Promise<void>;
   toggleComplete: (event: CalendarEvent) => Promise<void>;
   addCard: (params: { boardId: string; columnId: string; title: string; dueDate: string }) => Promise<void>;
+  rescheduleEvent: (event: CalendarEvent, newDateKey: string) => Promise<void>;
   getColumnsForBoard: (boardId: string) => { id: string; title: string }[];
 }
 
@@ -140,17 +146,20 @@ export function useCalendarData(): CalendarData {
 
       setTotalCards(cards.length);
 
+      // Build a Map for O(1) card lookups
+      const cardById = new Map(cards.map(c => [c.id, c]));
+
       // Checklist items with due dates
       const checklists = checklistsRes.data || [];
-      const cardIdSet = new Set(cards.map(c => c.id));
       const checklistEvents: CalendarEvent[] = [];
 
       for (const item of checklists) {
         if (!item.due_date) continue;
-        // Map checklist item to its parent card
-        const parentCard = cards.find(c => c.id === item.card_id);
+        const parentCard = cardById.get(item.card_id);
         if (!parentCard) continue;
-        if (!cardIdSet.has(item.card_id)) continue;
+
+        // checklist due_date is timestamptz — extract YYYY-MM-DD
+        const dateKey = item.due_date.slice(0, 10);
 
         const col = columnById.get(parentCard.column_id);
         const boardIndex = boardIndexMap.get(parentCard.board_id) ?? 0;
@@ -165,8 +174,8 @@ export function useCalendarData(): CalendarData {
           columnId: parentCard.column_id,
           columnName: col?.title ?? 'Unknown',
           priority: parentCard.priority as CardPriority | null,
-          startDate: item.due_date,
-          endDate: item.due_date,
+          startDate: dateKey,
+          endDate: dateKey,
           assignee: parentCard.assignee ?? null,
           isComplete: item.is_completed ?? false,
           cardId: item.card_id,
@@ -270,6 +279,54 @@ export function useCalendarData(): CalendarData {
     setTotalCards(prev => prev + 1);
   }, [boards, columnsMap]);
 
+  const rescheduleEvent = useCallback(async (event: CalendarEvent, newDateKey: string) => {
+    const oldStart = event.startDate;
+    const oldEnd = event.endDate;
+    const duration = Math.round(
+      (parseLocalDate(oldEnd).getTime() - parseLocalDate(oldStart).getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    let newStart = newDateKey;
+    let newEnd = newDateKey;
+    if (duration > 0) {
+      const endD = parseLocalDate(newDateKey);
+      endD.setDate(endD.getDate() + duration);
+      newEnd = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, '0')}-${String(endD.getDate()).padStart(2, '0')}`;
+    }
+
+    // Optimistic update
+    setEvents(prev =>
+      prev.map(e => (e.id === event.id ? { ...e, startDate: newStart, endDate: newEnd } : e))
+    );
+
+    if (event.type === 'card') {
+      const update: Record<string, string | null> = { due_date: newEnd };
+      // Only set start_date if the card originally spanned multiple days
+      if (oldStart !== oldEnd) {
+        update.start_date = newStart;
+      }
+      const { error } = await supabase
+        .from('board_cards')
+        .update(update)
+        .eq('id', event.id);
+      if (error) {
+        setEvents(prev =>
+          prev.map(e => (e.id === event.id ? { ...e, startDate: oldStart, endDate: oldEnd } : e))
+        );
+      }
+    } else {
+      const { error } = await supabase
+        .from('card_checklists')
+        .update({ due_date: newDateKey })
+        .eq('id', event.id);
+      if (error) {
+        setEvents(prev =>
+          prev.map(e => (e.id === event.id ? { ...e, startDate: oldStart, endDate: oldEnd } : e))
+        );
+      }
+    }
+  }, []);
+
   const getColumnsForBoard = useCallback((boardId: string) => {
     return columnsMap[boardId] || [];
   }, [columnsMap]);
@@ -284,6 +341,7 @@ export function useCalendarData(): CalendarData {
     refresh,
     toggleComplete,
     addCard,
+    rescheduleEvent,
     getColumnsForBoard,
   };
 }

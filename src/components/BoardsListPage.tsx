@@ -8,6 +8,7 @@ import { useProjectBoard } from '@/hooks/useProjectBoard';
 import { useTeams } from '@/hooks/useTeams';
 
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
+import FlameLoader from '@/components/FlameLoader';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { hapticLight } from '@/lib/haptics';
 import {
@@ -459,10 +460,8 @@ function BoardsListPage() {
 
         {/* Board grid */}
         {loading && boards.length === 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, padding: '0 4px' }}>
-            {[0, 1, 2, 3, 4, 5].map(i => (
-              <div key={i} style={{ height: 120, background: '#1a1d21', borderRadius: 12, opacity: 0.7 - i * 0.08 }} />
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 20px' }}>
+            <FlameLoader delay={400} size={56} />
           </div>
         ) : boards.length === 0 ? (
           <div className="kb-empty">

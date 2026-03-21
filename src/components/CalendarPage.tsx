@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCalendarData } from '@/hooks/useCalendarData';
 import type { CalendarEvent } from '@/hooks/useCalendarData';
 import type { CardPriority } from '@/types/board-types';
+import FlameLoader from '@/components/FlameLoader';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
 
 const LS_KEY = 'lumio_calendar_state';
 
-type ViewMode = 'month' | 'agenda' | 'day';
+type ViewMode = 'month' | 'week' | 'agenda' | 'day';
 
 function getBoardColor(index: number) {
   return BOARD_COLORS[index % BOARD_COLORS.length];
@@ -58,6 +59,30 @@ function formatShortDate(dateStr: string) {
 
 function isToday(dateStr: string) {
   return dateStr === toDateKey(new Date());
+}
+
+function getWeekDays(dateStr: string): Date[] {
+  const d = parseLocalDate(dateStr);
+  const startOfWeek = new Date(d);
+  startOfWeek.setDate(d.getDate() - d.getDay()); // Sunday
+  const days: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(startOfWeek);
+    day.setDate(startOfWeek.getDate() + i);
+    days.push(day);
+  }
+  return days;
+}
+
+function formatWeekRange(dateStr: string) {
+  const days = getWeekDays(dateStr);
+  const start = days[0];
+  const end = days[6];
+  const sameMonth = start.getMonth() === end.getMonth();
+  if (sameMonth) {
+    return `${start.toLocaleDateString('en-US', { month: 'long' })} ${start.getDate()}–${end.getDate()}, ${start.getFullYear()}`;
+  }
+  return `${start.toLocaleDateString('en-US', { month: 'short' })} ${start.getDate()} – ${end.toLocaleDateString('en-US', { month: 'short' })} ${end.getDate()}, ${end.getFullYear()}`;
 }
 
 function isOverdue(event: CalendarEvent) {
@@ -245,7 +270,16 @@ const calendarStyles = `
     transition: all 0.15s;
   }
   .cal-nav-btn:hover { border-color: #6366f1; color: #818cf8; }
-  .cal-nav-btn.today { color: #818cf8; border-color: #4f52a0; }
+  .cal-nav-btn.today-active {
+    background: #6366f1;
+    border-color: #6366f1;
+    color: #fff;
+    font-weight: 600;
+  }
+  .cal-nav-btn.today-active:hover {
+    background: #5254cc;
+    border-color: #5254cc;
+  }
 
   .cal-current-label {
     font-size: 15px;
@@ -262,7 +296,7 @@ const calendarStyles = `
   }
   .cal-day-headers {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, calc(100% / 7));
     background: #13151f;
     border-bottom: 1px solid #1e2130;
   }
@@ -277,13 +311,15 @@ const calendarStyles = `
   }
   .cal-grid {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, calc(100% / 7));
   }
   .cal-cell {
     min-height: 110px;
+    min-width: 0;
+    overflow: hidden;
     border-right: 1px solid #1e2130;
     border-bottom: 1px solid #1e2130;
-    padding: 4px;
+    padding: 28px 4px 4px;
     position: relative;
     cursor: pointer;
     transition: background 0.12s;
@@ -294,6 +330,9 @@ const calendarStyles = `
   .cal-cell.today-cell { background: rgba(99,102,241,0.05); }
 
   .cal-day-num {
+    position: absolute;
+    top: 4px;
+    right: 4px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -303,8 +342,7 @@ const calendarStyles = `
     font-size: 12px;
     font-weight: 500;
     color: #9ca3af;
-    float: right;
-    margin: 2px 2px 4px 0;
+    line-height: 1;
   }
   .cal-day-num.today-num {
     background: #6366f1;
@@ -658,7 +696,8 @@ const calendarStyles = `
   .cal-mini-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 1px;
+    gap: 0;
+    justify-items: center;
   }
   .cal-mini-day-header {
     text-align: center;
@@ -671,34 +710,37 @@ const calendarStyles = `
   .cal-mini-day {
     text-align: center;
     font-size: 12px;
-    padding: 4px 2px;
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
     border-radius: 50%;
     cursor: pointer;
     color: #9ca3af;
     position: relative;
-    line-height: 1;
   }
   .cal-mini-day:hover { background: #1e2130; color: #e5e7eb; }
   .cal-mini-day.today { background: #6366f1; color: #fff; font-weight: 700; }
-  .cal-mini-day.selected { background: transparent; color: #818cf8; font-weight: 600; }
+  .cal-mini-day.selected {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px #6366f1;
+    color: #818cf8;
+    font-weight: 600;
+  }
   .cal-mini-day.selected::after {
-    content: '';
-    display: block;
-    width: 20px;
-    height: 2px;
-    background: #6366f1;
-    margin: 2px auto 0;
-    border-radius: 1px;
+    display: none;
   }
   .cal-mini-day.other { opacity: 0.3; }
-  .cal-mini-day.has-events::before {
+  .cal-mini-day.has-events::after {
     content: '';
-    display: block;
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
     width: 3px;
     height: 3px;
     background: #6366f1;
     border-radius: 50%;
-    margin: 0 auto 1px;
   }
 
   /* Board filter pills */
@@ -868,18 +910,145 @@ const calendarStyles = `
     animation: cal-spin 0.8s linear infinite;
   }
 
+  /* ── Week view ── */
+  .cal-week-grid {
+    display: grid;
+    grid-template-columns: repeat(7, calc(100% / 7));
+  }
+  .cal-week-col {
+    border-right: 1px solid #1e2130;
+    min-height: 400px;
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .cal-week-col:last-child { border-right: none; }
+  .cal-week-col-header {
+    text-align: center;
+    padding: 10px 4px 8px;
+    border-bottom: 1px solid #1e2130;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .cal-week-col-header:hover { background: rgba(99,102,241,0.05); }
+  .cal-week-col-header .cal-day-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .cal-week-col-header .cal-day-num {
+    position: static;
+    margin: 0;
+  }
+  .cal-week-col-body {
+    flex: 1;
+    padding: 4px;
+    overflow-y: auto;
+  }
+  .cal-week-col.today-col .cal-week-col-header {
+    background: rgba(99,102,241,0.06);
+  }
+  .cal-week-col.drag-over {
+    background: rgba(99,102,241,0.12);
+    box-shadow: inset 0 0 0 2px #6366f1;
+  }
+
+  /* ── Drag and drop ── */
+  .cal-cell.drag-over {
+    background: rgba(99,102,241,0.12) !important;
+    box-shadow: inset 0 0 0 2px #6366f1;
+  }
+  .cal-event-badge[draggable="true"],
+  .cal-span-bar[draggable="true"] {
+    cursor: grab;
+  }
+  .cal-event-badge[draggable="true"]:active,
+  .cal-span-bar[draggable="true"]:active {
+    cursor: grabbing;
+    opacity: 0.6;
+  }
+
   /* ── Mobile ── */
   @media (max-width: 767px) {
-    .cal-search { width: 100%; }
-    .cal-toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
-    .cal-toolbar-right { display: flex; gap: 8px; flex-wrap: wrap; }
-    .cal-agenda-wrap { flex-direction: column; }
+    .cal-container { padding: 0 10px 32px; }
+    .cal-header { padding: 14px 0 10px; }
+    .cal-title { font-size: 18px; }
+    .cal-subtitle { font-size: 12px; }
+    .cal-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      padding: 8px 0 6px;
+    }
+    .cal-search { width: 100%; box-sizing: border-box; }
+    .cal-toolbar > .cal-dropdown-wrap,
+    .cal-toolbar > .cal-view-toggles,
+    .cal-toolbar > .cal-add-btn,
+    .cal-toolbar > .cal-nav-row {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .cal-view-toggles {
+      display: flex;
+      width: 100%;
+    }
+    .cal-view-btn {
+      flex: 1;
+      text-align: center;
+      padding: 8px 4px;
+      font-size: 12px;
+    }
+    .cal-add-btn {
+      justify-content: center;
+      padding: 10px 14px;
+    }
+    .cal-nav-row {
+      justify-content: space-between;
+      flex-wrap: nowrap;
+      gap: 6px;
+    }
+    .cal-nav-btn { padding: 6px 10px; font-size: 12px; }
+    .cal-current-label {
+      font-size: 13px;
+      min-width: 0;
+      text-align: center;
+      flex: 1;
+    }
+    .cal-agenda-wrap { flex-direction: column; min-height: auto; }
     .cal-agenda-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #1e2130; }
+    .cal-agenda-main-header { padding: 12px 14px; }
+    .cal-agenda-events { padding: 12px 14px; }
     .cal-modal { max-width: 92vw; }
-    .cal-event-card-title { white-space: normal; }
-    .cal-cell { min-height: 70px; }
+    .cal-event-card { padding: 10px 12px; }
+    .cal-event-card-title { white-space: normal; font-size: 13px; }
+    .cal-cell { min-height: 60px; padding-top: 22px; }
+    .cal-day-num { font-size: 11px; width: 20px; height: 20px; }
     .cal-event-badge { display: none; }
-    .cal-event-dots { display: flex; gap: 2px; justify-content: center; flex-wrap: wrap; padding: 2px; }
+    .cal-span-bar { display: none; }
+    .cal-more-link { display: none; }
+    .cal-event-dots { display: flex; gap: 2px; justify-content: center; flex-wrap: wrap; padding: 2px 0; }
+    .cal-day-header { font-size: 10px; padding: 6px 2px; }
+    .cal-legend { gap: 8px; padding: 10px 0 4px; }
+    .cal-legend-item { font-size: 11px; padding: 2px 6px; }
+    .cal-day-header-bar { padding: 10px 0 12px; }
+    .cal-day-heading { font-size: 15px; }
+    /* Week view mobile */
+    .cal-week-col { min-height: 250px; }
+    .cal-week-col-header { padding: 6px 2px 4px; }
+    .cal-week-col-header .cal-day-label { font-size: 9px; }
+    .cal-week-col-header .cal-day-num { font-size: 11px; width: 20px; height: 20px; }
+    .cal-week-col-body { padding: 2px; }
+    .cal-week-col-body .cal-event-badge { display: flex; font-size: 10px; padding: 1px 2px; }
+    .cal-week-col-body .cal-event-badge-title { font-size: 10px; }
+    .cal-week-col-body .cal-priority-dot { width: 4px; height: 4px; }
   }
   @media (min-width: 768px) {
     .cal-event-dots { display: none; }
@@ -974,6 +1143,20 @@ function getMonthDays(year: number, month: number): Date[] {
 
 function getEventsForDay(events: CalendarEvent[], dateKey: string): CalendarEvent[] {
   return events.filter(e => e.startDate <= dateKey && e.endDate >= dateKey);
+}
+
+/** Pre-compute a Map<dayKey, CalendarEvent[]> for a range of dates */
+function buildEventIndex(events: CalendarEvent[], dayKeys: string[]): Map<string, CalendarEvent[]> {
+  const index = new Map<string, CalendarEvent[]>();
+  for (const key of dayKeys) index.set(key, []);
+  for (const e of events) {
+    for (const key of dayKeys) {
+      if (e.startDate <= key && e.endDate >= key) {
+        index.get(key)!.push(e);
+      }
+    }
+  }
+  return index;
 }
 
 function isMultiDay(event: CalendarEvent) {
@@ -1198,17 +1381,50 @@ interface MonthViewProps {
   onDayClick: (dateKey: string) => void;
   onEventClick: (event: CalendarEvent) => void;
   onToggle: (event: CalendarEvent) => void;
+  onReschedule: (event: CalendarEvent, newDateKey: string) => void;
 }
 
-function MonthView({ year, month, events, onDayClick, onEventClick, onToggle }: MonthViewProps) {
+function MonthView({ year, month, events, onDayClick, onEventClick, onToggle, onReschedule }: MonthViewProps) {
   const days = useMemo(() => getMonthDays(year, month), [year, month]);
+  const dayKeys = useMemo(() => days.map(toDateKey), [days]);
+  const eventIndex = useMemo(() => buildEventIndex(events, dayKeys), [events, dayKeys]);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const todayKey = toDateKey(new Date());
 
   const handleBadgeMouseEnter = (ev: React.MouseEvent, event: CalendarEvent) => {
     setTooltip({ event, x: ev.clientX, y: ev.clientY });
   };
   const handleBadgeMouseLeave = () => setTooltip(null);
+
+  const handleDragStart = (ev: React.DragEvent, event: CalendarEvent) => {
+    ev.dataTransfer.setData('application/json', JSON.stringify({ id: event.id }));
+    ev.dataTransfer.effectAllowed = 'move';
+    setTooltip(null);
+  };
+
+  const handleDragOver = (ev: React.DragEvent, dayKey: string) => {
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'move';
+    if (dragOverKey !== dayKey) setDragOverKey(dayKey);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverKey(null);
+  };
+
+  const handleDrop = (ev: React.DragEvent, dayKey: string) => {
+    ev.preventDefault();
+    setDragOverKey(null);
+    try {
+      const raw = ev.dataTransfer.getData('application/json');
+      const data = JSON.parse(raw) as { id: string };
+      const event = events.find(e => e.id === data.id);
+      if (event && event.startDate !== dayKey) {
+        onReschedule(event, dayKey);
+      }
+    } catch { /* ignore bad drops */ }
+  };
 
   return (
     <>
@@ -1223,7 +1439,7 @@ function MonthView({ year, month, events, onDayClick, onEventClick, onToggle }: 
             const dayKey = toDateKey(day);
             const inMonth = day.getMonth() === month;
             const today = dayKey === todayKey;
-            const dayEvents = getEventsForDay(events, dayKey);
+            const dayEvents = eventIndex.get(dayKey) || [];
             const sortedEvents = [...dayEvents].sort(sortEvents);
             const visibleEvents = sortedEvents.slice(0, 4);
             const hiddenCount = sortedEvents.length - visibleEvents.length;
@@ -1231,8 +1447,11 @@ function MonthView({ year, month, events, onDayClick, onEventClick, onToggle }: 
             return (
               <div
                 key={idx}
-                className={`cal-cell${!inMonth ? ' other-month' : ''}${today ? ' today-cell' : ''}`}
+                className={`cal-cell${!inMonth ? ' other-month' : ''}${today ? ' today-cell' : ''}${dragOverKey === dayKey ? ' drag-over' : ''}`}
                 onClick={() => onDayClick(dayKey)}
+                onDragOver={ev => handleDragOver(ev, dayKey)}
+                onDragLeave={handleDragLeave}
+                onDrop={ev => handleDrop(ev, dayKey)}
               >
                 <span className={`cal-day-num${today ? ' today-num' : ''}`}>
                   {day.getDate()}
@@ -1269,6 +1488,8 @@ function MonthView({ year, month, events, onDayClick, onEventClick, onToggle }: 
                         key={event.id + dayKey}
                         className={`cal-span-bar ${spanClass}${event.isComplete ? ' complete-badge' : ''}`}
                         style={{ background: color + 'cc' }}
+                        draggable={isStart}
+                        onDragStart={isStart ? ev => handleDragStart(ev, event) : undefined}
                         onClick={ev => { ev.stopPropagation(); onEventClick(event); }}
                         onMouseEnter={ev => handleBadgeMouseEnter(ev, event)}
                         onMouseLeave={handleBadgeMouseLeave}
@@ -1289,6 +1510,8 @@ function MonthView({ year, month, events, onDayClick, onEventClick, onToggle }: 
                       style={{
                         borderLeftColor: event.type === 'checklist' ? undefined : color,
                       }}
+                      draggable
+                      onDragStart={ev => handleDragStart(ev, event)}
                       onClick={ev => { ev.stopPropagation(); onEventClick(event); }}
                       onMouseEnter={ev => handleBadgeMouseEnter(ev, event)}
                       onMouseLeave={handleBadgeMouseLeave}
@@ -1312,6 +1535,113 @@ function MonthView({ year, month, events, onDayClick, onEventClick, onToggle }: 
         </div>
       </div>
 
+      {tooltip && <EventTooltip state={tooltip} />}
+    </>
+  );
+}
+
+// ─── Week View ────────────────────────────────────────────────────────────────
+
+interface WeekViewProps {
+  selectedDate: string;
+  events: CalendarEvent[];
+  onDayClick: (dateKey: string) => void;
+  onEventClick: (event: CalendarEvent) => void;
+  onToggle: (event: CalendarEvent) => void;
+  onReschedule: (event: CalendarEvent, newDateKey: string) => void;
+}
+
+function WeekView({ selectedDate, events, onDayClick, onEventClick, onToggle, onReschedule }: WeekViewProps) {
+  const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
+  const dayKeys = useMemo(() => weekDays.map(toDateKey), [weekDays]);
+  const eventIndex = useMemo(() => buildEventIndex(events, dayKeys), [events, dayKeys]);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const todayKey = toDateKey(new Date());
+
+  const handleBadgeMouseEnter = (ev: React.MouseEvent, event: CalendarEvent) => {
+    setTooltip({ event, x: ev.clientX, y: ev.clientY });
+  };
+  const handleBadgeMouseLeave = () => setTooltip(null);
+
+  const handleDragStart = (ev: React.DragEvent, event: CalendarEvent) => {
+    ev.dataTransfer.setData('application/json', JSON.stringify({ id: event.id }));
+    ev.dataTransfer.effectAllowed = 'move';
+    setTooltip(null);
+  };
+
+  const handleDragOver = (ev: React.DragEvent, dayKey: string) => {
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'move';
+    if (dragOverKey !== dayKey) setDragOverKey(dayKey);
+  };
+
+  const handleDragLeave = () => setDragOverKey(null);
+
+  const handleDrop = (ev: React.DragEvent, dayKey: string) => {
+    ev.preventDefault();
+    setDragOverKey(null);
+    try {
+      const raw = ev.dataTransfer.getData('application/json');
+      const data = JSON.parse(raw) as { id: string };
+      const event = events.find(e => e.id === data.id);
+      if (event && event.startDate !== dayKey) {
+        onReschedule(event, dayKey);
+      }
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <>
+      <div className="cal-grid-wrap">
+        <div className="cal-week-grid">
+          {weekDays.map(day => {
+            const dayKey = toDateKey(day);
+            const today = dayKey === todayKey;
+            const dayEvents = (eventIndex.get(dayKey) || []).sort(sortEvents);
+
+            return (
+              <div
+                key={dayKey}
+                className={`cal-week-col${today ? ' today-col' : ''}${dragOverKey === dayKey ? ' drag-over' : ''}`}
+                onDragOver={ev => handleDragOver(ev, dayKey)}
+                onDragLeave={handleDragLeave}
+                onDrop={ev => handleDrop(ev, dayKey)}
+              >
+                <div className="cal-week-col-header" onClick={() => onDayClick(dayKey)}>
+                  <span className="cal-day-label">{DAYS[day.getDay()]}</span>
+                  <span className={`cal-day-num${today ? ' today-num' : ''}`}>{day.getDate()}</span>
+                </div>
+                <div className="cal-week-col-body">
+                  {dayEvents.map(event => {
+                    const color = event.type === 'checklist' ? '#818cf8' : getBoardColor(event.boardIndex);
+                    return (
+                      <div
+                        key={event.id}
+                        className={`cal-event-badge${event.type === 'checklist' ? ' checklist-type' : ''}${event.isComplete ? ' complete-badge' : ''}`}
+                        style={{ borderLeftColor: event.type === 'checklist' ? undefined : color }}
+                        draggable
+                        onDragStart={ev => handleDragStart(ev, event)}
+                        onClick={ev => { ev.stopPropagation(); onEventClick(event); }}
+                        onMouseEnter={ev => handleBadgeMouseEnter(ev, event)}
+                        onMouseLeave={handleBadgeMouseLeave}
+                      >
+                        {event.priority && (
+                          <span className="cal-priority-dot" style={{ background: PRIORITY_COLORS[event.priority] }} />
+                        )}
+                        <span className="cal-event-badge-title">{event.title}</span>
+                      </div>
+                    );
+                  })}
+                  {dayEvents.length === 0 && (
+                    <div style={{ padding: '8px 4px', fontSize: 11, color: '#374151', textAlign: 'center' }}>—</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
       {tooltip && <EventTooltip state={tooltip} />}
     </>
   );
@@ -1562,7 +1892,7 @@ function BoardFilter({ boards, filteredBoardIds, onToggle }: BoardFilterProps) {
 
 export default function CalendarPage() {
   const router = useRouter();
-  const { events, boards, loading, error, totalCards, totalChecklistItems, refresh, toggleComplete, addCard, getColumnsForBoard } = useCalendarData();
+  const { events, boards, loading, error, totalCards, totalChecklistItems, refresh, toggleComplete, addCard, rescheduleEvent, getColumnsForBoard } = useCalendarData();
 
   // ── Persisted state ──
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -1632,6 +1962,18 @@ export default function CalendarPage() {
   }, [events, filteredBoardIds, debouncedSearch]);
 
   // ── Navigation ──
+  const todayKey = toDateKey(new Date());
+  const isViewingToday = useMemo(() => {
+    const now = new Date();
+    if (viewMode === 'month') return year === now.getFullYear() && month === now.getMonth();
+    if (viewMode === 'day') return selectedDate === todayKey;
+    if (viewMode === 'week') {
+      const weekDays = getWeekDays(selectedDate);
+      return weekDays.some(d => toDateKey(d) === todayKey);
+    }
+    return agendaMiniYear === now.getFullYear() && agendaMiniMonth === now.getMonth();
+  }, [viewMode, year, month, selectedDate, todayKey, agendaMiniYear, agendaMiniMonth]);
+
   const goToMonth = (y: number, m: number) => {
     let ny = y, nm = m;
     if (nm < 0) { nm = 11; ny -= 1; }
@@ -1692,15 +2034,27 @@ export default function CalendarPage() {
     });
   };
 
+  // ── Week navigation helpers ──
+  const goWeek = useCallback((delta: number) => {
+    const d = parseLocalDate(selectedDate);
+    d.setDate(d.getDate() + delta * 7);
+    const dk = toDateKey(d);
+    setSelectedDate(dk);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+  }, [selectedDate]);
+
   // ── Nav label ──
   const navLabel = useMemo(() => {
     if (viewMode === 'month') return `${MONTHS[month]} ${year}`;
+    if (viewMode === 'week') return formatWeekRange(selectedDate);
     if (viewMode === 'day') return formatDisplayDate(selectedDate);
     return `${MONTHS[agendaMiniMonth]} ${agendaMiniYear}`;
   }, [viewMode, year, month, selectedDate, agendaMiniYear, agendaMiniMonth]);
 
   const handlePrev = () => {
     if (viewMode === 'month') goToMonth(year, month - 1);
+    else if (viewMode === 'week') goWeek(-1);
     else if (viewMode === 'day') goToDay(-1);
     else {
       if (agendaMiniMonth === 0) { setAgendaMiniYear(y => y - 1); setAgendaMiniMonth(11); }
@@ -1709,6 +2063,7 @@ export default function CalendarPage() {
   };
   const handleNext = () => {
     if (viewMode === 'month') goToMonth(year, month + 1);
+    else if (viewMode === 'week') goWeek(1);
     else if (viewMode === 'day') goToDay(1);
     else {
       if (agendaMiniMonth === 11) { setAgendaMiniYear(y => y + 1); setAgendaMiniMonth(0); }
@@ -1761,7 +2116,7 @@ export default function CalendarPage() {
               onToggle={handleToggleBoard}
             />
             <div className="cal-view-toggles">
-              {(['month', 'agenda', 'day'] as ViewMode[]).map(v => (
+              {(['month', 'week', 'agenda', 'day'] as ViewMode[]).map(v => (
                 <button
                   key={v}
                   className={`cal-view-btn${viewMode === v ? ' active' : ''}`}
@@ -1778,7 +2133,7 @@ export default function CalendarPage() {
             {/* ── Nav ── */}
             <div className="cal-nav-row" style={{ marginLeft: 'auto' }}>
               <button className="cal-nav-btn" onClick={handlePrev}><ChevronLeft /></button>
-              <button className="cal-nav-btn today" onClick={goToToday}>Today</button>
+              <button className={`cal-nav-btn${isViewingToday ? ' today-active' : ''}`} onClick={goToToday}>Today</button>
               <button className="cal-nav-btn" onClick={handleNext}><ChevronRight /></button>
               <span className="cal-current-label">{navLabel}</span>
             </div>
@@ -1788,8 +2143,7 @@ export default function CalendarPage() {
         {/* ── Content ── */}
         {loading ? (
           <div className="cal-loading">
-            <div className="cal-spinner" />
-            Loading calendar…
+            <FlameLoader delay={400} size={48} />
           </div>
         ) : error ? (
           <div className="cal-empty">
@@ -1807,6 +2161,7 @@ export default function CalendarPage() {
                   onDayClick={handleDayClick}
                   onEventClick={handleEventClick}
                   onToggle={toggleComplete}
+                  onReschedule={rescheduleEvent}
                 />
                 {/* Legend */}
                 {boards.length > 0 && (
@@ -1824,6 +2179,16 @@ export default function CalendarPage() {
                   </div>
                 )}
               </>
+            )}
+            {viewMode === 'week' && (
+              <WeekView
+                selectedDate={selectedDate}
+                events={filteredEvents}
+                onDayClick={handleDayClick}
+                onEventClick={handleEventClick}
+                onToggle={toggleComplete}
+                onReschedule={rescheduleEvent}
+              />
             )}
             {viewMode === 'day' && (
               <DayView

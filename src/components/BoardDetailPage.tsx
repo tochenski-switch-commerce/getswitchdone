@@ -18,6 +18,7 @@ import {
   BotMessageSquare, GripVertical,
 } from '@/components/BoardIcons';
 import dynamic from 'next/dynamic';
+import FlameLoader from '@/components/FlameLoader';
 import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import SaveAsTemplateModal from '@/components/SaveAsTemplateModal';
@@ -744,22 +745,8 @@ function BoardPage() {
     return (
       <div className="kb-root">
         <style>{kanbanStyles}</style>
-        {/* Skeleton loading — shows column/card placeholders instead of spinner */}
-        <div style={{ padding: '16px 24px' }}>
-          <div style={{ height: 28, width: 200, background: '#23262b', borderRadius: 6, marginBottom: 16 }} />
-          <div style={{ display: 'flex', gap: 16, overflowX: 'auto' }}>
-            {[0, 1, 2, 3].map(col => (
-              <div key={col} style={{ minWidth: 280, flex: '0 0 280px' }}>
-                <div style={{ height: 20, width: 100, background: '#23262b', borderRadius: 4, marginBottom: 12 }} />
-                {[0, 1, 2].map(card => (
-                  <div key={card} style={{
-                    height: 72 + card * 12, background: '#1a1d21', borderRadius: 8,
-                    marginBottom: 8, opacity: 0.6 - card * 0.15,
-                  }} />
-                ))}
-              </div>
-            ))}
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+          <FlameLoader delay={600} size={56} />
         </div>
       </div>
     );
