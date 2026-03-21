@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import AuthRedirect from '@/components/AuthRedirect';
 
 export const metadata: Metadata = {
   title: 'Lumio — Work that actually gets done',
@@ -304,6 +305,7 @@ export default function Home() {
 
   return (
     <div style={{ background: '#0f0f0f', color: '#fff', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", minHeight: '100vh' }}>
+      <AuthRedirect />
       <style>{`
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(16px); }
