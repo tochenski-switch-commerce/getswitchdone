@@ -28,7 +28,8 @@
       "Bash(npx next:*)",
       "Bash(node -e \":*)",
       "Bash(grep -n \"is_complete\" /Users/tripochenski/Documents/Projects/gsd-boards/boards-starter/schema/*.sql)",
-      "Bash(pkill -f \"next dev\")"
+      "Bash(pkill -f \"next dev\")",
+      "Bash(wc -l /Users/tripochenski/Documents/Projects/gsd-boards/src/app/\\\\\\(marketing\\\\\\)/page.tsx)"
     ],
     "additionalDirectories": [
       "/Users/tripochenski/Documents/Projects/gsd-boards/373s|href=\"\"\"\"/auth\"\"\"\"|href=\"\"\"\""
