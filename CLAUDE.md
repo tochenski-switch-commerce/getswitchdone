@@ -168,8 +168,9 @@ After any meaningful commit:
 1. `git add [specific files]`
 2. `git commit -m "[clear message]"`
 3. `git push`
+4. Trigger a Netlify redeploy if the change affects production behavior
 
-Don't use `git add -A` or `git add .` — stage specific files to avoid accidentally committing `.env` or build artifacts.
+Don't use `git add -A` or `git add .` — stage specific files to avoid accidentally committing `.env` or build artifacts. Never assume a push is enough — follow through to redeploy when it matters.
 
 ---
 

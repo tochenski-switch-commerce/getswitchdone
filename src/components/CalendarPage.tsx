@@ -813,6 +813,7 @@ const calendarStyles = `
     width: 100%;
     max-width: 420px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+    color-scheme: dark;
   }
   .cal-modal-title {
     font-size: 16px;
@@ -843,6 +844,8 @@ const calendarStyles = `
     outline: none;
     transition: border-color 0.15s;
     box-sizing: border-box;
+    font-family: inherit;
+    color-scheme: dark;
   }
   .cal-modal-input:focus { border-color: #6366f1; }
   .cal-modal-input::placeholder { color: #4b5563; }
@@ -858,8 +861,18 @@ const calendarStyles = `
     cursor: pointer;
     appearance: none;
     box-sizing: border-box;
+    font-family: inherit;
+    color-scheme: dark;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
   }
   .cal-modal-select:focus { border-color: #6366f1; }
+  .cal-modal-select option {
+    background: #1a1d27;
+    color: #e5e7eb;
+  }
   .cal-modal-actions {
     display: flex;
     gap: 10px;
@@ -874,8 +887,10 @@ const calendarStyles = `
     font-size: 13px;
     color: #9ca3af;
     cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
   }
-  .cal-modal-cancel:hover { color: #e5e7eb; }
+  .cal-modal-cancel:hover { color: #e5e7eb; background: #2a2d3a; }
   .cal-modal-save {
     background: #6366f1;
     border: none;
@@ -885,6 +900,7 @@ const calendarStyles = `
     font-weight: 600;
     color: #fff;
     cursor: pointer;
+    font-family: inherit;
     transition: background 0.15s;
   }
   .cal-modal-save:hover { background: #5254cc; }
