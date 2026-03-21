@@ -187,11 +187,13 @@ export default function TopNav() {
           background: #fa420f;
           color: #fff;
         }
-        .kb-nav-right {
-          margin-left: auto;
+        .kb-nav-bell-wrap {
           display: flex;
           align-items: center;
-          gap: 2px;
+          flex-shrink: 0;
+        }
+        .kb-nav-bottom {
+          display: contents;
         }
         .kb-top-nav .kb-btn-icon {
           background: none !important;
@@ -220,7 +222,8 @@ export default function TopNav() {
           border: none;
           cursor: pointer;
           transition: all 0.15s ease;
-          margin-left: 4px;
+          margin-left: 0;
+          flex-shrink: 0;
         }
         .kb-nav-profile-btn:hover { background: #e03a0d; }
         .kb-profile-dropdown {
@@ -276,7 +279,7 @@ export default function TopNav() {
           position: relative;
           flex: 1;
           max-width: 280px;
-          margin: 0 8px;
+          margin: 0 8px 0 auto;
         }
         .kb-global-search-input-wrap {
           display: flex;
@@ -363,43 +366,51 @@ export default function TopNav() {
         }
         @media (max-width: 600px) {
           .kb-top-nav {
-            padding: 6px 8px;
+            padding: 6px 8px 8px;
             gap: 0;
+            flex-wrap: wrap;
           }
           .kb-nav-tab {
             padding: 6px 10px;
             font-size: 12px;
           }
+          /* Bell stays in row 1, pushed to the right */
+          .kb-nav-bell-wrap {
+            order: 1;
+            margin-left: auto;
+          }
+          /* Search + Profile drop to row 2 */
+          .kb-nav-bottom {
+            order: 2;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            gap: 8px;
+            margin-top: 6px;
+          }
           .kb-global-search {
-            max-width: none;
             flex: 1;
+            max-width: none;
             min-width: 0;
-            margin: 0 4px;
+            margin: 0;
           }
           .kb-global-search-input-wrap {
-            height: 28px;
-            padding: 0 8px;
+            height: 34px;
+            padding: 0 10px;
           }
           .kb-global-search-input {
-            font-size: 12px;
-          }
-          .kb-nav-right {
-            gap: 0;
+            font-size: 13px;
           }
           .kb-nav-profile-btn {
-            width: 24px;
-            height: 24px;
-            font-size: 10px;
-            margin-left: 2px;
+            width: 30px;
+            height: 30px;
+            font-size: 12px;
           }
         }
         @media (max-width: 380px) {
           .kb-nav-tab {
             padding: 5px 7px;
             font-size: 11px;
-          }
-          .kb-global-search {
-            margin: 0 2px;
           }
         }
       `}</style>
@@ -427,108 +438,91 @@ export default function TopNav() {
           </button>
         ))}
 
-        {/* Global card search */}
-        <div className="kb-global-search" ref={searchBarRef}>
-          <div className="kb-global-search-input-wrap">
-            <Search size={13} style={{ color: '#4b5563', flexShrink: 0 }} />
-            <input
-              className="kb-global-search-input"
-              placeholder="Search cards…"
-              value={cardSearch}
-              onChange={e => {
-                setCardSearch(e.target.value);
-                setCardSearchIdx(0);
-                setShowInbox(false);
-                setShowProfile(false);
-              }}
-              onKeyDown={e => {
-                if (e.key === 'ArrowDown') { e.preventDefault(); setCardSearchIdx(i => Math.min(i + 1, cardSearchResults.length - 1)); }
-                if (e.key === 'ArrowUp') { e.preventDefault(); setCardSearchIdx(i => Math.max(i - 1, 0)); }
-                if (e.key === 'Enter' && cardSearchResults[cardSearchIdx]) handleSelectResult(cardSearchResults[cardSearchIdx]);
-                if (e.key === 'Escape') { setCardSearch(''); setCardSearchResults([]); }
-              }}
-            />
-            {cardSearch && (
-              <button className="kb-global-search-clear" onClick={() => { setCardSearch(''); setCardSearchResults([]); }}>
-                <X size={12} />
-              </button>
-            )}
+        {/* Search + Profile — inline on desktop, second row on mobile */}
+        <div className="kb-nav-bottom">
+          <div className="kb-global-search" ref={searchBarRef}>
+            <div className="kb-global-search-input-wrap">
+              <Search size={13} style={{ color: '#4b5563', flexShrink: 0 }} />
+              <input
+                className="kb-global-search-input"
+                placeholder="Search cards…"
+                value={cardSearch}
+                onChange={e => {
+                  setCardSearch(e.target.value);
+                  setCardSearchIdx(0);
+                  setShowInbox(false);
+                  setShowProfile(false);
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setCardSearchIdx(i => Math.min(i + 1, cardSearchResults.length - 1)); }
+                  if (e.key === 'ArrowUp') { e.preventDefault(); setCardSearchIdx(i => Math.max(i - 1, 0)); }
+                  if (e.key === 'Enter' && cardSearchResults[cardSearchIdx]) handleSelectResult(cardSearchResults[cardSearchIdx]);
+                  if (e.key === 'Escape') { setCardSearch(''); setCardSearchResults([]); }
+                }}
+              />
+              {cardSearch && (
+                <button className="kb-global-search-clear" onClick={() => { setCardSearch(''); setCardSearchResults([]); }}>
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            {cardSearchResults.length > 0 && (() => {
+              const thisBoardResults = currentBoardId
+                ? cardSearchResults.filter(r => r.boardId === currentBoardId)
+                : [];
+              const otherResults = currentBoardId
+                ? cardSearchResults.filter(r => r.boardId !== currentBoardId)
+                : cardSearchResults;
+              const allOrdered = [...thisBoardResults, ...otherResults];
+              return (
+                <div className="kb-global-search-dropdown">
+                  {thisBoardResults.length > 0 && (
+                    <>
+                      <div className="kb-global-search-label">This board</div>
+                      {thisBoardResults.map(result => {
+                        const i = allOrdered.indexOf(result);
+                        return (
+                          <div
+                            key={result.id}
+                            className={`kb-global-search-item${i === cardSearchIdx ? ' selected' : ''}`}
+                            onMouseEnter={() => setCardSearchIdx(i)}
+                            onClick={() => handleSelectResult(result)}
+                          >
+                            <div className="kb-global-search-item-title">{result.title}</div>
+                            <div className="kb-global-search-item-meta">{result.columnTitle}</div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                  {otherResults.length > 0 && (
+                    <>
+                      <div className="kb-global-search-label" style={thisBoardResults.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
+                        {currentBoardId ? 'Other boards' : 'Cards'}
+                      </div>
+                      {otherResults.map(result => {
+                        const i = allOrdered.indexOf(result);
+                        return (
+                          <div
+                            key={result.id}
+                            className={`kb-global-search-item${i === cardSearchIdx ? ' selected' : ''}`}
+                            onMouseEnter={() => { setCardSearchIdx(i); prefetchBoard(result.boardId); }}
+                            onClick={() => handleSelectResult(result)}
+                          >
+                            <div className="kb-global-search-item-title">{result.title}</div>
+                            <div className="kb-global-search-item-meta">{result.boardTitle} · {result.columnTitle}</div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
-          {cardSearchResults.length > 0 && (() => {
-            const thisBoardResults = currentBoardId
-              ? cardSearchResults.filter(r => r.boardId === currentBoardId)
-              : [];
-            const otherResults = currentBoardId
-              ? cardSearchResults.filter(r => r.boardId !== currentBoardId)
-              : cardSearchResults;
-            // flat index for keyboard nav: this-board results come first
-            const allOrdered = [...thisBoardResults, ...otherResults];
-            return (
-              <div className="kb-global-search-dropdown">
-                {thisBoardResults.length > 0 && (
-                  <>
-                    <div className="kb-global-search-label">This board</div>
-                    {thisBoardResults.map(result => {
-                      const i = allOrdered.indexOf(result);
-                      return (
-                        <div
-                          key={result.id}
-                          className={`kb-global-search-item${i === cardSearchIdx ? ' selected' : ''}`}
-                          onMouseEnter={() => setCardSearchIdx(i)}
-                          onClick={() => handleSelectResult(result)}
-                        >
-                          <div className="kb-global-search-item-title">{result.title}</div>
-                          <div className="kb-global-search-item-meta">{result.columnTitle}</div>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-                {otherResults.length > 0 && (
-                  <>
-                    <div className="kb-global-search-label" style={thisBoardResults.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
-                      {currentBoardId ? 'Other boards' : 'Cards'}
-                    </div>
-                    {otherResults.map(result => {
-                      const i = allOrdered.indexOf(result);
-                      return (
-                        <div
-                          key={result.id}
-                          className={`kb-global-search-item${i === cardSearchIdx ? ' selected' : ''}`}
-                          onMouseEnter={() => { setCardSearchIdx(i); prefetchBoard(result.boardId); }}
-                          onClick={() => handleSelectResult(result)}
-                        >
-                          <div className="kb-global-search-item-title">{result.title}</div>
-                          <div className="kb-global-search-item-meta">{result.boardTitle} · {result.columnTitle}</div>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-              </div>
-            );
-          })()}
-        </div>
-
-        <div className="kb-nav-right">
-          {/* Inbox bell — same as was in board toolbar */}
-          <button
-            className="kb-btn-icon"
-            onClick={() => { setShowInbox(!showInbox); setShowProfile(false); }}
-            title="Inbox"
-            style={{ position: 'relative' }}
-          >
-            <Bell size={16} />
-            {notifications.filter(n => !n.is_read).length > 0 && (
-              <span style={{
-                position: 'absolute', top: 2, right: 2, width: 7, height: 7,
-                borderRadius: '50%', background: '#ef4444',
-              }} />
-            )}
-          </button>
 
           {/* Profile */}
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
             <button
               className="kb-nav-profile-btn"
               onClick={() => { setShowProfile(!showProfile); setShowInbox(false); }}
@@ -560,6 +554,24 @@ export default function TopNav() {
               </>
             )}
           </div>
+        </div>
+
+        {/* Bell — order:1 on mobile keeps it in row 1, right-aligned */}
+        <div className="kb-nav-bell-wrap">
+          <button
+            className="kb-btn-icon"
+            onClick={() => { setShowInbox(!showInbox); setShowProfile(false); }}
+            title="Inbox"
+            style={{ position: 'relative' }}
+          >
+            <Bell size={16} />
+            {notifications.filter(n => !n.is_read).length > 0 && (
+              <span style={{
+                position: 'absolute', top: 2, right: 2, width: 7, height: 7,
+                borderRadius: '50%', background: '#ef4444',
+              }} />
+            )}
+          </button>
         </div>
       </nav>
 
