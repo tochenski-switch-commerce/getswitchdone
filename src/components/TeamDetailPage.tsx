@@ -1,12 +1,16 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeams } from '@/hooks/useTeams';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Users, Trash2, Edit3, Check, X, Copy, UserMinus, LogOut, Calendar, getBoardIcon, DEFAULT_ICON_COLOR } from '@/components/BoardIcons';
-import type { Team, TeamMember, TeamInvite, ProjectBoard } from '@/types/board-types';
+import {
+  ArrowLeft, Users, Trash2, Edit3, Check, X, Copy, UserMinus, LogOut, Calendar,
+  getBoardIcon, DEFAULT_ICON_COLOR,
+  StickyNote, Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered, LinkIcon,
+} from '@/components/BoardIcons';
+import type { Team, ProjectBoard } from '@/types/board-types';
 
 export default function TeamDetailPage() {
   const params = useParams();
@@ -14,9 +18,9 @@ export default function TeamDetailPage() {
   const teamId = params.id as string;
   const { user, loading: authLoading } = useAuth();
   const {
-    teams, members, invites, loading, error,
+    teams, members, invites, error,
     fetchTeams, fetchMembers, fetchInvites,
-    createInvite, revokeInvite, removeMember, updateMemberRole, leaveTeam, deleteTeam, renameTeam, getMyRole,
+    createInvite, removeMember, updateMemberRole, transferOwnership, leaveTeam, deleteTeam, renameTeam, getMyRole, updateTeamNotes,
   } = useTeams();
 
   const [team, setTeam] = useState<Team | null>(null);
@@ -25,6 +29,11 @@ export default function TeamDetailPage() {
   const [nameInput, setNameInput] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
   const [teamBoards, setTeamBoards] = useState<ProjectBoard[]>([]);
+
+  // ── Notes panel ──
+  const [showNotePanel, setShowNotePanel] = useState(false);
+  const noteRef = useRef<HTMLDivElement>(null);
+  const noteSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -57,6 +66,61 @@ export default function TeamDetailPage() {
     if (t) { setTeam(t); setNameInput(t.name); }
   }, [teams, teamId]);
 
+  // Sync note content when team loads (only on team id change, not on every notes save)
+  useEffect(() => {
+    if (team?.notes != null && noteRef.current) {
+      const html = team.notes;
+      if (html && !/<[a-z][\s\S]*>/i.test(html)) {
+        noteRef.current.innerHTML = html.replace(/\n/g, '<br>');
+      } else {
+        noteRef.current.innerHTML = html || '';
+      }
+    }
+  }, [team?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clean up autosave timer on unmount
+  useEffect(() => {
+    return () => {
+      if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
+    };
+  }, []);
+
+  const saveNoteNow = useCallback(() => {
+    if (!noteRef.current || !team) return;
+    if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
+    const html = noteRef.current.innerHTML;
+    if (html !== (team.notes || '')) {
+      updateTeamNotes(teamId, html);
+    }
+  }, [team, teamId, updateTeamNotes]);
+
+  const handleNoteInput = useCallback(() => {
+    if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
+    noteSaveTimer.current = setTimeout(saveNoteNow, 1500);
+  }, [saveNoteNow]);
+
+  const execNoteCmd = (cmd: string, value?: string) => {
+    document.execCommand(cmd, false, value);
+    noteRef.current?.focus();
+  };
+
+  const insertNoteLink = () => {
+    const url = prompt('Enter URL:');
+    if (url) {
+      try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return;
+        document.execCommand('createLink', false, parsed.href);
+      } catch { /* invalid URL — ignore */ }
+    }
+    noteRef.current?.focus();
+  };
+
+  const closeNotePanel = useCallback(() => {
+    saveNoteNow();
+    setShowNotePanel(false);
+  }, [saveNoteNow]);
+
   const handleRename = async () => {
     if (!nameInput.trim() || !teamId) return;
     await renameTeam(teamId, nameInput);
@@ -64,7 +128,6 @@ export default function TeamDetailPage() {
   };
 
   const handleCopyInviteLink = async () => {
-    // Re-use an existing active invite, or create one on the fly
     let activeInvite = invites.find(i => i.is_active);
     if (!activeInvite) {
       const created = await createInvite(teamId);
@@ -86,6 +149,12 @@ export default function TeamDetailPage() {
     await removeMember(teamId, userId);
   };
 
+  const handleTransferOwnership = async (userId: string, name: string) => {
+    if (!confirm(`Transfer ownership to ${name}? You will become an editor and lose owner permissions.`)) return;
+    await transferOwnership(teamId, userId);
+    setMyRole('editor');
+  };
+
   const handleLeave = async () => {
     if (!confirm('Leave this team? You will lose access to team boards.')) return;
     await leaveTeam(teamId);
@@ -101,6 +170,7 @@ export default function TeamDetailPage() {
   if (authLoading || !user) return null;
 
   const isOwner = myRole === 'owner';
+  const canEditNotes = myRole === 'owner' || myRole === 'editor';
 
   return (
     <div className="kb-root">
@@ -137,7 +207,15 @@ export default function TeamDetailPage() {
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              className={`kb-note-toggle${showNotePanel ? ' kb-note-toggle-active' : ''}`}
+              onClick={() => setShowNotePanel(v => !v)}
+              title="Team notes"
+            >
+              <StickyNote size={14} />
+              <span>Notes</span>
+            </button>
             {!isOwner && (
               <button className="kb-btn kb-btn-ghost kb-btn-danger" onClick={handleLeave}>
                 <LogOut size={14} /> Leave
@@ -235,15 +313,76 @@ export default function TeamDetailPage() {
                     )}
                   </div>
                   {isOwner && !isMe && !isMemberOwner && (
-                    <button className="kb-btn-icon kb-btn-icon-danger" onClick={() => handleRemoveMember(m.user_id)} title="Remove member">
-                      <UserMinus size={15} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button
+                        className="kb-btn-icon kb-btn-icon-transfer"
+                        onClick={() => handleTransferOwnership(m.user_id, m.user_profiles?.name || 'this member')}
+                        title="Transfer ownership"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                      </button>
+                      <button className="kb-btn-icon kb-btn-icon-danger" onClick={() => handleRemoveMember(m.user_id)} title="Remove member">
+                        <UserMinus size={15} />
+                      </button>
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
         </section>
+      </div>
+
+      {/* ── Note Panel (slide-in from right) ── */}
+      <div className={`kb-note-panel${showNotePanel ? ' open' : ''}`}>
+        <div className="kb-note-header">
+          <div className="kb-note-header-title">
+            <StickyNote size={16} />
+            Team Notes
+          </div>
+          <button className="kb-note-close-btn" onClick={closeNotePanel} title="Close notes">
+            <X size={18} />
+          </button>
+        </div>
+        {canEditNotes && (
+          <div className="kb-note-toolbar">
+            <button className="kb-note-tool-btn" onMouseDown={e => { e.preventDefault(); execNoteCmd('bold'); }} title="Bold"><Bold size={14} /></button>
+            <button className="kb-note-tool-btn" onMouseDown={e => { e.preventDefault(); execNoteCmd('italic'); }} title="Italic"><Italic size={14} /></button>
+            <button className="kb-note-tool-btn" onMouseDown={e => { e.preventDefault(); execNoteCmd('underline'); }} title="Underline"><Underline size={14} /></button>
+            <button className="kb-note-tool-btn" onMouseDown={e => { e.preventDefault(); execNoteCmd('strikeThrough'); }} title="Strikethrough"><Strikethrough size={14} /></button>
+            <div className="kb-note-tool-sep" />
+            <button className="kb-note-tool-btn" onMouseDown={e => { e.preventDefault(); execNoteCmd('formatBlock', '<h3>'); }} title="Heading"><Heading size={14} /></button>
+            <button className="kb-note-tool-btn" onMouseDown={e => { e.preventDefault(); execNoteCmd('insertUnorderedList'); }} title="Bullet list"><ListBullet size={14} /></button>
+            <button className="kb-note-tool-btn" onMouseDown={e => { e.preventDefault(); execNoteCmd('insertOrderedList'); }} title="Numbered list"><ListOrdered size={14} /></button>
+            <div className="kb-note-tool-sep" />
+            <button className="kb-note-tool-btn" onMouseDown={e => { e.preventDefault(); insertNoteLink(); }} title="Insert link"><LinkIcon size={14} /></button>
+          </div>
+        )}
+        <div className="kb-note-body">
+          <div
+            ref={noteRef}
+            className="kb-note-editable"
+            contentEditable={canEditNotes}
+            suppressContentEditableWarning
+            onInput={canEditNotes ? handleNoteInput : undefined}
+            onBlur={canEditNotes ? saveNoteNow : undefined}
+            onClick={e => {
+              const target = e.target as HTMLElement;
+              const anchor = target.closest('a');
+              if (anchor && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                window.open(anchor.href, '_blank', 'noopener,noreferrer');
+              }
+            }}
+          />
+        </div>
+        {!canEditNotes && (
+          <div className="kb-note-readonly-hint">
+            <span>Viewers can read but not edit team notes.</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -290,6 +429,8 @@ const detailStyles = `
   }
   .kb-btn-icon:hover { background: rgba(255,255,255,0.08); color: #e5e7eb; }
   .kb-btn-icon-danger:hover { background: rgba(239,68,68,0.15); color: #ef4444; }
+  .kb-btn-icon-transfer { color: #6b7280; }
+  .kb-btn-icon-transfer:hover { background: rgba(234,179,8,0.15); color: #eab308; }
   .kb-btn {
     display: inline-flex;
     align-items: center;
@@ -481,6 +622,206 @@ const detailStyles = `
     font-weight: 500;
   }
 
+  /* ── Notes toggle button ── */
+  .kb-note-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #3b3f54;
+    background: #1e2235;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .kb-note-toggle:hover { background: #262b44; color: #cbd5e1; border-color: #4b5068; }
+  .kb-note-toggle-active {
+    background: rgba(99, 102, 241, 0.15) !important;
+    color: #a5b4fc !important;
+    border-color: rgba(99, 102, 241, 0.4) !important;
+  }
+  .kb-note-toggle-active:hover { background: rgba(99, 102, 241, 0.25) !important; }
+
+  /* ── Note Panel ── */
+  .kb-note-panel {
+    position: fixed;
+    top: 64px;
+    right: 0;
+    bottom: 0;
+    width: 400px;
+    background: #1a1d2e;
+    border-left: 1px solid #2a2d3a;
+    display: flex;
+    flex-direction: column;
+    z-index: 900;
+    transform: translateX(100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+  }
+  .kb-note-panel.open { transform: translateX(0); }
+  .kb-note-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid #2a2d3a;
+    flex-shrink: 0;
+  }
+  .kb-note-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #e2e8f0;
+  }
+  .kb-note-close-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 8px !important;
+    border: 1px solid #3b3f54 !important;
+    background: #1e2235 !important;
+    color: #94a3b8 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    flex-shrink: 0 !important;
+    padding: 0 !important;
+  }
+  .kb-note-close-btn:hover {
+    background: #ef4444 !important;
+    border-color: #ef4444 !important;
+    color: #fff !important;
+  }
+  .kb-note-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #2a2d3a;
+    background: rgba(15, 17, 23, 0.5);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .kb-note-tool-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 6px !important;
+    border: none !important;
+    background: transparent !important;
+    color: #94a3b8 !important;
+    cursor: pointer !important;
+    transition: all 0.12s ease !important;
+    padding: 0 !important;
+  }
+  .kb-note-tool-btn:hover {
+    background: rgba(99, 102, 241, 0.15) !important;
+    color: #a5b4fc !important;
+  }
+  .kb-note-tool-btn:active {
+    background: rgba(99, 102, 241, 0.25) !important;
+    color: #c7d2fe !important;
+  }
+  .kb-note-tool-sep {
+    width: 1px;
+    height: 20px;
+    background: #2a2d3a;
+    margin: 0 4px;
+    flex-shrink: 0;
+  }
+  .kb-note-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+  .kb-note-editable {
+    min-height: 100%;
+    outline: none;
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.7;
+    word-break: break-word;
+    caret-color: #818cf8;
+  }
+  .kb-note-editable:empty::before {
+    content: 'Start typing your notes...';
+    color: #4b5068;
+    font-style: italic;
+    pointer-events: none;
+  }
+  .kb-note-editable h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin: 16px 0 8px 0;
+    line-height: 1.3;
+  }
+  .kb-note-editable h3:first-child { margin-top: 0; }
+  .kb-note-editable a {
+    color: #818cf8;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: text;
+    position: relative;
+  }
+  .kb-note-editable a:hover { color: #a5b4fc; cursor: pointer; }
+  .kb-note-editable a:hover::after {
+    content: '⌘ click to open';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e2235;
+    color: #94a3b8;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid #3b3f54;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+    font-style: normal;
+    font-weight: 500;
+    text-decoration: none;
+    line-height: 1.4;
+  }
+  .kb-note-editable ul {
+    padding-left: 24px;
+    margin: 8px 0;
+    list-style-type: disc !important;
+  }
+  .kb-note-editable ol {
+    padding-left: 24px;
+    margin: 8px 0;
+    list-style-type: decimal !important;
+  }
+  .kb-note-editable li { margin: 2px 0; display: list-item !important; }
+  .kb-note-editable blockquote {
+    border-left: 3px solid #6366f1;
+    padding-left: 12px;
+    margin: 8px 0;
+    color: #94a3b8;
+    font-style: italic;
+  }
+  .kb-note-editable s { color: #64748b; }
+  .kb-note-readonly-hint {
+    padding: 10px 16px;
+    font-size: 12px;
+    color: #4b5563;
+    border-top: 1px solid #2a2d3a;
+    flex-shrink: 0;
+    text-align: center;
+  }
+
   /* ── Mobile ── */
   @media (max-width: 480px) {
     .kb-container { padding: 16px 12px 80px; }
@@ -491,5 +832,8 @@ const detailStyles = `
     .kb-member-name { font-size: 13px; }
     .kb-copy-link-btn { padding: 12px 16px; font-size: 13px; }
     .kb-btn { padding: 8px 12px; font-size: 12px; }
+    .kb-note-panel { width: 100%; top: auto; height: 65vh; transform: translateY(100%); }
+    .kb-note-panel.open { transform: translateY(0); }
+    .kb-note-toggle span { display: none; }
   }
 `;

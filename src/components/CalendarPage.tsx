@@ -992,9 +992,114 @@ const calendarStyles = `
     opacity: 0.6;
   }
 
+  /* ── Nav + Add row wrapper ── */
+  .cal-nav-add-row { display: contents; }
+
+  /* ── Mobile board multi-select (mobile only) ── */
+  .cal-board-select-wrap {
+    display: none;
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .cal-board-select-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 13px;
+    color: #e5e7eb;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+  }
+  .cal-board-select-btn:hover { border-color: #4f52a0; }
+  .cal-board-select-btn-label { display: flex; align-items: center; gap: 8px; }
+  .cal-board-select-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 10px;
+    padding: 6px;
+    z-index: 250;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  }
+  .cal-board-select-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #d1d5db;
+  }
+  .cal-board-select-item:hover { background: #22253a; }
+  .cal-board-select-item.active { color: #f9fafb; }
+  .cal-board-select-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid #374151;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.12s;
+  }
+  .cal-board-select-item.active .cal-board-select-check {
+    border-color: #6366f1;
+    background: rgba(99,102,241,0.15);
+    color: #818cf8;
+  }
+  .cal-board-select-divider {
+    height: 1px;
+    background: #1e2130;
+    margin: 4px 0;
+  }
+
+  /* ── FAB (mobile only) ── */
+  .cal-fab {
+    display: none;
+  }
+
+  /* ── Agenda header meta (Today badge + count) ── */
+  .cal-agenda-header-meta { display: flex; align-items: center; gap: 8px; }
+
+  /* ── Collapse toggle (mobile only) ── */
+  .cal-collapse-toggle {
+    display: none;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    background: #13151f;
+    border: 1px solid #1e2130;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    cursor: pointer;
+    gap: 5px;
+    font-size: 11px;
+    color: #6b7280;
+    font-family: inherit;
+    transition: color 0.12s;
+    box-sizing: border-box;
+  }
+  .cal-collapse-toggle:hover { color: #9ca3af; }
+
+
   /* ── Mobile ── */
   @media (max-width: 767px) {
-    .cal-container { padding: 0 10px 32px; }
+    .cal-container { padding: 0 10px 96px; }
     .cal-header { padding: 14px 0 10px; }
     .cal-title { font-size: 18px; }
     .cal-subtitle { font-size: 12px; }
@@ -1006,9 +1111,7 @@ const calendarStyles = `
     }
     .cal-search { width: 100%; box-sizing: border-box; }
     .cal-toolbar > .cal-dropdown-wrap,
-    .cal-toolbar > .cal-view-toggles,
-    .cal-toolbar > .cal-add-btn,
-    .cal-toolbar > .cal-nav-row {
+    .cal-toolbar > .cal-view-toggles {
       width: 100%;
       box-sizing: border-box;
     }
@@ -1022,12 +1125,17 @@ const calendarStyles = `
       padding: 8px 4px;
       font-size: 12px;
     }
-    .cal-add-btn {
-      justify-content: center;
-      padding: 10px 14px;
+    /* Nav + Add share one compact row on mobile */
+    .cal-nav-add-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
     }
-    .cal-nav-row {
-      justify-content: space-between;
+    .cal-nav-add-row .cal-nav-row {
+      flex: 1;
+      margin-left: 0;
+      justify-content: flex-start;
       flex-wrap: nowrap;
       gap: 6px;
     }
@@ -1040,7 +1148,9 @@ const calendarStyles = `
     }
     .cal-agenda-wrap { flex-direction: column; min-height: auto; }
     .cal-agenda-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #1e2130; }
-    .cal-agenda-main-header { padding: 12px 14px; }
+    .cal-agenda-main-header { padding: 10px 14px; flex-direction: column; align-items: flex-start; gap: 4px; }
+    .cal-agenda-main-heading { display: none; }
+    .cal-agenda-header-meta { display: flex; align-items: center; gap: 8px; }
     .cal-agenda-events { padding: 12px 14px; }
     .cal-modal { max-width: 92vw; }
     .cal-event-card { padding: 10px 12px; }
@@ -1065,9 +1175,111 @@ const calendarStyles = `
     .cal-week-col-body .cal-event-badge { display: flex; font-size: 10px; padding: 1px 2px; }
     .cal-week-col-body .cal-event-badge-title { font-size: 10px; }
     .cal-week-col-body .cal-priority-dot { width: 4px; height: 4px; }
+    /* Hide Add button from nav row — FAB replaces it */
+    .cal-nav-add-row .cal-add-btn { display: none; }
+    /* FAB */
+    .cal-fab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      bottom: 24px;
+      right: 20px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      box-shadow: 0 4px 16px rgba(99,102,241,0.45);
+      cursor: pointer;
+      z-index: 300;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .cal-fab:active { transform: scale(0.93); background: #5254cc; }
+    /* Hide desktop board dropdown on mobile — chips replace it */
+    .cal-toolbar > .cal-dropdown-wrap { display: none; }
+    /* Hide month legend on mobile — chips replace it */
+    .cal-legend { display: none; }
+    /* Hide agenda sidebar board pills on mobile — chips replace it */
+    .cal-board-pills { display: none; }
+    /* Hide full mini calendar on mobile when collapsed */
+    .cal-mini-cal-collapsed { display: none; }
+    /* Show collapse toggle on mobile */
+    .cal-collapse-toggle { display: flex; }
+    /* Agenda mini-cal collapse */
+    .cal-mini-collapse-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 14px;
+      background: none;
+      border: none;
+      border-bottom: 1px solid #1e2130;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: #f9fafb;
+      gap: 8px;
+    }
+    .cal-mini-collapse-btn .cal-mini-collapse-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #6b7280;
+      font-size: 12px;
+      font-weight: 400;
+    }
+    .cal-mini-week-strip {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      padding: 6px 10px 10px;
+      border-bottom: 1px solid #1e2130;
+    }
+    .cal-mini-week-strip-day {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 2px;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+    .cal-mini-week-strip-day:hover { background: #1e2130; }
+    .cal-mini-week-strip-label {
+      font-size: 9px;
+      font-weight: 600;
+      color: #4b5563;
+      text-transform: uppercase;
+    }
+    .cal-mini-week-strip-num {
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 13px;
+      color: #9ca3af;
+    }
+    .cal-mini-week-strip-num.today { background: #6366f1; color: #fff; font-weight: 700; }
+    .cal-mini-week-strip-num.selected { box-shadow: inset 0 0 0 2px #6366f1; color: #818cf8; font-weight: 600; }
+    .cal-mini-week-strip-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #6366f1;
+    }
+    /* Board multi-select dropdown */
+    .cal-board-select-wrap { display: block; }
   }
+
   @media (min-width: 768px) {
     .cal-event-dots { display: none; }
+    .cal-mini-collapse-btn { display: none; }
+    .cal-mini-week-strip { display: none; }
   }
 `;
 
@@ -1122,6 +1334,22 @@ function ChevronRight() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
       <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+function ChevronDown() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function ChevronUp() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <polyline points="18 15 12 9 6 15" />
     </svg>
   );
 }
@@ -1393,6 +1621,9 @@ function AddCardModal({ defaultDate, boards, getColumnsForBoard, onSave, onClose
 interface MonthViewProps {
   year: number;
   month: number;
+  selectedDate: string;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   events: CalendarEvent[];
   onDayClick: (dateKey: string) => void;
   onEventClick: (event: CalendarEvent) => void;
@@ -1400,8 +1631,16 @@ interface MonthViewProps {
   onReschedule: (event: CalendarEvent, newDateKey: string) => void;
 }
 
-function MonthView({ year, month, events, onDayClick, onEventClick, onToggle, onReschedule }: MonthViewProps) {
-  const days = useMemo(() => getMonthDays(year, month), [year, month]);
+function MonthView({ year, month, selectedDate, collapsed, onToggleCollapse, events, onDayClick, onEventClick, onToggle, onReschedule }: MonthViewProps) {
+  const allDays = useMemo(() => getMonthDays(year, month), [year, month]);
+  const selectedRow = useMemo(() => {
+    const idx = allDays.findIndex(d => toDateKey(d) === selectedDate);
+    return idx === -1 ? 0 : Math.floor(idx / 7);
+  }, [allDays, selectedDate]);
+  const days = useMemo(
+    () => collapsed ? allDays.slice(selectedRow * 7, selectedRow * 7 + 7) : allDays,
+    [allDays, collapsed, selectedRow]
+  );
   const dayKeys = useMemo(() => days.map(toDateKey), [days]);
   const eventIndex = useMemo(() => buildEventIndex(events, dayKeys), [events, dayKeys]);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
@@ -1551,6 +1790,9 @@ function MonthView({ year, month, events, onDayClick, onEventClick, onToggle, on
         </div>
       </div>
 
+      <button className="cal-collapse-toggle" onClick={onToggleCollapse}>
+        {collapsed ? <><ChevronDown /> Show full month</> : <><ChevronUp /> Show week only</>}
+      </button>
       {tooltip && <EventTooltip state={tooltip} />}
     </>
   );
@@ -1793,18 +2035,69 @@ function AgendaView({
     [events, selectedDate]
   );
   const todayKey = toDateKey(new Date());
+  const [miniCalExpanded, setMiniCalExpanded] = useState(false);
+
+  const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
+
+  const eventDateSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of events) {
+      const start = parseLocalDate(e.startDate);
+      const end = parseLocalDate(e.endDate);
+      const cur = new Date(start);
+      while (cur <= end) {
+        set.add(toDateKey(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+    return set;
+  }, [events]);
 
   return (
     <div className="cal-agenda-wrap">
       <div className="cal-agenda-sidebar">
-        <MiniCalendar
-          year={year}
-          month={month}
-          selectedDate={selectedDate}
-          events={events}
-          onSelectDate={onSelectDate}
-          onMonthChange={onMonthChange}
-        />
+        {/* Mobile: collapsible header — shows week strip when collapsed */}
+        <button className="cal-mini-collapse-btn" onClick={() => setMiniCalExpanded(e => !e)}>
+          <span>{MONTHS[month]} {year}</span>
+          <span className="cal-mini-collapse-right">
+            {miniCalExpanded ? 'Hide calendar' : 'Show calendar'}
+            {miniCalExpanded ? <ChevronUp /> : <ChevronDown />}
+          </span>
+        </button>
+
+        {/* Mobile: week strip — always visible when mini cal is collapsed */}
+        {!miniCalExpanded && (
+          <div className="cal-mini-week-strip">
+            {weekDays.map(day => {
+              const dk = toDateKey(day);
+              const isToday = dk === todayKey;
+              const isSelected = dk === selectedDate && !isToday;
+              const hasEvents = eventDateSet.has(dk);
+              return (
+                <div key={dk} className="cal-mini-week-strip-day" onClick={() => onSelectDate(dk)}>
+                  <span className="cal-mini-week-strip-label">{DAYS[day.getDay()][0]}</span>
+                  <span className={`cal-mini-week-strip-num${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}`}>
+                    {day.getDate()}
+                  </span>
+                  {hasEvents && <span className="cal-mini-week-strip-dot" />}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Full mini calendar — always on desktop, toggled on mobile */}
+        <div className={miniCalExpanded ? undefined : 'cal-mini-cal-collapsed'}>
+          <MiniCalendar
+            year={year}
+            month={month}
+            selectedDate={selectedDate}
+            events={events}
+            onSelectDate={onSelectDate}
+            onMonthChange={onMonthChange}
+          />
+        </div>
+
         <div className="cal-board-pills">
           <p className="cal-board-pill-label">Boards</p>
           {boards.map(b => {
@@ -1825,8 +2118,10 @@ function AgendaView({
       <div className="cal-agenda-main">
         <div className="cal-agenda-main-header">
           <span className="cal-agenda-main-heading">{formatDisplayDate(selectedDate)}</span>
-          {selectedDate === todayKey && <span className="cal-today-badge">Today</span>}
-          <span className="cal-event-count">{dayEvents.length} {dayEvents.length === 1 ? 'event' : 'events'}</span>
+          <div className="cal-agenda-header-meta">
+            {selectedDate === todayKey && <span className="cal-today-badge">Today</span>}
+            <span className="cal-event-count">{dayEvents.length} {dayEvents.length === 1 ? 'event' : 'events'}</span>
+          </div>
         </div>
         <div className="cal-agenda-events">
           {dayEvents.length === 0 ? (
@@ -1904,6 +2199,80 @@ function BoardFilter({ boards, filteredBoardIds, onToggle }: BoardFilterProps) {
   );
 }
 
+// ─── Mobile Board Multi-Select ────────────────────────────────────────────────
+
+interface MobileBoardSelectProps {
+  boards: { id: string; title: string; index: number }[];
+  filteredBoardIds: Set<string>;
+  onToggle: (boardId: string) => void;
+  onClearAll: () => void;
+}
+
+function MobileBoardSelect({ boards, filteredBoardIds, onToggle, onClearAll }: MobileBoardSelectProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const allVisible = filteredBoardIds.size === 0;
+  const visibleCount = boards.length - filteredBoardIds.size;
+  const label = allVisible ? 'All boards' : `${visibleCount} of ${boards.length} boards`;
+
+  return (
+    <div className="cal-board-select-wrap" ref={ref}>
+      <button className="cal-board-select-btn" onClick={() => setOpen(o => !o)}>
+        <span className="cal-board-select-btn-label">
+          {!allVisible && (
+            <span style={{ display: 'flex', gap: 3 }}>
+              {boards.filter(b => !filteredBoardIds.has(b.id)).slice(0, 3).map(b => (
+                <span key={b.id} style={{ width: 8, height: 8, borderRadius: '50%', background: getBoardColor(b.index), display: 'inline-block' }} />
+              ))}
+            </span>
+          )}
+          {label}
+        </span>
+        <ChevronDown />
+      </button>
+      {open && (
+        <div className="cal-board-select-menu">
+          <div
+            className={`cal-board-select-item${allVisible ? ' active' : ''}`}
+            onClick={() => { onClearAll(); setOpen(false); }}
+          >
+            <span className="cal-board-select-check">
+              {allVisible && <CheckIcon />}
+            </span>
+            All boards
+          </div>
+          <div className="cal-board-select-divider" />
+          {boards.map(b => {
+            const active = !filteredBoardIds.has(b.id);
+            return (
+              <div
+                key={b.id}
+                className={`cal-board-select-item${active ? ' active' : ''}`}
+                onClick={() => onToggle(b.id)}
+              >
+                <span className="cal-board-select-check">
+                  {active && <CheckIcon />}
+                </span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: getBoardColor(b.index), flexShrink: 0, display: 'inline-block' }} />
+                {b.title}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CalendarPage() {
@@ -1943,6 +2312,9 @@ export default function CalendarPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [agendaMiniYear, setAgendaMiniYear] = useState(year);
   const [agendaMiniMonth, setAgendaMiniMonth] = useState(month);
+  const [mobileCalCollapsed, setMobileCalCollapsed] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768
+  );
 
   // ── Load data on mount ──
   useEffect(() => { refresh(); }, [refresh]);
@@ -2035,6 +2407,8 @@ export default function CalendarPage() {
     });
   };
 
+  const handleClearBoardFilter = () => setFilteredBoardIds(new Set());
+
   const handleLegendClick = (boardId: string) => {
     setFilteredBoardIds(prev => {
       const next = new Set(prev);
@@ -2065,26 +2439,31 @@ export default function CalendarPage() {
     if (viewMode === 'month') return `${MONTHS[month]} ${year}`;
     if (viewMode === 'week') return formatWeekRange(selectedDate);
     if (viewMode === 'day') return formatDisplayDate(selectedDate);
-    return `${MONTHS[agendaMiniMonth]} ${agendaMiniYear}`;
+    return formatWeekRange(selectedDate);
   }, [viewMode, year, month, selectedDate, agendaMiniYear, agendaMiniMonth]);
+
+  const goWeekAgenda = useCallback((delta: number) => {
+    const d = parseLocalDate(selectedDate);
+    d.setDate(d.getDate() + delta * 7);
+    const dk = toDateKey(d);
+    setSelectedDate(dk);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+    setAgendaMiniYear(d.getFullYear());
+    setAgendaMiniMonth(d.getMonth());
+  }, [selectedDate]);
 
   const handlePrev = () => {
     if (viewMode === 'month') goToMonth(year, month - 1);
     else if (viewMode === 'week') goWeek(-1);
     else if (viewMode === 'day') goToDay(-1);
-    else {
-      if (agendaMiniMonth === 0) { setAgendaMiniYear(y => y - 1); setAgendaMiniMonth(11); }
-      else setAgendaMiniMonth(m => m - 1);
-    }
+    else goWeekAgenda(-1);
   };
   const handleNext = () => {
     if (viewMode === 'month') goToMonth(year, month + 1);
     else if (viewMode === 'week') goWeek(1);
     else if (viewMode === 'day') goToDay(1);
-    else {
-      if (agendaMiniMonth === 11) { setAgendaMiniYear(y => y + 1); setAgendaMiniMonth(0); }
-      else setAgendaMiniMonth(m => m + 1);
-    }
+    else goWeekAgenda(1);
   };
 
   const handleAgendaDateSelect = (dateKey: string) => {
@@ -2131,6 +2510,12 @@ export default function CalendarPage() {
               filteredBoardIds={filteredBoardIds}
               onToggle={handleToggleBoard}
             />
+            <MobileBoardSelect
+              boards={boards}
+              filteredBoardIds={filteredBoardIds}
+              onToggle={handleToggleBoard}
+              onClearAll={handleClearBoardFilter}
+            />
             <div className="cal-view-toggles">
               {(['month', 'week', 'agenda', 'day'] as ViewMode[]).map(v => (
                 <button
@@ -2142,16 +2527,17 @@ export default function CalendarPage() {
                 </button>
               ))}
             </div>
-            <button className="cal-add-btn" onClick={() => setShowAddModal(true)}>
-              <PlusIcon /> Add Card
-            </button>
-
-            {/* ── Nav ── */}
-            <div className="cal-nav-row" style={{ marginLeft: 'auto' }}>
-              <button className="cal-nav-btn" onClick={handlePrev}><ChevronLeft /></button>
-              <button className={`cal-nav-btn${isViewingToday ? ' today-active' : ''}`} onClick={goToToday}>Today</button>
-              <button className="cal-nav-btn" onClick={handleNext}><ChevronRight /></button>
-              <span className="cal-current-label">{navLabel}</span>
+            {/* ── Nav + Add (share one row on mobile) ── */}
+            <div className="cal-nav-add-row">
+              <div className="cal-nav-row" style={{ marginLeft: 'auto' }}>
+                <button className="cal-nav-btn" onClick={handlePrev}><ChevronLeft /></button>
+                <button className={`cal-nav-btn${isViewingToday ? ' today-active' : ''}`} onClick={goToToday}>Today</button>
+                <button className="cal-nav-btn" onClick={handleNext}><ChevronRight /></button>
+                <span className="cal-current-label">{navLabel}</span>
+              </div>
+              <button className="cal-add-btn" onClick={() => setShowAddModal(true)}>
+                <PlusIcon /> Add
+              </button>
             </div>
           </div>
         </div>
@@ -2173,6 +2559,9 @@ export default function CalendarPage() {
                 <MonthView
                   year={year}
                   month={month}
+                  selectedDate={selectedDate}
+                  collapsed={mobileCalCollapsed}
+                  onToggleCollapse={() => setMobileCalCollapsed(c => !c)}
                   events={filteredEvents}
                   onDayClick={handleDayClick}
                   onEventClick={handleEventClick}
@@ -2232,6 +2621,13 @@ export default function CalendarPage() {
           </>
         )}
       </div>
+
+      {/* ── Mobile FAB ── */}
+      {boards.length > 0 && (
+        <button className="cal-fab" onClick={() => setShowAddModal(true)}>
+          <PlusIcon />
+        </button>
+      )}
 
       {/* ── Add Card Modal ── */}
       {showAddModal && boards.length > 0 && (

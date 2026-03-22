@@ -76,6 +76,18 @@ export function useTeams() {
     }
   }, []);
 
+  // ─── Update team notes (owner or editor) ─────────────────
+  const updateTeamNotes = useCallback(async (teamId: string, notes: string) => {
+    setError(null);
+    try {
+      const { error: err } = await supabase.rpc('update_team_notes', { p_team_id: teamId, p_notes: notes });
+      if (err) throw err;
+      setTeams(prev => prev.map(t => t.id === teamId ? { ...t, notes } : t));
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
   // ─── Rename team ─────────────────────────────────────────
   const renameTeam = useCallback(async (teamId: string, name: string) => {
     setError(null);
@@ -118,6 +130,39 @@ export function useTeams() {
     } catch (err: any) {
       setError(err.message);
       return [];
+    }
+  }, []);
+
+  // ─── Transfer ownership to another member ────────────────
+  const transferOwnership = useCallback(async (teamId: string, newOwnerId: string) => {
+    setError(null);
+    try {
+      const user = await getCachedUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Promote new owner first (while we're still owner, so RLS passes)
+      const { error: promoteErr } = await supabase
+        .from('team_members')
+        .update({ role: 'owner' })
+        .eq('team_id', teamId)
+        .eq('user_id', newOwnerId);
+      if (promoteErr) throw promoteErr;
+
+      // Then demote self to editor
+      const { error: demoteErr } = await supabase
+        .from('team_members')
+        .update({ role: 'editor' })
+        .eq('team_id', teamId)
+        .eq('user_id', user.id);
+      if (demoteErr) throw demoteErr;
+
+      setMembers(prev => prev.map(m => {
+        if (m.team_id === teamId && m.user_id === newOwnerId) return { ...m, role: 'owner' as const };
+        if (m.team_id === teamId && m.user_id === user.id) return { ...m, role: 'editor' as const };
+        return m;
+      }));
+    } catch (err: any) {
+      setError(err.message);
     }
   }, []);
 
@@ -262,8 +307,8 @@ export function useTeams() {
 
   return {
     teams, members, invites, loading, error,
-    fetchTeams, createTeam, deleteTeam, renameTeam,
-    fetchMembers, updateMemberRole, removeMember, leaveTeam,
+    fetchTeams, createTeam, deleteTeam, renameTeam, updateTeamNotes,
+    fetchMembers, transferOwnership, updateMemberRole, removeMember, leaveTeam,
     fetchInvites, createInvite, revokeInvite,
     joinTeam, fetchTeamMemberCounts, getMyRole,
   };

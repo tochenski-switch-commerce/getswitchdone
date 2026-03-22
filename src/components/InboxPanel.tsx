@@ -14,6 +14,15 @@ const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: st
   mention:        { icon: <AtSign size={14} />,        color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
 };
 
+function stripHtml(html: string): string {
+  if (typeof document !== 'undefined') {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
+  }
+  return html.replace(/<[^>]*>/g, '');
+}
+
 function timeAgo(dateStr: string): string {
   const now = Date.now();
   const d = new Date(dateStr).getTime();
@@ -101,7 +110,7 @@ export default function InboxPanel({
                   </div>
                   <div className="kb-inbox-item-content">
                     <div className="kb-inbox-item-title">{n.title}</div>
-                    {n.body && <div className="kb-inbox-item-body">{n.body}</div>}
+                    {n.body && <div className="kb-inbox-item-body">{stripHtml(n.body)}</div>}
                     <div className="kb-inbox-item-time">{timeAgo(n.created_at)}</div>
                   </div>
                   <div className="kb-inbox-item-actions">

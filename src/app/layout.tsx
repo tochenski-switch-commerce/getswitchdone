@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import WebNotificationManager from '@/components/WebNotificationManager';
 
 export const metadata: Metadata = {
   title: 'Lumio',
@@ -67,6 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }
         `}</style>
         {children}
+        <WebNotificationManager />
         <ServiceWorkerRegistration />
       </body>
     </html>
@@ -79,9 +81,12 @@ function ServiceWorkerRegistration() {
       dangerouslySetInnerHTML={{
         __html: `
           if ('serviceWorker' in navigator && !window.Capacitor) {
-            window.addEventListener('load', function() {
-              navigator.serviceWorker.register('/sw.js');
-            });
+            function registerSW() { navigator.serviceWorker.register('/sw.js'); }
+            if (document.readyState === 'complete') {
+              registerSW();
+            } else {
+              window.addEventListener('load', registerSW);
+            }
           }
         `,
       }}

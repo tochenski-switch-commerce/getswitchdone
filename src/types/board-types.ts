@@ -6,6 +6,7 @@ export type RepeatMode = 'interval' | 'monthly-weekday';
 export interface Team {
   id: string;
   name: string;
+  notes?: string;
   created_by: string;
   created_at: string;
 }

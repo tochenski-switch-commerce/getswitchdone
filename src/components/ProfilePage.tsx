@@ -11,6 +11,7 @@ import {
   ArrowLeft, Sparkles,
 } from '@/components/BoardIcons';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useWebPush } from '@/hooks/useWebPush';
 export default function ProfilePage() {
   const { user, profile, signOut, updatePassword, updateProfileName, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function ProfilePage() {
   const [pwMsg, setPwMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   // ── Notifications ──
-  const [pushEnabled, setPushEnabled] = useState(false);
+  const { state: webPushState, subscribe: webPushSubscribe, unsubscribe: webPushUnsubscribe } = useWebPush(user?.id);
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [dueSoonNotifs, setDueSoonNotifs] = useState(true);
   const [commentNotifs, setCommentNotifs] = useState(true);
@@ -66,12 +67,6 @@ export default function ProfilePage() {
     if (user) fetchTeams();
   }, [user, fetchTeams]);
 
-  // Check push permission state
-  useEffect(() => {
-    if (typeof Notification !== 'undefined') {
-      setPushEnabled(Notification.permission === 'granted');
-    }
-  }, []);
 
   // ── Handlers ──
   const handleSaveName = async () => {
@@ -330,14 +325,26 @@ export default function ProfilePage() {
             <h2 className="pf-section-title">Notification Preferences</h2>
           </div>
           <div className="pf-toggles">
-            <ToggleRow label="Push Notifications" checked={pushEnabled} onChange={async (v) => {
-              if (v && typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
-                const perm = await Notification.requestPermission();
-                setPushEnabled(perm === 'granted');
-              } else {
-                setPushEnabled(v);
-              }
-            }} />
+            <div className="pf-toggle-row">
+              <div>
+                <span className="pf-toggle-label">Browser Notifications</span>
+                {webPushState === 'denied' && (
+                  <p className="pf-hint" style={{ margin: '2px 0 0', fontSize: 11 }}>
+                    Blocked in browser settings — enable under Site Settings to turn on.
+                  </p>
+                )}
+              </div>
+              <button
+                className={`pf-toggle ${webPushState === 'granted' ? 'on' : ''}`}
+                onClick={() => webPushState === 'granted' ? webPushUnsubscribe() : webPushSubscribe()}
+                disabled={webPushState === 'loading' || webPushState === 'unsupported' || webPushState === 'denied'}
+                type="button"
+                role="switch"
+                aria-checked={webPushState === 'granted'}
+              >
+                <span className="pf-toggle-thumb" />
+              </button>
+            </div>
             <ToggleRow label="Email Notifications" checked={emailNotifs} onChange={setEmailNotifs} />
             <ToggleRow label="Due Soon Reminders" checked={dueSoonNotifs} onChange={setDueSoonNotifs} />
             <ToggleRow label="Comment Notifications" checked={commentNotifs} onChange={setCommentNotifs} />

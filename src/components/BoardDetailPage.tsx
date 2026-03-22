@@ -1772,10 +1772,9 @@ function BoardPage() {
             if (!result) return;
 
             const senderName = userProfiles.find(p => p.id === user?.id)?.name || 'someone';
-            const snippet = content.length > 80 ? content.slice(0, 80) + '…' : content;
+            const plainContent = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            const snippet = plainContent.length > 80 ? plainContent.slice(0, 80) + '…' : plainContent;
             const notifiedUserIds = new Set<string>();
-
-            const plainContent = content.replace(/<[^>]+>/g, ' ');
             const mentionRegex = /@"([^"]+)"|@(\S+)/g;
             let match;
             while ((match = mentionRegex.exec(plainContent)) !== null) {

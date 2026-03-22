@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as http2 from 'http2';
 import * as crypto from 'crypto';
+import webpush from 'web-push';
+
+if (process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT ?? 'mailto:admin@lumio.app',
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+}
 
 function getSupabaseAdmin() {
   return createClient(
@@ -31,16 +40,8 @@ export async function POST(req: NextRequest) {
     .select('token, platform')
     .eq('user_id', user_id);
 
-  if (!tokens || tokens.length === 0) {
-    return NextResponse.json({ sent: 0 });
-  }
-
-  // Check if APNs is configured
-  if (!process.env.APNS_KEY_ID || !process.env.APNS_TEAM_ID || !process.env.APNS_PRIVATE_KEY) {
-    return NextResponse.json({ sent: 0, reason: 'apns_not_configured' });
-  }
-
-  const iosTokens = tokens.filter(t => t.platform === 'ios');
+  const apnsReady = !!(process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID && process.env.APNS_PRIVATE_KEY);
+  const iosTokens = apnsReady ? (tokens ?? []).filter(t => t.platform === 'ios') : [];
 
   // Get actual unread notification count for this user
   const { count: unreadCount } = await supabaseAdmin
@@ -61,12 +62,41 @@ export async function POST(req: NextRequest) {
     card_id,
   };
 
-  const results = await Promise.allSettled(
+  const apnsResults = await Promise.allSettled(
     iosTokens.map(t => sendApnsPush(t.token, payload, user_id, supabaseAdmin))
   );
+  const apnsSent = apnsResults.filter(r => r.status === 'fulfilled' && r.value).length;
 
-  const sent = results.filter(r => r.status === 'fulfilled' && r.value).length;
-  return NextResponse.json({ sent });
+  // ── Web Push ──────────────────────────────────────────────────────────────
+  const webPayload = JSON.stringify({ title, body: body || '', type, board_id, card_id });
+  const { data: webSubs } = await supabaseAdmin
+    .from('web_push_subscriptions')
+    .select('endpoint, p256dh, auth, id')
+    .eq('user_id', user_id);
+
+  let webSent = 0;
+  if (webSubs && webSubs.length > 0 && process.env.VAPID_PRIVATE_KEY) {
+    const webResults = await Promise.allSettled(
+      webSubs.map(async (sub) => {
+        try {
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            webPayload
+          );
+          return true;
+        } catch (err: unknown) {
+          // 410 Gone = subscription expired, clean it up
+          if (err && typeof err === 'object' && 'statusCode' in err && (err as { statusCode: number }).statusCode === 410) {
+            await supabaseAdmin.from('web_push_subscriptions').delete().eq('id', sub.id);
+          }
+          return false;
+        }
+      })
+    );
+    webSent = webResults.filter(r => r.status === 'fulfilled' && r.value).length;
+  }
+
+  return NextResponse.json({ sent: apnsSent + webSent, apns: apnsSent, web: webSent });
 }
 
 // ── APNs JWT ──

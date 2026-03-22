@@ -3,13 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTeams } from '@/hooks/useTeams';
+import { supabase } from '@/lib/supabase';
 
 export default function JoinPage() {
   const { code } = useParams<{ code: string }>();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { joinTeam } = useTeams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Joining team…');
 
@@ -17,16 +16,19 @@ export default function JoinPage() {
     if (authLoading) return;
 
     if (!user) {
-      // Not logged in — redirect to auth with returnTo so they come back here after sign-in
+      // Not logged in — redirect to auth with returnTo so they come back here after sign-in/sign-up
       router.replace(`/auth?returnTo=/join/${encodeURIComponent(code)}&invite=${encodeURIComponent(code)}`);
       return;
     }
 
     let cancelled = false;
     (async () => {
-      const teamId = await joinTeam(code);
+      const { data: teamId, error } = await supabase.rpc('use_team_invite', { code });
       if (cancelled) return;
-      if (teamId) {
+      if (error) {
+        setStatus('error');
+        setMessage(error.message ?? 'Invalid or expired invite link.');
+      } else if (teamId) {
         setStatus('success');
         setMessage("You've joined the team! Redirecting...");
         setTimeout(() => router.replace(`/teams/${teamId}`), 1200);
@@ -36,7 +38,7 @@ export default function JoinPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [authLoading, user, code, joinTeam, router]);
+  }, [authLoading, user, code, router]);
 
   return (
     <div style={{
