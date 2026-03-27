@@ -33,10 +33,17 @@
       "Bash(find /Users/tripochenski/Documents/Projects/gsd-boards/src -name *Team* -o -name *team*)",
       "Bash(ls -la /Users/tripochenski/Documents/Projects/gsd-boards/src/app/\\\\\\(app\\\\\\)/teams/)",
       "Read(//private/tmp/**)",
-      "Bash(grep -l \"kb-note-panel\" /Users/tripochenski/Documents/Projects/gsd-boards/src/components/*.tsx /Users/tripochenski/Documents/Projects/gsd-boards/src/components/board-detail/*.ts*)"
+      "Bash(grep -l \"kb-note-panel\" /Users/tripochenski/Documents/Projects/gsd-boards/src/components/*.tsx /Users/tripochenski/Documents/Projects/gsd-boards/src/components/board-detail/*.ts*)",
+      "Bash(grep -l \"TRIGGER\\\\|FUNCTION\" /Users/tripochenski/Documents/Projects/gsd-boards/boards-starter/schema/*.sql)",
+      "Bash(npm --prefix /Users/tripochenski/Documents/Projects/gsd-boards run dev)",
+      "Bash(pkill -f \"next-server\")",
+      "Bash(npm ls:*)",
+      "Bash(find /Users/tripochenski/Documents/Projects/gsd-boards/src -type f -name *alend*)",
+      "Bash(git stash:*)"
     ],
     "additionalDirectories": [
-      "/Users/tripochenski/Documents/Projects/gsd-boards/373s|href=\"\"\"\"/auth\"\"\"\"|href=\"\"\"\""
+      "/Users/tripochenski/Documents/Projects/gsd-boards/373s|href=\"\"\"\"/auth\"\"\"\"|href=\"\"\"\"",
+      "/Users/tripochenski/Documents/Projects/gsd-boards/src/app/(app)/boards/[id]"
     ]
   }
 }

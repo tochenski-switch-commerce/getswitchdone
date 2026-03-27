@@ -10,12 +10,12 @@ import { useSubscription } from '@/hooks/useSubscription';
 import type { BoardCard, CardPriority, BoardEmail, BoardAutomationRule, BoardAutomationTrigger } from '@/types/board-types';
 import {
   Plus, ArrowLeft, Search, MoreHorizontal, Trash2, Pencil,
-  Tag, X, ChevronLeft, ChevronRight, User, Users,
+  Tag, X, ChevronLeft, ChevronRight, User, Users, Star,
   FolderKanban, Check, Globe, Lock, StickyNote, Copy,
   Zap, Bold, Italic, Underline, Strikethrough,
   LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, FileText, Mail, Clock,
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
-  BotMessageSquare, GripVertical,
+  BotMessageSquare, GripVertical, BarChart3,
 } from '@/components/BoardIcons';
 import dynamic from 'next/dynamic';
 import FlameLoader from '@/components/FlameLoader';
@@ -71,9 +71,9 @@ function BoardPage() {
     addCustomField, updateCustomField, deleteCustomField, setCardCustomFieldValue,
     userProfiles, boardMembers,
     notifications, fetchNotifications, createNotification, markNotificationRead, markCardNotificationsRead, markAllNotificationsRead, deleteNotification, clearAllNotifications,
-    addCardLink, removeCardLink, searchCards,
+    addCardLink, removeCardLink, searchCards, fetchCardDetail,
     boardEmails, unroutedEmails, fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
-    loading, error: boardError, setBoard,
+    loading, error: boardError, setBoard, toggleBoardStar,
   } = useProjectBoard();
 
   const { teams, fetchTeams } = useTeams();
@@ -83,6 +83,9 @@ function BoardPage() {
   const [filterPriority, setFilterPriority] = useState<CardPriority | 'none' | ''>('');
   const [filterLabel, setFilterLabel] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [filterAssignee, setFilterAssignee] = useState('');
+  const [showSnoozed, setShowSnoozed] = useState(false);
+  const [snoozeNow, setSnoozeNow] = useState(() => new Date());
 
   // Sync search state from the TopNav global search bar
   useEffect(() => {
@@ -94,6 +97,7 @@ function BoardPage() {
   }, []);
   const [selectedCard, setSelectedCard] = useState<BoardCard | null>(null);
   const closedCardRef = useRef<string | null>(null);
+  const addingCardRef = useRef(false);
   const [addingCardCol, setAddingCardCol] = useState<string | null>(null);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [addingColumn, setAddingColumn] = useState(false);
@@ -180,6 +184,12 @@ function BoardPage() {
     }
   }, [boardId]);
 
+  // Snooze wake-up timer: update snoozeNow every minute so snoozed cards reappear automatically
+  useEffect(() => {
+    const id = setInterval(() => setSnoozeNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Realtime: re-fetch board in background when another user makes changes
   const handleRemoteChange = useCallback(() => {
     if (boardId) fetchBoard(boardId, true);
@@ -199,16 +209,30 @@ function BoardPage() {
 
   useEffect(() => {
     if (boardId) {
-      // Fire all initial fetches in parallel
-      Promise.all([
-        fetchBoard(boardId),
-        fetchChecklistTemplates(boardId),
-        fetchNotifications(),
-        fetchBoards(),
-        fetchTeams(),
-      ]);
+      fetchBoard(boardId);
+      fetchChecklistTemplates(boardId);
+      fetchNotifications();
     }
-  }, [boardId, fetchBoard, fetchChecklistTemplates, fetchNotifications, fetchBoards, fetchTeams]);
+  }, [boardId, fetchBoard, fetchChecklistTemplates, fetchNotifications]);
+
+  // Lazy-load teams: immediately when a team board loads, deferred for solo boards
+  useEffect(() => {
+    if (board?.team_id) fetchTeams();
+  }, [board?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lazy-load teams when board menu opens (needed for team assignment UI on solo boards)
+  useEffect(() => {
+    if (showBoardMenu && teams.length === 0) fetchTeams();
+  }, [showBoardMenu]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lazy-load boards when the link picker opens or the email routing panel opens
+  useEffect(() => {
+    if (linkPickerColId !== null && boards.length === 0) fetchBoards();
+  }, [linkPickerColId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (showEmailPanel && emailView === 'unrouted' && boards.length === 0) fetchBoards();
+  }, [showEmailPanel, emailView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Run date-based board automations once per board load
   useEffect(() => {
@@ -356,9 +380,18 @@ function BoardPage() {
   }, [notifications]);
 
   // ── Filtered cards ──
+  const snoozedCards = useMemo(() => {
+    if (!board) return [];
+    return board.cards.filter(c => c.snoozed_until && new Date(c.snoozed_until) > snoozeNow);
+  }, [board, snoozeNow]);
+
   const filteredCards = useMemo(() => {
     if (!board) return [];
     let cards = board.cards;
+    // Hide snoozed cards unless explicitly showing them
+    if (!showSnoozed) {
+      cards = cards.filter(c => !c.snoozed_until || new Date(c.snoozed_until) <= snoozeNow);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       cards = cards.filter(c =>
@@ -411,8 +444,23 @@ function BoardPage() {
         }
       });
     }
+    if (filterAssignee) {
+      if (filterAssignee === 'unassigned') {
+        cards = cards.filter(c =>
+          !c.assignee &&
+          (!c.assignees || c.assignees.length === 0) &&
+          (c.checklists || []).every(item => !item.assignees || item.assignees.length === 0)
+        );
+      } else {
+        cards = cards.filter(c =>
+          c.assignee === filterAssignee ||
+          (c.assignees || []).includes(filterAssignee) ||
+          (c.checklists || []).some(item => (item.assignees || []).includes(filterAssignee))
+        );
+      }
+    }
     return cards;
-  }, [board, search, filterPriority, filterLabel, filterDate]);
+  }, [board, search, filterPriority, filterLabel, filterDate, filterAssignee, showSnoozed, snoozeNow]);
 
   const getColumnCards = useCallback((colId: string) => {
     return filteredCards.filter(c => c.column_id === colId).sort((a, b) => {
@@ -421,6 +469,20 @@ function BoardPage() {
       return a.position - b.position;
     });
   }, [filteredCards]);
+
+  // ── Unique assignees in this board (cards + checklist items) ──
+  const boardAssigneeIds = useMemo(() => {
+    if (!board) return [];
+    const ids = new Set<string>();
+    for (const card of board.cards) {
+      if (card.assignee) ids.add(card.assignee);
+      for (const a of (card.assignees || [])) ids.add(a);
+      for (const item of (card.checklists || [])) {
+        for (const a of (item.assignees || [])) ids.add(a);
+      }
+    }
+    return Array.from(ids);
+  }, [board]);
 
   // ── Drag & Drop (native HTML5) ──
   const handleDragStart = (cardId: string) => {
@@ -569,11 +631,38 @@ function BoardPage() {
 
   const handleQuickAddCard = async (colId: string) => {
     if (!newCardTitle.trim()) return;
+    if (addingCardRef.current) return;
     if (!canCreateCard(activeCardCount)) { showPaywall(); return; }
-    await addCard(boardId, { column_id: colId, title: newCardTitle });
-    hapticMedium();
-    setNewCardTitle('');
-    setAddingCardCol(null);
+    addingCardRef.current = true;
+
+    const LABEL_COLORS = ['#3b82f6', '#8b5cf6', '#ef4444', '#f97316', '#10b981', '#f59e0b', '#ec4899', '#06b6d4'];
+    const hashtagMatches = newCardTitle.match(/#([a-zA-Z0-9_]+)/g) || [];
+    const cleanTitle = hashtagMatches.length
+      ? (newCardTitle.replace(/#[a-zA-Z0-9_]+/g, '').replace(/\s+/g, ' ').trim() || newCardTitle.trim())
+      : newCardTitle;
+
+    const labelIds: string[] = [];
+    let colorOffset = board?.labels.length ?? 0;
+    for (const tag of hashtagMatches) {
+      const tagName = tag.slice(1);
+      const existing = board?.labels.find(l => l.name.toLowerCase() === tagName.toLowerCase());
+      if (existing) {
+        if (!labelIds.includes(existing.id)) labelIds.push(existing.id);
+      } else {
+        const newLabel = await addLabel(boardId, tagName, LABEL_COLORS[colorOffset % LABEL_COLORS.length]);
+        colorOffset++;
+        if (newLabel && !labelIds.includes(newLabel.id)) labelIds.push(newLabel.id);
+      }
+    }
+
+    try {
+      await addCard(boardId, { column_id: colId, title: cleanTitle, ...(labelIds.length ? { label_ids: labelIds } : {}) });
+      hapticMedium();
+      setNewCardTitle('');
+      setAddingCardCol(null);
+    } finally {
+      addingCardRef.current = false;
+    }
   };
 
   // ── Mobile add card ──
@@ -625,6 +714,16 @@ function BoardPage() {
     if (!selectedCard || !board) return null;
     return board.cards.find(c => c.id === selectedCard.id) || null;
   }, [selectedCard, board]);
+
+  // Lazily fetch card_links when a card opens (omitted from board load to save 2 queries)
+  const fetchedCardDetailRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (selectedCard?.id && fetchedCardDetailRef.current !== selectedCard.id) {
+      fetchedCardDetailRef.current = selectedCard.id;
+      fetchCardDetail(selectedCard.id);
+    }
+    if (!selectedCard) fetchedCardDetailRef.current = null;
+  }, [selectedCard?.id, fetchCardDetail]);
 
   // Auto-open card from URL ?card= param
   useEffect(() => {
@@ -938,6 +1037,33 @@ function BoardPage() {
           <div className="kb-filters-inline">
             <select
               className="kb-filter-select"
+              value={filterAssignee}
+              onChange={e => setFilterAssignee(e.target.value)}
+            >
+              <option value="">All Assignees</option>
+              <option value="unassigned">Unassigned</option>
+              {boardAssigneeIds.map(id => {
+                const profile = userProfiles.find(p => p.id === id) || boardMembers.find(p => p.id === id);
+                const name = id === user?.id ? 'Me' : (profile?.name || id);
+                return <option key={id} value={id}>{name}</option>;
+              })}
+            </select>
+
+            <select
+              className="kb-filter-select"
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+            >
+              <option value="">All Dates</option>
+              <option value="overdue">Overdue</option>
+              <option value="today">Due Today</option>
+              <option value="week">Due This Week</option>
+              <option value="month">Due This Month</option>
+              <option value="no-dates">No Dates</option>
+            </select>
+
+            <select
+              className="kb-filter-select"
               value={filterPriority}
               onChange={e => setFilterPriority(e.target.value as CardPriority | '')}
             >
@@ -961,24 +1087,25 @@ function BoardPage() {
                 ))}
               </select>
             )}
-
-            <select
-              className="kb-filter-select"
-              value={filterDate}
-              onChange={e => setFilterDate(e.target.value)}
-            >
-              <option value="">All Dates</option>
-              <option value="overdue">Overdue</option>
-              <option value="today">Due Today</option>
-              <option value="week">Due This Week</option>
-              <option value="month">Due This Month</option>
-              <option value="no-dates">No Dates</option>
-            </select>
           </div>
+
+          {snoozedCards.length > 0 && (
+            <button
+              className={`kb-btn-icon${showSnoozed ? ' kb-btn-icon-active' : ''}`}
+              onClick={() => setShowSnoozed(v => !v)}
+              title={showSnoozed ? 'Hide snoozed cards' : `${snoozedCards.length} snoozed card${snoozedCards.length === 1 ? '' : 's'}`}
+              style={{ position: 'relative', gap: 4 }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8h1a4 4 0 0 1 0 8h-1" /><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" />
+              </svg>
+              <span style={{ fontSize: 11, fontWeight: 600 }}>{snoozedCards.length}</span>
+            </button>
+          )}
 
           {/* Mobile filter toggle */}
           <button
-            className={`kb-mobile-filter-btn ${(filterPriority || filterLabel || filterDate) ? 'has-active' : ''}`}
+            className={`kb-mobile-filter-btn ${(filterPriority || filterLabel || filterDate || filterAssignee) ? 'has-active' : ''}`}
             onClick={() => setShowMobileFilters(!showMobileFilters)}
             title="Filters"
           >
@@ -1008,6 +1135,15 @@ function BoardPage() {
             <BotMessageSquare size={16} />
           </button>
 
+          {/* Star board */}
+          <button
+            className="kb-btn-icon"
+            onClick={() => toggleBoardStar(boardId)}
+            title={board.is_starred ? 'Unstar board' : 'Star board'}
+          >
+            <Star size={16} style={{ fill: board.is_starred ? '#f59e0b' : 'none', color: board.is_starred ? '#f59e0b' : 'currentColor' }} />
+          </button>
+
           {/* Board menu */}
           <div style={{ position: 'relative' }}>
             <button className="kb-btn-icon" onClick={() => setShowBoardMenu(!showBoardMenu)}>
@@ -1019,6 +1155,9 @@ function BoardPage() {
                 <div className="kb-dropdown">
                   <button className="kb-dropdown-item" onClick={() => { setShowBoardMenu(false); router.push('/boards'); }}>
                     <ArrowLeft size={14} /> All Boards
+                  </button>
+                  <button className="kb-dropdown-item" onClick={() => { setShowBoardMenu(false); router.push(`/boards/${boardId}/overview`); }}>
+                    <BarChart3 size={14} /> Board Overview
                   </button>
                   <button className="kb-dropdown-item" onClick={() => { setShowBoardMenu(false); setShowLabelManager(true); }}>
                     <Tag size={14} /> Manage Labels
@@ -1129,6 +1268,37 @@ function BoardPage() {
       {showMobileFilters && (
         <div className="kb-mobile-filter-panel">
           <div className="kb-mobile-filter-row">
+            <label className="kb-mobile-filter-label">Assignee</label>
+            <select
+              className="kb-filter-select"
+              value={filterAssignee}
+              onChange={e => setFilterAssignee(e.target.value)}
+            >
+              <option value="">All Assignees</option>
+              <option value="unassigned">Unassigned</option>
+              {boardAssigneeIds.map(id => {
+                const profile = userProfiles.find(p => p.id === id) || boardMembers.find(p => p.id === id);
+                const name = id === user?.id ? 'Me' : (profile?.name || id);
+                return <option key={id} value={id}>{name}</option>;
+              })}
+            </select>
+          </div>
+          <div className="kb-mobile-filter-row">
+            <label className="kb-mobile-filter-label">Date</label>
+            <select
+              className="kb-filter-select"
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+            >
+              <option value="">All Dates</option>
+              <option value="overdue">Overdue</option>
+              <option value="today">Due Today</option>
+              <option value="week">Due This Week</option>
+              <option value="month">Due This Month</option>
+              <option value="no-dates">No Dates</option>
+            </select>
+          </div>
+          <div className="kb-mobile-filter-row">
             <label className="kb-mobile-filter-label">Priority</label>
             <select
               className="kb-filter-select"
@@ -1158,25 +1328,10 @@ function BoardPage() {
               </select>
             </div>
           )}
-          <div className="kb-mobile-filter-row">
-            <label className="kb-mobile-filter-label">Date</label>
-            <select
-              className="kb-filter-select"
-              value={filterDate}
-              onChange={e => setFilterDate(e.target.value)}
-            >
-              <option value="">All Dates</option>
-              <option value="overdue">Overdue</option>
-              <option value="today">Due Today</option>
-              <option value="week">Due This Week</option>
-              <option value="month">Due This Month</option>
-              <option value="no-dates">No Dates</option>
-            </select>
-          </div>
-          {(filterPriority || filterLabel || filterDate) && (
+          {(filterPriority || filterLabel || filterDate || filterAssignee) && (
             <button
               className="kb-mobile-filter-clear"
-              onClick={() => { setFilterPriority(''); setFilterLabel(''); setFilterDate(''); }}
+              onClick={() => { setFilterPriority(''); setFilterLabel(''); setFilterDate(''); setFilterAssignee(''); }}
             >
               Clear All Filters
             </button>
@@ -1282,7 +1437,7 @@ function BoardPage() {
                   <div className="kb-col-drop-indicator" />
                 )}
               <div
-                className={`kb-column ${dragColId === col.id ? 'kb-col-dragging' : ''} ${!dragColId && dragOverCol === col.id ? 'drag-over' : ''} ${isLinkCol ? 'kb-column-links' : ''} ${zoomedColId === col.id ? 'kb-column-zoomed' : ''}`}
+                className={`kb-column ${dragColId === col.id ? 'kb-col-dragging' : ''} ${!dragColId && dragOverCol === col.id ? 'drag-over' : ''} ${isLinkCol ? 'kb-column-links' : ''} ${zoomedColId === col.id ? 'kb-column-zoomed' : ''} ${!isLinkCol && col.card_limit != null && colCards.length >= col.card_limit ? 'kb-column-over-limit' : ''}`}
                 onDragOver={e => { if (dragColIdRef.current) handleColDragOver(e, col.id); else handleDragOver(e, col.id); }}
                 onDragLeave={e => {
                   if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) return;
@@ -1324,7 +1479,9 @@ function BoardPage() {
                       onSave={title => updateColumn(boardId, col.id, { title })}
                       className="kb-column-title"
                     />
-                    <span className="kb-column-count">{isLinkCol ? colLinks.length : colCards.length}</span>
+                    <span className={`kb-column-count ${!isLinkCol && col.card_limit != null && colCards.length >= col.card_limit ? 'kb-count-over-limit' : ''}`}>
+                      {isLinkCol ? colLinks.length : colCards.length}{!isLinkCol && col.card_limit != null ? `/${col.card_limit}` : ''}
+                    </span>
                   </div>
                   <div className="kb-column-actions">
                     {columns.indexOf(col) > 0 && (
@@ -1544,6 +1701,7 @@ function BoardPage() {
                             onClick={() => openCardDetail(card)}
                             isDragging={dragCardId === card.id}
                             hasAlert={alertCardIds.has(card.id)}
+                            isSnoozed={!!(card.snoozed_until && new Date(card.snoozed_until) > snoozeNow)}
                             onPriorityChange={async (p) => {
                               markCardUpdated(card.id);
                               await updateCard(boardId, card.id, { priority: p });
@@ -1930,6 +2088,7 @@ function BoardPage() {
                 await updateCard(boardId, colCards[i].id, { position: i });
               }
             }}
+            onUpdateColumn={async (updates) => { await updateColumn(boardId, col.id, updates as any); }}
             onClose={() => setListActionsColId(null)}
             userProfiles={boardMembers}
           />

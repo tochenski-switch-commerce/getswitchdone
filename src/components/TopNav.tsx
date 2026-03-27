@@ -21,11 +21,14 @@ import dynamic from 'next/dynamic';
 const InboxPanel = dynamic(() => import('@/components/InboxPanel'), { ssr: false });
 
 const tabs = [
-  { label: 'Boards', href: '/boards' },
+  { label: 'Focus', href: '/focus' },
   { label: 'Calendar', href: '/calendar' },
+  { label: 'Boards', href: '/boards' },
   { label: 'Teams', href: '/teams' },
   { label: 'Forms', href: '/forms' },
 ] as const;
+
+const PRIMARY_TAB_COUNT = 3; // Focus, Calendar, Boards visible on mobile
 
 export default function TopNav() {
   const { user, profile, signOut } = useAuth();
@@ -35,6 +38,7 @@ export default function TopNav() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showInbox, setShowInbox] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showMore, setShowMore] = useState(false);
 
   const [cardSearch, setCardSearch] = useState('');
   const [cardSearchResults, setCardSearchResults] = useState<SearchResult[]>([]);
@@ -364,7 +368,42 @@ export default function TopNav() {
           overflow: hidden;
           text-overflow: ellipsis;
         }
+        /* Desktop: show all tabs, hide mobile row */
+        .kb-tabs-all { display: flex; gap: 2px; }
+        .kb-tabs-mobile { display: none; }
+        .kb-more-wrap { position: relative; }
+        .kb-more-dropdown {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          min-width: 140px;
+          background: #1a1d27;
+          border: 1px solid #2a2d3a;
+          border-radius: 10px;
+          padding: 4px;
+          z-index: 1001;
+          box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+        }
+        .kb-more-dropdown-item {
+          display: block;
+          width: 100%;
+          padding: 9px 14px;
+          border: none;
+          border-radius: 7px;
+          background: transparent;
+          color: #d1d5db;
+          font-size: 13px;
+          font-weight: 600;
+          text-align: left;
+          cursor: pointer;
+          transition: background 0.12s;
+          font-family: inherit;
+        }
+        .kb-more-dropdown-item:hover { background: rgba(255,255,255,0.06); }
+        .kb-more-dropdown-item.active { color: #fa420f; }
         @media (max-width: 600px) {
+          .kb-tabs-all { display: none; }
+          .kb-tabs-mobile { display: flex; gap: 0; }
           .kb-top-nav {
             padding: 6px 8px 8px;
             gap: 0;
@@ -428,15 +467,55 @@ export default function TopNav() {
           <path fill="white" d="M607.665,85.002 C599.884,85.002 593.331,82.269 587.998,76.798 C582.665,71.331 580.028,64.768 579.998,57.107 C579.941,42.541 586.944,32.765 592.177,28.186 C589.274,44.173 605.779,44.594 601.191,31.580 C594.742,10.187 607.500,0.000 607.500,0.000 C607.500,0.000 608.726,13.316 627.498,37.416 C631.946,43.126 634.998,49.231 634.998,57.107 C634.998,64.768 632.498,71.331 627.498,76.798 C622.498,82.269 615.883,85.002 607.665,85.002 ZM491.959,189.321 C491.959,183.425 490.900,178.297 488.781,173.937 C486.662,169.571 483.605,166.212 479.599,163.858 C475.598,161.498 470.892,160.321 465.473,160.321 C457.472,160.321 451.170,162.913 446.579,168.101 C441.989,173.285 439.693,180.358 439.693,189.321 L439.693,287.993 L439.283,287.993 L385.308,287.993 L384.898,287.993 L384.898,189.321 C384.898,183.425 383.839,178.297 381.720,173.937 C379.601,169.571 376.544,166.212 372.538,163.858 C368.538,161.498 363.831,160.321 358.412,160.321 C350.411,160.321 344.110,162.913 339.519,168.101 C334.928,173.285 332.633,180.358 332.633,189.321 L332.633,287.993 L278.248,287.993 L278.248,188.614 C278.248,173.522 281.603,160.260 288.313,148.827 C295.022,137.388 304.381,128.431 316.388,121.949 C328.395,115.467 342.405,112.223 358.412,112.223 C373.951,112.223 387.900,115.528 400.260,122.126 C404.440,124.356 408.295,126.871 411.842,129.655 C415.390,126.787 419.254,124.213 423.448,121.949 C435.455,115.467 449.465,112.223 465.473,112.223 C481.011,112.223 494.961,115.528 507.321,122.126 C519.681,128.724 529.277,137.742 536.103,149.181 C542.934,160.614 546.344,173.760 546.344,188.614 L546.344,287.993 L491.959,287.993 L491.959,189.321 ZM210.814,278.263 C198.807,284.745 184.797,287.989 168.789,287.989 C153.251,287.989 139.302,284.684 126.941,278.086 C114.581,271.488 104.986,262.470 98.160,251.031 C91.329,239.598 87.918,226.451 87.918,211.598 L87.918,112.219 L142.303,112.219 L142.303,210.890 C142.303,216.787 143.363,221.915 145.482,226.275 C147.601,230.640 150.657,233.1000 154.664,236.354 C158.664,238.714 163.371,239.891 168.789,239.891 C176.790,239.891 183.092,237.299 187.683,232.110 C192.274,226.927 194.569,219.854 194.569,210.890 L194.569,112.219 L248.954,112.219 L248.954,211.598 C248.954,226.689 245.599,239.951 238.889,251.385 C232.179,262.823 222.821,271.781 210.814,278.263 ZM-0.015,27.340 L54.369,27.340 L54.369,284.098 L-0.015,284.098 L-0.015,27.340 ZM634.648,284.098 L580.263,284.098 L580.263,112.219 L634.648,112.219 L634.648,284.098 Z" />
         </svg>
 
-        {tabs.map(t => (
-          <button
-            key={t.href}
-            className={`kb-nav-tab${activeHref === t.href ? ' active' : ''}`}
-            onClick={() => router.push(t.href)}
-          >
-            {t.label}
-          </button>
-        ))}
+        {/* Desktop: all tabs */}
+        <div className="kb-tabs-all">
+          {tabs.map(t => (
+            <button
+              key={t.href}
+              className={`kb-nav-tab${activeHref === t.href ? ' active' : ''}`}
+              onClick={() => router.push(t.href)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Mobile: first 3 tabs + More */}
+        <div className="kb-tabs-mobile">
+          {tabs.slice(0, PRIMARY_TAB_COUNT).map(t => (
+            <button
+              key={t.href}
+              className={`kb-nav-tab${activeHref === t.href ? ' active' : ''}`}
+              onClick={() => router.push(t.href)}
+            >
+              {t.label}
+            </button>
+          ))}
+          <div className="kb-more-wrap">
+            <button
+              className={`kb-nav-tab${tabs.slice(PRIMARY_TAB_COUNT).some(t => activeHref === t.href) || showMore ? ' active' : ''}`}
+              onClick={() => setShowMore(m => !m)}
+            >
+              More
+            </button>
+            {showMore && (
+              <>
+                <div className="kb-profile-backdrop" onClick={() => setShowMore(false)} />
+                <div className="kb-more-dropdown">
+                  {tabs.slice(PRIMARY_TAB_COUNT).map(t => (
+                    <button
+                      key={t.href}
+                      className={`kb-more-dropdown-item${activeHref === t.href ? ' active' : ''}`}
+                      onClick={() => { router.push(t.href); setShowMore(false); }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
 
         {/* Search + Profile — inline on desktop, second row on mobile */}
         <div className="kb-nav-bottom">

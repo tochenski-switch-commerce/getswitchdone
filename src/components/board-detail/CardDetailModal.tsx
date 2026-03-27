@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { BoardCard, CardChecklistGroup, CardPriority, ChecklistTemplate, UserProfile, RepeatUnit, RepeatRule, RepeatMode, CommentReaction } from '@/types/board-types';
+import type { BoardCard, BoardLabel, CardChecklistGroup, CardPriority, ChecklistTemplate, UserProfile, RepeatUnit, RepeatRule, RepeatMode, CommentReaction } from '@/types/board-types';
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   Plus, Trash2, Edit3,
@@ -47,6 +47,7 @@ export default function CardDetailModal({
   onRemoveCardLink,
   onSearchCards,
   userProfiles,
+  onAddLabel,
 }: {
   card: BoardCard;
   board: FullBoard;
@@ -79,6 +80,7 @@ export default function CardDetailModal({
   onRemoveCardLink: (linkId: string) => Promise<void>;
   onSearchCards: (query: string) => Promise<{ id: string; title: string; board_id: string; column_id: string; is_archived: boolean }[]>;
   userProfiles: UserProfile[];
+  onAddLabel: (name: string, color: string) => Promise<BoardLabel>;
 }) {
   const [editTitle, setEditTitle] = useState(card.title);
   const [editDesc, setEditDesc] = useState(card.description || '');
@@ -125,10 +127,16 @@ export default function CardDetailModal({
   const [repeatWeekday, setRepeatWeekday] = useState(existingRule?.weekday ?? 1);
   const [repeatEndDate, setRepeatEndDate] = useState(existingRule?.endDate ?? '');
 
+  // Snooze state
+  const [showSnoozePicker, setShowSnoozePicker] = useState(false);
+  const [snoozeDate, setSnoozeDate] = useState('');
+  const [snoozeTime, setSnoozeTime] = useState('08:00');
+
   const titleRef = useRef<HTMLInputElement>(null);
   const descRef = useRef<HTMLDivElement>(null);
   const commentAddRef = useRef<HTMLDivElement>(null);
   const commentEditRef = useRef<HTMLDivElement>(null);
+  const savingRef = useRef(false);
 
   // @mention state
   const [mentionQuery, setMentionQuery] = useState('');
@@ -328,6 +336,8 @@ export default function CardDetailModal({
   }, []);
 
   const handleSave = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     const pendingComment = commentAddRef.current?.innerHTML || '';
     if (pendingComment && pendingComment !== '<br>') {
@@ -363,23 +373,47 @@ export default function CardDetailModal({
       }
     }
 
+    // Parse #hashtags from title and resolve to labels
+    const LABEL_COLORS = ['#3b82f6', '#8b5cf6', '#ef4444', '#f97316', '#10b981', '#f59e0b', '#ec4899', '#06b6d4'];
+    const hashtagMatches = editTitle.match(/#([a-zA-Z0-9_]+)/g) || [];
+    let finalTitle = editTitle;
+    let finalLabelIds = [...editLabels];
+    if (hashtagMatches.length) {
+      finalTitle = editTitle.replace(/#[a-zA-Z0-9_]+/g, '').replace(/\s+/g, ' ').trim() || editTitle.trim();
+      let colorOffset = board.labels.length;
+      for (const tag of hashtagMatches) {
+        const tagName = tag.slice(1);
+        const existing = board.labels.find(l => l.name.toLowerCase() === tagName.toLowerCase());
+        if (existing) {
+          if (!finalLabelIds.includes(existing.id)) finalLabelIds.push(existing.id);
+        } else {
+          const newLabel = await onAddLabel(tagName, LABEL_COLORS[colorOffset % LABEL_COLORS.length]);
+          colorOffset++;
+          if (newLabel && !finalLabelIds.includes(newLabel.id)) finalLabelIds.push(newLabel.id);
+        }
+      }
+      setEditTitle(finalTitle);
+      setEditLabels(finalLabelIds);
+    }
+
     await onUpdate({
-      title: editTitle,
+      title: finalTitle,
       description: editingDesc ? descHtml : editDesc,
       priority: editPriority || null,
       start_date: editStartDate || null,
       due_date: editDueDate || null,
       due_time: editDueTime || null,
       assignee: editAssignee || null,
-      label_ids: editLabels,
+      label_ids: finalLabelIds,
       repeat_rule,
       repeat_series_id: repeat_rule ? repeat_series_id : null,
     });
     setSaving(false);
+    savingRef.current = false;
   };
 
   const handleClose = async () => {
-    if (!saving && editTitle.trim()) {
+    if (!savingRef.current && editTitle.trim()) {
       await handleSave();
     }
     onClose();
@@ -1272,6 +1306,16 @@ export default function CardDetailModal({
               </select>
             </div>
 
+            {/* Snooze status */}
+            {card.snoozed_until && new Date(card.snoozed_until) > new Date() && (
+              <div style={{ background: 'rgba(156,163,175,0.08)', border: '1px solid rgba(156,163,175,0.2)', borderRadius: 6, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M18 8h1a4 4 0 0 1 0 8h-1" /><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" />
+                </svg>
+                <span>Snoozed until {new Date(card.snoozed_until).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+              </div>
+            )}
+
             {/* Dates */}
             <div className="kb-form-group">
               <div className="kb-detail-section-label"><CalendarDays size={13} /> Start Date</div>
@@ -1572,6 +1616,118 @@ export default function CardDetailModal({
                 <ClipboardList size={13} />
                 Copy Content
               </button>
+              <button
+                className="kb-btn kb-btn-ghost"
+                onClick={async () => {
+                  await onUpdate({ is_focused: !card.is_focused });
+                }}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  ...(card.is_focused ? {
+                    color: '#fa420f',
+                    borderColor: 'rgba(250,66,15,0.35)',
+                    background: 'rgba(250,66,15,0.08)',
+                  } : {}),
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill={card.is_focused ? 'currentColor' : 'none'}
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                {card.is_focused ? 'Remove Focus' : 'Focus on Today'}
+              </button>
+              {/* Snooze */}
+              {card.snoozed_until && new Date(card.snoozed_until) > new Date() ? (
+                <button
+                  className="kb-btn kb-btn-ghost"
+                  onClick={async () => { await onUpdate({ snoozed_until: null }); setShowSnoozePicker(false); }}
+                  style={{ width: '100%', justifyContent: 'center', color: '#9ca3af', borderColor: 'rgba(156,163,175,0.3)' }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8h1a4 4 0 0 1 0 8h-1" /><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" />
+                  </svg>
+                  Wake Up Now
+                </button>
+              ) : (
+                <button
+                  className="kb-btn kb-btn-ghost"
+                  onClick={() => setShowSnoozePicker(v => !v)}
+                  style={{ width: '100%', justifyContent: 'center', ...(showSnoozePicker ? { color: '#9ca3af', borderColor: 'rgba(156,163,175,0.3)', background: 'rgba(156,163,175,0.08)' } : {}) }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8h1a4 4 0 0 1 0 8h-1" /><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" />
+                  </svg>
+                  Snooze Card
+                </button>
+              )}
+
+              {showSnoozePicker && !(card.snoozed_until && new Date(card.snoozed_until) > new Date()) && (
+                <div style={{ background: '#1a1d2a', border: '1px solid #2a2d3a', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Snooze until…</div>
+                  {/* Quick options */}
+                  {(() => {
+                    const now = new Date();
+                    const laterToday = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+                    const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(8, 0, 0, 0);
+                    const nextWeek = new Date(now); nextWeek.setDate(nextWeek.getDate() + (8 - nextWeek.getDay()) % 7 || 7); nextWeek.setHours(8, 0, 0, 0);
+                    const fmt = (d: Date) => d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                    const snooze = async (d: Date) => {
+                      await onUpdate({ snoozed_until: d.toISOString() });
+                      setShowSnoozePicker(false);
+                      onClose();
+                    };
+                    return (
+                      <>
+                        <button className="kb-btn kb-btn-ghost" onClick={() => snooze(laterToday)} style={{ width: '100%', justifyContent: 'space-between', fontSize: 13 }}>
+                          <span>Later today</span><span style={{ color: '#6b7280', fontSize: 11 }}>{fmt(laterToday)}</span>
+                        </button>
+                        <button className="kb-btn kb-btn-ghost" onClick={() => snooze(tomorrow)} style={{ width: '100%', justifyContent: 'space-between', fontSize: 13 }}>
+                          <span>Tomorrow</span><span style={{ color: '#6b7280', fontSize: 11 }}>{fmt(tomorrow)}</span>
+                        </button>
+                        <button className="kb-btn kb-btn-ghost" onClick={() => snooze(nextWeek)} style={{ width: '100%', justifyContent: 'space-between', fontSize: 13 }}>
+                          <span>Next week</span><span style={{ color: '#6b7280', fontSize: 11 }}>{fmt(nextWeek)}</span>
+                        </button>
+                      </>
+                    );
+                  })()}
+                  {/* Custom date + time */}
+                  <div style={{ borderTop: '1px solid #2a2d3a', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ fontSize: 11, color: '#6b7280' }}>Custom</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        type="date"
+                        className="kb-input"
+                        value={snoozeDate}
+                        onChange={e => setSnoozeDate(e.target.value)}
+                        style={{ flex: 1, fontSize: 12 }}
+                      />
+                      <input
+                        type="time"
+                        className="kb-input"
+                        value={snoozeTime}
+                        onChange={e => setSnoozeTime(e.target.value)}
+                        style={{ width: 90, fontSize: 12 }}
+                      />
+                    </div>
+                    <button
+                      className="kb-btn kb-btn-primary"
+                      disabled={!snoozeDate}
+                      onClick={async () => {
+                        if (!snoozeDate) return;
+                        const d = new Date(`${snoozeDate}T${snoozeTime || '08:00'}`);
+                        await onUpdate({ snoozed_until: d.toISOString() });
+                        setShowSnoozePicker(false);
+                        onClose();
+                      }}
+                      style={{ width: '100%', justifyContent: 'center' }}
+                    >
+                      Set Snooze
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <button
                 className="kb-btn kb-btn-danger"
                 onClick={async () => {

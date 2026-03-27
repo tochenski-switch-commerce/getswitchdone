@@ -140,9 +140,13 @@ export default function DatePickerInput({ value, onChange, className = '', style
 
   const goToday = () => {
     const now = new Date();
-    setViewYear(now.getFullYear());
-    setViewMonth(now.getMonth());
-    selectDay(now.getDate());
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const d = now.getDate();
+    setViewYear(y);
+    setViewMonth(m);
+    onChange(formatDate(y, m, d));
+    setOpen(false);
   };
 
   // Build calendar grid

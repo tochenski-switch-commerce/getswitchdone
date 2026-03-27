@@ -59,6 +59,7 @@ export interface ProjectBoard {
   is_public: boolean;
   timezone?: string;
   team_id?: string | null;
+  is_starred?: boolean;
   automations?: BoardAutomationRule[];
   created_at: string;
   updated_at: string;
@@ -100,6 +101,7 @@ export interface BoardColumn {
   color: string;
   column_type: ColumnType;
   automations: ColumnAutomationAction[];
+  card_limit?: number | null;
   created_at: string;
 }
 
@@ -136,6 +138,8 @@ export interface BoardCard {
   card_links?: CardLink[];
   repeat_rule?: RepeatRule | null;
   repeat_series_id?: string | null;
+  is_focused?: boolean;
+  snoozed_until?: string | null;
 }
 
 export interface CardLabelAssignment {
@@ -295,6 +299,7 @@ export interface CardLink {
   target_card?: { id: string; title: string; board_id: string; column_id: string; is_archived: boolean };
   source_card?: { id: string; title: string; board_id: string; column_id: string; is_archived: boolean };
 }
+
 
 // ── Board Emails ──
 

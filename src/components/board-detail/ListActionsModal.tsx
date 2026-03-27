@@ -5,7 +5,7 @@ import type { BoardCard, BoardColumn, CardPriority, ChecklistTemplate, UserProfi
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   CalendarDays, User, Flag, Tag, ArrowDownAZ,
-  CheckSquare, FolderKanban, Trash2, X, Zap, Check,
+  CheckSquare, FolderKanban, Trash2, X, Zap, Check, Target,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import { PRIORITY_CONFIG } from './helpers';
@@ -21,6 +21,7 @@ export default function ListActionsModal({
   checklistTemplates,
   onApplyTemplate,
   onSortCards,
+  onUpdateColumn,
   onClose,
   userProfiles,
 }: {
@@ -34,6 +35,7 @@ export default function ListActionsModal({
   checklistTemplates: ChecklistTemplate[];
   onApplyTemplate: (cardId: string, templateId: string) => Promise<void>;
   onSortCards: (columnId: string, direction: 'asc' | 'desc') => Promise<void>;
+  onUpdateColumn: (updates: { card_limit?: number | null }) => Promise<void>;
   onClose: () => void;
   userProfiles: UserProfile[];
 }) {
@@ -46,6 +48,8 @@ export default function ListActionsModal({
   const [bulkTemplate, setBulkTemplate] = useState('');
   const [applying, setApplying] = useState(false);
   const [result, setResult] = useState('');
+  const [limitInput, setLimitInput] = useState(column.card_limit != null ? String(column.card_limit) : '');
+  const [savingLimit, setSavingLimit] = useState(false);
 
   const otherColumns = board.columns.filter(c => c.id !== column.id);
 
@@ -76,6 +80,49 @@ export default function ListActionsModal({
         </div>
 
         <div className="kb-list-actions-body">
+          {/* Card Limit */}
+          <div className="kb-list-action-row">
+            <div className="kb-list-action-label"><Target size={13} /> Card Limit</div>
+            <div className="kb-list-action-controls">
+              <input
+                className="kb-input"
+                type="number"
+                min={1}
+                value={limitInput}
+                onChange={e => setLimitInput(e.target.value)}
+                placeholder="No limit"
+                style={{ flex: 1, maxWidth: 90 }}
+              />
+              <button
+                className="kb-btn kb-btn-primary kb-btn-sm"
+                disabled={savingLimit}
+                onClick={async () => {
+                  setSavingLimit(true);
+                  const val = limitInput.trim() === '' ? null : parseInt(limitInput, 10);
+                  await onUpdateColumn({ card_limit: val });
+                  setSavingLimit(false);
+                }}
+              >
+                Save
+              </button>
+              {column.card_limit != null && (
+                <button
+                  className="kb-btn kb-btn-sm"
+                  style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151' }}
+                  disabled={savingLimit}
+                  onClick={async () => {
+                    setSavingLimit(true);
+                    setLimitInput('');
+                    await onUpdateColumn({ card_limit: null });
+                    setSavingLimit(false);
+                  }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+
           {cards.length === 0 ? (
             <div className="kb-import-empty">No cards in this list</div>
           ) : (

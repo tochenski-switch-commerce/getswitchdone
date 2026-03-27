@@ -24,6 +24,7 @@ import {
   ChevronDown,
   Flag,
   Clock,
+  Star,
   getBoardIcon,
   DEFAULT_ICON_COLOR,
 } from '@/components/BoardIcons';
@@ -43,6 +44,7 @@ type CardRow = {
   is_complete: boolean;
   priority: string;
   updated_at: string;
+  assignees?: string[] | null;
 };
 
 type ChecklistRow = {
@@ -84,11 +86,13 @@ function BoardsListPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { boards, fetchBoards, createBoard, createBoardFromTemplate, deleteBoard, duplicateBoard, loading } = useProjectBoard();
+  const { boards, fetchBoards, createBoard, createBoardFromTemplate, deleteBoard, duplicateBoard, toggleBoardStar, loading } = useProjectBoard();
   const { teamTemplates, fetchTeamTemplates } = useTemplates();
   const { canCreateBoard, showPaywall } = useSubscription();
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('');
+  const [assigneeProfiles, setAssigneeProfiles] = useState<Map<string, string>>(new Map());
 
   // ── Stats flag (set to true when ready to ship) ───────────────────────────
   const STATS_ENABLED = true;
@@ -151,7 +155,7 @@ function BoardsListPage() {
     Promise.all([
       supabase
         .from('board_cards')
-        .select('id, board_id, due_date, is_complete, priority, updated_at')
+        .select('id, board_id, due_date, is_complete, priority, updated_at, assignees')
         .in('board_id', boardIds)
         .eq('is_archived', false),
       supabase
@@ -231,6 +235,42 @@ function BoardsListPage() {
     return map;
   }, [rawCards, rawChecklists, boards]);
 
+  // ── Unique assignees across all boards ────────────────────────────────────
+  const uniqueAssigneeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const card of rawCards) {
+      for (const a of (card.assignees || [])) ids.add(a);
+    }
+    return Array.from(ids);
+  }, [rawCards]);
+
+  const assigneeKey = uniqueAssigneeIds.join(',');
+  useEffect(() => {
+    if (!assigneeKey || !supabase) return;
+    supabase
+      .from('user_profiles')
+      .select('id, name')
+      .in('id', uniqueAssigneeIds)
+      .then(({ data }) => {
+        if (data) setAssigneeProfiles(new Map(data.map((p: { id: string; name: string }) => [p.id, p.name || p.id])));
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assigneeKey]);
+
+  // ── Filter boards by assignee ──────────────────────────────────────────────
+  const filteredBoards = useMemo(() => {
+    if (!assigneeFilter) return boards;
+    const matchingBoardIds = new Set<string>();
+    for (const card of rawCards) {
+      if (assigneeFilter === 'unassigned') {
+        if (!card.assignees || card.assignees.length === 0) matchingBoardIds.add(card.board_id);
+      } else {
+        if (card.assignees?.includes(assigneeFilter)) matchingBoardIds.add(card.board_id);
+      }
+    }
+    return boards.filter(b => matchingBoardIds.has(b.id));
+  }, [boards, rawCards, assigneeFilter]);
+
   // ── Toggle expand (global — all cards together) ────────────────────────────
   const toggleStats = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -270,6 +310,13 @@ function BoardsListPage() {
           {board.is_public && (
             <span className="kb-visibility-badge public"><Globe size={10} /> Public</span>
           )}
+          <button
+            className={`kb-star-btn${board.is_starred ? ' kb-star-btn-active' : ''}`}
+            onClick={e => { e.stopPropagation(); hapticLight(); toggleBoardStar(board.id); }}
+            title={board.is_starred ? 'Unstar board' : 'Star board'}
+          >
+            <Star size={14} style={{ fill: board.is_starred ? '#f59e0b' : 'none', color: board.is_starred ? '#f59e0b' : '#4b5563' }} />
+          </button>
         </div>
         {teamName && (
           <div className="kb-shared-by"><Users size={11} /> {teamName}</div>
@@ -483,15 +530,41 @@ function BoardsListPage() {
               <UpgradeBanner message="You've reached the free plan limit. Upgrade to Pro for unlimited boards." />
             )}
             */}
+
+            {/* ── Assignee filter ──────────────────────────────────────────── */}
+            {uniqueAssigneeIds.length > 0 && (
+              <div className="kb-filter-bar">
+                <select
+                  className="kb-filter-select"
+                  value={assigneeFilter}
+                  onChange={e => setAssigneeFilter(e.target.value)}
+                >
+                  <option value="">All Assignees</option>
+                  <option value="unassigned">Unassigned</option>
+                  {uniqueAssigneeIds.map(id => (
+                    <option key={id} value={id}>
+                      {id === user?.id ? 'Me' : (assigneeProfiles.get(id) || id)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* My Boards */}
             {(() => {
-              const myBoards = boards.filter(b => !b.team_id);
-              const teamGroups = teams.map(t => ({ team: t, boards: boards.filter(b => b.team_id === t.id) })).filter(g => g.boards.length > 0);
-              // Boards belonging to teams I'm not in (e.g. public)
               const knownTeamIds = new Set(teams.map(t => t.id));
-              const otherTeamBoards = boards.filter(b => b.team_id && !knownTeamIds.has(b.team_id));
+              const myBoards = filteredBoards.filter(b => !b.team_id);
+              const teamGroups = teams.map(t => ({ team: t, boards: filteredBoards.filter(b => b.team_id === t.id) })).filter(g => g.boards.length > 0);
+              // Boards belonging to teams I'm not in (e.g. public)
+              const otherTeamBoards = filteredBoards.filter(b => b.team_id && !knownTeamIds.has(b.team_id));
+              const noResults = filteredBoards.length === 0 && assigneeFilter;
               return (
                 <>
+                  {noResults && (
+                    <div style={{ color: '#6b7280', fontSize: 14, padding: '32px 0' }}>
+                      No boards match this filter.
+                    </div>
+                  )}
                   {myBoards.length > 0 && (
                     <div style={{ marginBottom: 28 }}>
                       <h2 className="kb-section-label">My Boards</h2>
@@ -618,6 +691,26 @@ const boardsListStyles = `
     color: #ef4444 !important;
   }
 
+  /* Filter bar */
+  .kb-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .kb-filter-select {
+    background: #1a1d27 !important;
+    border: 1px solid #2a2d3a !important;
+    border-radius: 10px !important;
+    padding: 6px 10px !important;
+    color: #e5e7eb !important;
+    font-size: 12px !important;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+  }
+  .kb-filter-select:focus { border-color: #6366f1 !important; }
+
   /* Board grid */
   .kb-board-grid {
     display: grid;
@@ -653,6 +746,29 @@ const boardsListStyles = `
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .kb-star-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 0;
+    transition: opacity 0.15s, background 0.15s;
+    opacity: 0;
+  }
+  .kb-board-card:hover .kb-star-btn,
+  .kb-star-btn-active {
+    opacity: 1 !important;
+  }
+  .kb-star-btn:hover {
+    background: rgba(245,158,11,0.1);
   }
   .kb-visibility-badge {
     display: inline-flex;

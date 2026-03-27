@@ -381,6 +381,14 @@ export const kanbanStyles = `
     border-color: #6366f1 !important;
     box-shadow: 0 0 0 2px rgba(99,102,241,0.2) inset;
   }
+  .kb-column.kb-column-over-limit {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 0 2px rgba(245,158,11,0.15) inset;
+  }
+  .kb-column-count.kb-count-over-limit {
+    background: rgba(245,158,11,0.15);
+    color: #f59e0b;
+  }
   .kb-column.kb-col-dragging {
     opacity: 0.35;
     pointer-events: none;

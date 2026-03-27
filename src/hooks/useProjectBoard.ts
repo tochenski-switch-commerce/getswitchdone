@@ -72,15 +72,14 @@ const _prefetchPromises = new Map<string, Promise<BoardFetchResult | null>>();
 
 // Pure async fetch+stitch — no React state. Used by both fetchBoard and prefetchBoard.
 async function _fetchBoardData(boardId: string): Promise<BoardFetchResult | null> {
-  // Phase 1: board-scoped data + profiles in parallel
-  const [boardRes, colsRes, cardsRes, labelsRes, customFieldsRes, boardLinksRes, profilesRes] = await Promise.all([
+  // Phase 1: board-scoped data (profiles fetched later, filtered to actual users)
+  const [boardRes, colsRes, cardsRes, labelsRes, customFieldsRes, boardLinksRes] = await Promise.all([
     supabase.from('project_boards').select('*').eq('id', boardId).single(),
     supabase.from('board_columns').select('*').eq('board_id', boardId).order('position'),
     supabase.from('board_cards').select('*').eq('board_id', boardId).eq('is_archived', false).order('position'),
     supabase.from('board_labels').select('*').eq('board_id', boardId),
     supabase.from('board_custom_fields').select('*').eq('board_id', boardId).order('position'),
     supabase.from('board_links').select('*, target_board:project_boards!target_board_id(id, title, icon, icon_color, is_public)').eq('board_id', boardId).order('position'),
-    supabase.from('user_profiles').select('id, name, updated_at'),
   ]);
 
   if (boardRes.error) throw boardRes.error;
@@ -88,30 +87,32 @@ async function _fetchBoardData(boardId: string): Promise<BoardFetchResult | null
   const columns = colsRes.data || [];
   const labels = labelsRes.data || [];
   const customFields = (customFieldsRes.data || []) as BoardCustomField[];
-  const profiles = (profilesRes.data || []) as UserProfile[];
-  const profileById = new Map(profiles.map(p => [p.id, p]));
   const labelById = new Map(labels.map(l => [l.id, l]));
   const boardLinks = ((boardLinksRes.data || []) as any[]).map(l => ({
     ...l,
     target_board: Array.isArray(l.target_board) ? l.target_board[0] : l.target_board,
   })) as BoardLink[];
 
-  // Phase 2: card-scoped data + board link stats in parallel
+  // Phase 2: card-scoped data + team members (parallel)
+  // team_members moved here from serial post-Phase-2 to save a round trip
+  // card_links removed — fetched lazily on card open via fetchCardDetail
   const cardIds = (cardsRes.data || []).map(c => c.id);
   const targetBoardIds = boardLinks.map(l => l.target_board_id);
-  const phase2: PromiseLike<any>[] = [];
-  phase2.push(
+  const phase2: PromiseLike<any>[] = [
     targetBoardIds.length > 0
       ? Promise.resolve(supabase.rpc('get_board_summary_stats', { board_ids: targetBoardIds }))
-      : Promise.resolve({ data: [] })
-  );
+      : Promise.resolve({ data: [] }),
+    // team_members always at index [1] — resolves empty if solo board
+    boardRes.data.team_id
+      ? supabase.from('team_members').select('user_id').eq('team_id', boardRes.data.team_id)
+      : Promise.resolve({ data: [] }),
+  ];
 
   let allComments: any[] = [];
   let allChecklists: any[] = [];
   let allChecklistGroups: CardChecklistGroup[] = [];
   let allAssignments: any[] = [];
   let allCfValues: CardCustomFieldValue[] = [];
-  let allCardLinks: CardLink[] = [];
 
   if (cardIds.length > 0) {
     phase2.push(
@@ -120,40 +121,51 @@ async function _fetchBoardData(boardId: string): Promise<BoardFetchResult | null
       supabase.from('card_checklist_groups').select('*').in('card_id', cardIds).order('position'),
       supabase.from('card_label_assignments').select('*').in('card_id', cardIds),
       supabase.from('card_custom_field_values').select('*').in('card_id', cardIds),
-      supabase.from('card_links').select('*, target_card:board_cards!target_card_id(id, title, board_id, column_id, is_archived)').in('source_card_id', cardIds),
-      supabase.from('card_links').select('*, source_card:board_cards!source_card_id(id, title, board_id, column_id, is_archived)').in('target_card_id', cardIds),
     );
   }
 
   const phase2Results = await Promise.all(phase2);
   const boardLinkStats = (phase2Results[0]?.data || []) as BoardSummaryStats[];
+  const teamMembersData = (phase2Results[1]?.data || []) as { user_id: string }[];
 
   if (cardIds.length > 0) {
-    const [, commentsRes, checklistsRes, checklistGroupsRes, assignmentsRes, cfValuesRes, cardLinksSourceRes, cardLinksTargetRes] = phase2Results;
-    allComments = (commentsRes.data || []).map((cm: any) => ({
-      ...cm,
-      user_profiles: { name: profileById.get(cm.user_id)?.name ?? 'Unknown' },
-      reactions: (cm.reactions || []).map((r: any) => ({
-        ...r,
-        user_profiles: { name: profileById.get(r.user_id)?.name ?? 'Unknown' },
-      })),
-    }));
+    // Indices: [0]=boardLinkStats, [1]=teamMembers, [2]=comments, [3]=checklists, [4]=checklistGroups, [5]=assignments, [6]=cfValues
+    const [, , commentsRes, checklistsRes, checklistGroupsRes, assignmentsRes, cfValuesRes] = phase2Results;
+    allComments = commentsRes.data || [];
     allChecklists = checklistsRes.data || [];
     allChecklistGroups = (checklistGroupsRes.data || []) as CardChecklistGroup[];
     allAssignments = assignmentsRes.data || [];
     allCfValues = (cfValuesRes.data || []) as CardCustomFieldValue[];
-    const sourceLinks = ((cardLinksSourceRes.data || []) as any[]).map(l => ({
-      ...l,
-      target_card: Array.isArray(l.target_card) ? l.target_card[0] : l.target_card,
-    })) as CardLink[];
-    const targetLinks = ((cardLinksTargetRes.data || []) as any[]).map(l => ({
-      ...l,
-      source_card: Array.isArray(l.source_card) ? l.source_card[0] : l.source_card,
-    })) as CardLink[];
-    const linkMap = new Map<string, CardLink>();
-    for (const l of [...sourceLinks, ...targetLinks]) linkMap.set(l.id, { ...linkMap.get(l.id), ...l });
-    allCardLinks = Array.from(linkMap.values());
   }
+
+  // Phase 3: fetch only the user profiles we actually need (replaces full table scan)
+  // Collect every user ID referenced in this board's data
+  const isUUID = (s: any) => typeof s === 'string' && s.length === 36;
+  const userIdSet = new Set<string>([
+    boardRes.data.user_id,
+    ...(cardsRes.data || []).map((c: any) => c.created_by).filter(isUUID),
+    ...(cardsRes.data || []).map((c: any) => c.assignee).filter(isUUID),
+    ...(cardsRes.data || []).flatMap((c: any) => c.assignees || []).filter(isUUID),
+    ...teamMembersData.map(m => m.user_id),
+    ...allComments.map((cm: any) => cm.user_id).filter(isUUID),
+    ...allComments.flatMap((cm: any) => (cm.reactions || []).map((r: any) => r.user_id)).filter(isUUID),
+  ]);
+  const { data: profilesRaw } = await supabase
+    .from('user_profiles')
+    .select('id, name, updated_at')
+    .in('id', [...userIdSet]);
+  const profiles = (profilesRaw || []) as UserProfile[];
+  const profileById = new Map(profiles.map(p => [p.id, p]));
+
+  // Enrich comments with profile names (profileById now available)
+  const enrichedComments = allComments.map((cm: any) => ({
+    ...cm,
+    user_profiles: { name: profileById.get(cm.user_id)?.name ?? 'Unknown' },
+    reactions: (cm.reactions || []).map((r: any) => ({
+      ...r,
+      user_profiles: { name: profileById.get(r.user_id)?.name ?? 'Unknown' },
+    })),
+  }));
 
   // Build O(1) lookup maps for card stitching
   const commentsByCard = new Map<string, any[]>();
@@ -161,9 +173,8 @@ async function _fetchBoardData(boardId: string): Promise<BoardFetchResult | null
   const checklistGroupsByCard = new Map<string, CardChecklistGroup[]>();
   const assignmentsByCard = new Map<string, any[]>();
   const cfValuesByCard = new Map<string, CardCustomFieldValue[]>();
-  const cardLinksByCard = new Map<string, CardLink[]>();
 
-  for (const cm of allComments) {
+  for (const cm of enrichedComments) {
     const arr = commentsByCard.get(cm.card_id) ?? []; arr.push(cm); commentsByCard.set(cm.card_id, arr);
   }
   for (const cl of allChecklists) {
@@ -178,11 +189,6 @@ async function _fetchBoardData(boardId: string): Promise<BoardFetchResult | null
   for (const v of allCfValues) {
     const arr = cfValuesByCard.get(v.card_id) ?? []; arr.push(v); cfValuesByCard.set(v.card_id, arr);
   }
-  for (const l of allCardLinks) {
-    for (const cardId of [l.source_card_id, l.target_card_id]) {
-      const arr = cardLinksByCard.get(cardId) ?? []; arr.push(l); cardLinksByCard.set(cardId, arr);
-    }
-  }
 
   const cards = (cardsRes.data || []).map(card => ({
     ...card,
@@ -191,20 +197,16 @@ async function _fetchBoardData(boardId: string): Promise<BoardFetchResult | null
     checklists: checklistsByCard.get(card.id) ?? [],
     labels: (assignmentsByCard.get(card.id) ?? []).map((a: any) => labelById.get(a.label_id)).filter(Boolean),
     custom_field_values: cfValuesByCard.get(card.id) ?? [],
-    card_links: cardLinksByCard.get(card.id) ?? [],
+    card_links: [],  // loaded lazily on card open via fetchCardDetail
   }));
 
   const fullBoard: FullBoard = { ...boardRes.data, columns, cards, labels, customFields, boardLinks, boardLinkStats };
 
-  let boardMembersResult: UserProfile[] = [];
-  if (fullBoard.team_id) {
-    const { data: memberRows } = await supabase.from('team_members').select('user_id').eq('team_id', fullBoard.team_id);
-    const memberIdSet = new Set((memberRows || []).map((m: any) => m.user_id));
-    boardMembersResult = profiles.filter(p => memberIdSet.has(p.id));
-  } else {
-    const owner = profileById.get(fullBoard.user_id);
-    boardMembersResult = owner ? [owner] : [];
-  }
+  // Board members derived from teamMembersData (already fetched in Phase 2)
+  const memberIdSet = new Set(teamMembersData.map(m => m.user_id));
+  const boardMembersResult: UserProfile[] = fullBoard.team_id
+    ? profiles.filter(p => memberIdSet.has(p.id))
+    : (profileById.get(fullBoard.user_id) ? [profileById.get(fullBoard.user_id)!] : []);
 
   return { fullBoard, profiles, boardMembersResult };
 }
@@ -216,7 +218,7 @@ export function prefetchBoard(boardId: string): void {
   const p = _fetchBoardData(boardId);
   _prefetchPromises.set(boardId, p);
   // Auto-expire after 60 s so stale prefetches don't linger in memory
-  p.finally(() => setTimeout(() => _prefetchPromises.delete(boardId), 60_000));
+  p.finally(() => setTimeout(() => _prefetchPromises.delete(boardId), 300_000));
 }
 
 // ── Hook ──
@@ -422,6 +424,19 @@ export function useProjectBoard() {
       if (!background) setLoading(false);
     }
   }, []);
+
+  const toggleBoardStar = useCallback(async (boardId: string) => {
+    // Read current value from single board state (detail page) or boards list
+    const current =
+      (board?.id === boardId ? board?.is_starred : undefined) ??
+      boards.find(b => b.id === boardId)?.is_starred ??
+      false;
+    const next = !current;
+    setBoards(prev => prev.map(b => b.id === boardId ? { ...b, is_starred: next } : b));
+    setBoard(prev => prev?.id === boardId ? { ...prev, is_starred: next } : prev);
+    // Must await — Supabase query builder is lazy and won't fire without it
+    await supabase.from('project_boards').update({ is_starred: next }).eq('id', boardId);
+  }, [board, boards]);
 
   const updateBoard = useCallback(async (boardId: string, updates: Partial<ProjectBoard>) => {
     setError(null);
@@ -2024,14 +2039,41 @@ export function useProjectBoard() {
     return data || [];
   }, []);
 
+  // Lazily fetch card_links for a single card (called when the card detail modal opens).
+  // card_links are omitted from the board load to save two joined queries on every navigation.
+  const fetchCardDetail = useCallback(async (cardId: string) => {
+    const [linksSourceRes, linksTargetRes] = await Promise.all([
+      supabase.from('card_links').select('*, target_card:board_cards!target_card_id(id, title, board_id, column_id, is_archived)').eq('source_card_id', cardId),
+      supabase.from('card_links').select('*, source_card:board_cards!source_card_id(id, title, board_id, column_id, is_archived)').eq('target_card_id', cardId),
+    ]);
+    const sourceLinks = ((linksSourceRes.data || []) as any[]).map(l => ({
+      ...l,
+      target_card: Array.isArray(l.target_card) ? l.target_card[0] : l.target_card,
+    })) as CardLink[];
+    const targetLinks = ((linksTargetRes.data || []) as any[]).map(l => ({
+      ...l,
+      source_card: Array.isArray(l.source_card) ? l.source_card[0] : l.source_card,
+    })) as CardLink[];
+    const linkMap = new Map<string, CardLink>();
+    for (const l of [...sourceLinks, ...targetLinks]) linkMap.set(l.id, { ...linkMap.get(l.id), ...l });
+    const card_links = Array.from(linkMap.values());
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cards: prev.cards.map(c => c.id === cardId ? { ...c, card_links } : c),
+      };
+    });
+  }, []);
+
   return {
     boards, board, loading, error, checklistTemplates, userProfiles, boardMembers, notifications,
     boardEmails, unroutedEmails,
-    fetchBoards, createBoard, createBoardFromTemplate, fetchBoard, updateBoard, deleteBoard, duplicateBoard,
+    fetchBoards, createBoard, createBoardFromTemplate, fetchBoard, updateBoard, toggleBoardStar, deleteBoard, duplicateBoard,
     addColumn, updateColumn, deleteColumn, reorderColumns,
     addBoardLink, removeBoardLink, reorderBoardLinks,
     addCard, updateCard, deleteCard, moveCard, reorderCardsInColumn,
-    addCardLink, removeCardLink, searchCards,
+    addCardLink, removeCardLink, searchCards, fetchCardDetail,
     addComment, editComment, deleteComment, reactToComment,
     addChecklistGroup, updateChecklistGroup, deleteChecklistGroup,
     addChecklistItem, editChecklistItem, toggleChecklistItem, deleteChecklistItem, updateChecklistItemDueDate, updateChecklistItemAssignees,
