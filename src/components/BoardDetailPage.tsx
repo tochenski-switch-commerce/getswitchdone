@@ -2054,6 +2054,7 @@ function BoardPage() {
           onAddCardLink={async (targetCardId) => { await addCardLink(activeCard.id, targetCardId); }}
           onRemoveCardLink={async (linkId) => { await removeCardLink(linkId); }}
           onSearchCards={async (query) => searchCards(boardId, query)}
+          onAddLabel={addLabel}
         />
         );
       })()}
