@@ -237,7 +237,7 @@ export function useProjectBoard() {
   const fetchUserProfiles = useCallback(async () => {
     const { data } = await supabase
       .from('user_profiles')
-      .select('*')
+      .select('id, name, avatar_url, updated_at')
       .order('name');
     if (data) setUserProfiles(data as UserProfile[]);
   }, []);
@@ -251,9 +251,10 @@ export function useProjectBoard() {
       if (!user) throw new Error('Not authenticated');
 
       // RLS policies handle visibility (own boards + public boards)
+      // Exclude `notes` — it's a large text field not needed for board listing
       const { data, error: err } = await supabase
         .from('project_boards')
-        .select('*')
+        .select('id, user_id, title, description, icon, icon_color, is_archived, is_public, timezone, team_id, is_starred, automations, created_at, updated_at')
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
       if (err) throw err;

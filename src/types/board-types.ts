@@ -139,6 +139,7 @@ export interface BoardCard {
   repeat_rule?: RepeatRule | null;
   repeat_series_id?: string | null;
   is_focused?: boolean;
+  focused_by?: string[];
   snoozed_until?: string | null;
 }
 

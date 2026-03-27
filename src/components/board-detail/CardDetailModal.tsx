@@ -1616,27 +1616,36 @@ export default function CardDetailModal({
                 <ClipboardList size={13} />
                 Copy Content
               </button>
-              <button
-                className="kb-btn kb-btn-ghost"
-                onClick={async () => {
-                  await onUpdate({ is_focused: !card.is_focused });
-                }}
-                style={{
-                  width: '100%',
-                  justifyContent: 'center',
-                  ...(card.is_focused ? {
-                    color: '#fa420f',
-                    borderColor: 'rgba(250,66,15,0.35)',
-                    background: 'rgba(250,66,15,0.08)',
-                  } : {}),
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill={card.is_focused ? 'currentColor' : 'none'}
-                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                {card.is_focused ? 'Remove Focus' : 'Focus on Today'}
-              </button>
+              {(() => {
+                const isFocused = (card.focused_by ?? []).includes(currentUserId ?? '');
+                return (
+                  <button
+                    className="kb-btn kb-btn-ghost"
+                    onClick={async () => {
+                      const prev = card.focused_by ?? [];
+                      const next = isFocused
+                        ? prev.filter(id => id !== currentUserId)
+                        : [...prev, currentUserId!];
+                      await onUpdate({ focused_by: next });
+                    }}
+                    style={{
+                      width: '100%',
+                      justifyContent: 'center',
+                      ...(isFocused ? {
+                        color: '#fa420f',
+                        borderColor: 'rgba(250,66,15,0.35)',
+                        background: 'rgba(250,66,15,0.08)',
+                      } : {}),
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill={isFocused ? 'currentColor' : 'none'}
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                    {isFocused ? 'Remove Focus' : 'Focus on Today'}
+                  </button>
+                );
+              })()}
               {/* Snooze */}
               {card.snoozed_until && new Date(card.snoozed_until) > new Date() ? (
                 <button

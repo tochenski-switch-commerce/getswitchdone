@@ -71,27 +71,33 @@ ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE team_invites ENABLE ROW LEVEL SECURITY;
 
 -- teams: viewable/manageable by members
+DROP POLICY IF EXISTS "View teams I belong to" ON teams;
 CREATE POLICY "View teams I belong to" ON teams
   FOR SELECT TO authenticated
   USING (id IN (SELECT get_my_team_ids()));
 
+DROP POLICY IF EXISTS "Create teams" ON teams;
 CREATE POLICY "Create teams" ON teams
   FOR INSERT TO authenticated
   WITH CHECK (auth.uid() = created_by);
 
+DROP POLICY IF EXISTS "Update teams (owner only)" ON teams;
 CREATE POLICY "Update teams (owner only)" ON teams
   FOR UPDATE TO authenticated
   USING (id IN (SELECT get_my_owned_team_ids()));
 
+DROP POLICY IF EXISTS "Delete teams (owner only)" ON teams;
 CREATE POLICY "Delete teams (owner only)" ON teams
   FOR DELETE TO authenticated
   USING (id IN (SELECT get_my_owned_team_ids()));
 
 -- team_members: viewable by fellow members, manageable by owners
+DROP POLICY IF EXISTS "View team members" ON team_members;
 CREATE POLICY "View team members" ON team_members
   FOR SELECT TO authenticated
   USING (team_id IN (SELECT get_my_team_ids()));
 
+DROP POLICY IF EXISTS "Insert team members (owner or self-join)" ON team_members;
 CREATE POLICY "Insert team members (owner or self-join)" ON team_members
   FOR INSERT TO authenticated
   WITH CHECK (
@@ -101,6 +107,7 @@ CREATE POLICY "Insert team members (owner or self-join)" ON team_members
     OR user_id = auth.uid()
   );
 
+DROP POLICY IF EXISTS "Delete team members (owner or self)" ON team_members;
 CREATE POLICY "Delete team members (owner or self)" ON team_members
   FOR DELETE TO authenticated
   USING (
@@ -109,23 +116,28 @@ CREATE POLICY "Delete team members (owner or self)" ON team_members
   );
 
 -- team_invites: viewable/manageable by team owners
+DROP POLICY IF EXISTS "View team invites (owner)" ON team_invites;
 CREATE POLICY "View team invites (owner)" ON team_invites
   FOR SELECT TO authenticated
   USING (team_id IN (SELECT get_my_owned_team_ids()));
 
 -- Allow anyone authenticated to read an invite by code (for the join flow)
+DROP POLICY IF EXISTS "Read invite by code" ON team_invites;
 CREATE POLICY "Read invite by code" ON team_invites
   FOR SELECT TO authenticated
   USING (is_active = true);
 
+DROP POLICY IF EXISTS "Create team invites (owner)" ON team_invites;
 CREATE POLICY "Create team invites (owner)" ON team_invites
   FOR INSERT TO authenticated
   WITH CHECK (team_id IN (SELECT get_my_owned_team_ids()));
 
+DROP POLICY IF EXISTS "Update team invites (owner)" ON team_invites;
 CREATE POLICY "Update team invites (owner)" ON team_invites
   FOR UPDATE TO authenticated
   USING (team_id IN (SELECT get_my_owned_team_ids()));
 
+DROP POLICY IF EXISTS "Delete team invites (owner)" ON team_invites;
 CREATE POLICY "Delete team invites (owner)" ON team_invites
   FOR DELETE TO authenticated
   USING (team_id IN (SELECT get_my_owned_team_ids()));
@@ -141,6 +153,7 @@ DROP POLICY IF EXISTS "Update own boards" ON project_boards;
 DROP POLICY IF EXISTS "Delete own boards" ON project_boards;
 
 -- New policies
+DROP POLICY IF EXISTS "View accessible boards" ON project_boards;
 CREATE POLICY "View accessible boards" ON project_boards
   FOR SELECT TO authenticated
   USING (
@@ -149,10 +162,12 @@ CREATE POLICY "View accessible boards" ON project_boards
     OR team_id IN (SELECT get_my_team_ids())
   );
 
+DROP POLICY IF EXISTS "Insert own boards" ON project_boards;
 CREATE POLICY "Insert own boards" ON project_boards
   FOR INSERT TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Update own or team boards" ON project_boards;
 CREATE POLICY "Update own or team boards" ON project_boards
   FOR UPDATE TO authenticated
   USING (
@@ -160,6 +175,7 @@ CREATE POLICY "Update own or team boards" ON project_boards
     OR team_id IN (SELECT get_my_owned_team_ids())
   );
 
+DROP POLICY IF EXISTS "Delete own boards" ON project_boards;
 CREATE POLICY "Delete own boards" ON project_boards
   FOR DELETE TO authenticated
   USING (auth.uid() = user_id);
@@ -191,6 +207,7 @@ $$;
 -- board_columns
 DROP POLICY IF EXISTS "View columns" ON board_columns;
 DROP POLICY IF EXISTS "Manage columns" ON board_columns;
+DROP POLICY IF EXISTS "Access columns" ON board_columns;
 CREATE POLICY "Access columns" ON board_columns
   FOR ALL TO authenticated
   USING (can_access_board(board_id));
@@ -198,6 +215,7 @@ CREATE POLICY "Access columns" ON board_columns
 -- board_labels
 DROP POLICY IF EXISTS "View labels" ON board_labels;
 DROP POLICY IF EXISTS "Manage labels" ON board_labels;
+DROP POLICY IF EXISTS "Access labels" ON board_labels;
 CREATE POLICY "Access labels" ON board_labels
   FOR ALL TO authenticated
   USING (can_access_board(board_id));
@@ -205,6 +223,7 @@ CREATE POLICY "Access labels" ON board_labels
 -- board_cards
 DROP POLICY IF EXISTS "View cards" ON board_cards;
 DROP POLICY IF EXISTS "Manage cards" ON board_cards;
+DROP POLICY IF EXISTS "Access cards" ON board_cards;
 CREATE POLICY "Access cards" ON board_cards
   FOR ALL TO authenticated
   USING (can_access_board(board_id));
@@ -212,6 +231,7 @@ CREATE POLICY "Access cards" ON board_cards
 -- card_label_assignments — needs join through board_cards
 DROP POLICY IF EXISTS "View label assignments" ON card_label_assignments;
 DROP POLICY IF EXISTS "Manage label assignments" ON card_label_assignments;
+DROP POLICY IF EXISTS "Access label assignments" ON card_label_assignments;
 CREATE POLICY "Access label assignments" ON card_label_assignments
   FOR ALL TO authenticated
   USING (
@@ -221,6 +241,7 @@ CREATE POLICY "Access label assignments" ON card_label_assignments
 -- card_comments
 DROP POLICY IF EXISTS "View comments" ON card_comments;
 DROP POLICY IF EXISTS "Manage comments" ON card_comments;
+DROP POLICY IF EXISTS "Access comments" ON card_comments;
 CREATE POLICY "Access comments" ON card_comments
   FOR ALL TO authenticated
   USING (
@@ -230,6 +251,7 @@ CREATE POLICY "Access comments" ON card_comments
 -- card_checklists
 DROP POLICY IF EXISTS "View checklists" ON card_checklists;
 DROP POLICY IF EXISTS "Manage checklists" ON card_checklists;
+DROP POLICY IF EXISTS "Access checklists" ON card_checklists;
 CREATE POLICY "Access checklists" ON card_checklists
   FOR ALL TO authenticated
   USING (
@@ -239,6 +261,7 @@ CREATE POLICY "Access checklists" ON card_checklists
 -- board_custom_fields
 DROP POLICY IF EXISTS "View custom fields" ON board_custom_fields;
 DROP POLICY IF EXISTS "Manage custom fields" ON board_custom_fields;
+DROP POLICY IF EXISTS "Access custom fields" ON board_custom_fields;
 CREATE POLICY "Access custom fields" ON board_custom_fields
   FOR ALL TO authenticated
   USING (can_access_board(board_id));
@@ -246,6 +269,7 @@ CREATE POLICY "Access custom fields" ON board_custom_fields
 -- card_custom_field_values — join through board_cards
 DROP POLICY IF EXISTS "View custom field values" ON card_custom_field_values;
 DROP POLICY IF EXISTS "Manage custom field values" ON card_custom_field_values;
+DROP POLICY IF EXISTS "Access custom field values" ON card_custom_field_values;
 CREATE POLICY "Access custom field values" ON card_custom_field_values
   FOR ALL TO authenticated
   USING (
@@ -255,6 +279,7 @@ CREATE POLICY "Access custom field values" ON card_custom_field_values
 -- board_links
 DROP POLICY IF EXISTS "View board links" ON board_links;
 DROP POLICY IF EXISTS "Manage board links" ON board_links;
+DROP POLICY IF EXISTS "Access board links" ON board_links;
 CREATE POLICY "Access board links" ON board_links
   FOR ALL TO authenticated
   USING (can_access_board(board_id));
@@ -262,6 +287,7 @@ CREATE POLICY "Access board links" ON board_links
 -- card_links — join through board_cards
 DROP POLICY IF EXISTS "View card links" ON card_links;
 DROP POLICY IF EXISTS "Manage card links" ON card_links;
+DROP POLICY IF EXISTS "Access card links" ON card_links;
 CREATE POLICY "Access card links" ON card_links
   FOR ALL TO authenticated
   USING (
@@ -271,6 +297,7 @@ CREATE POLICY "Access card links" ON card_links
 -- board_emails
 DROP POLICY IF EXISTS "View board emails" ON board_emails;
 DROP POLICY IF EXISTS "Manage board emails" ON board_emails;
+DROP POLICY IF EXISTS "Access board emails" ON board_emails;
 CREATE POLICY "Access board emails" ON board_emails
   FOR ALL TO authenticated
   USING (

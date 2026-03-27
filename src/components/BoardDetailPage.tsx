@@ -1112,6 +1112,16 @@ function BoardPage() {
             <SlidersHorizontal size={15} />
           </button>
 
+          {/* Overview link */}
+          <button
+            className="kb-note-toggle"
+            onClick={() => router.push(`/boards/${boardId}/overview`)}
+            title="Board Overview"
+          >
+            <BarChart3 size={15} />
+            Overview
+          </button>
+
           {/* Note panel toggle */}
           <button
             className={`kb-note-toggle ${showNotePanel ? 'kb-note-toggle-active' : ''}`}
@@ -1702,6 +1712,7 @@ function BoardPage() {
                             isDragging={dragCardId === card.id}
                             hasAlert={alertCardIds.has(card.id)}
                             isSnoozed={!!(card.snoozed_until && new Date(card.snoozed_until) > snoozeNow)}
+                            currentUserId={user?.id}
                             onPriorityChange={async (p) => {
                               markCardUpdated(card.id);
                               await updateCard(boardId, card.id, { priority: p });

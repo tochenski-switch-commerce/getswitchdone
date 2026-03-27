@@ -92,6 +92,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ checked: cards.length, notified: 0, alreadyNotified: alreadyNotified.size });
   }
 
+  // Batch-fetch all assignee user IDs needed across all overdue cards in one query
+  const allCardAssigneeNames = new Set<string>();
+  for (const card of newOverdue) {
+    const names: string[] = card.assignees?.length ? card.assignees : card.assignee ? [card.assignee] : [];
+    for (const n of names) allCardAssigneeNames.add(n);
+  }
+
+  const nameToUserIdMap = new Map<string, string>();
+  if (allCardAssigneeNames.size > 0) {
+    const { data: allProfiles } = await db
+      .from('user_profiles')
+      .select('id, name')
+      .in('name', [...allCardAssigneeNames]);
+    for (const p of allProfiles || []) {
+      if (p.name) nameToUserIdMap.set(p.name, p.id);
+    }
+  }
+
   // For each overdue card, determine who to notify:
   // - The card creator (created_by)
   // - All assignees
@@ -103,16 +121,10 @@ export async function GET(req: NextRequest) {
     const userIds = new Set<string>();
     if (card.created_by) userIds.add(card.created_by);
 
-    // Look up assignee user IDs from user_profiles (assignees are stored as names)
     const assigneeNames: string[] = card.assignees?.length ? card.assignees : card.assignee ? [card.assignee] : [];
-    if (assigneeNames.length > 0) {
-      const { data: profiles } = await db
-        .from('user_profiles')
-        .select('id')
-        .in('name', assigneeNames);
-      if (profiles) {
-        for (const p of profiles) userIds.add(p.id);
-      }
+    for (const name of assigneeNames) {
+      const uid = nameToUserIdMap.get(name);
+      if (uid) userIds.add(uid);
     }
 
     const dueDisplay = new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -175,6 +187,30 @@ export async function GET(req: NextRequest) {
 
     const alreadyNotifiedChecklist = new Set((existingChecklistNotifs || []).map((n: any) => n.checklist_item_id));
 
+    // Batch-fetch all assignee user IDs needed across all overdue checklist items in one query
+    const allChecklistAssigneeNames = new Set<string>();
+    for (const item of overdueChecklistItems) {
+      if (alreadyNotifiedChecklist.has(item.id)) continue;
+      const bc = item.board_cards as any;
+      const itemAssignees: string[] = Array.isArray(item.assignees) && item.assignees.length ? item.assignees : [];
+      const names: string[] = itemAssignees.length
+        ? itemAssignees
+        : bc.assignees?.length ? bc.assignees : bc.assignee ? [bc.assignee] : [];
+      for (const n of names) allChecklistAssigneeNames.add(n);
+    }
+
+    // Merge with the card-level map already fetched; only query new names
+    const newNames = [...allChecklistAssigneeNames].filter(n => !nameToUserIdMap.has(n));
+    if (newNames.length > 0) {
+      const { data: extraProfiles } = await db
+        .from('user_profiles')
+        .select('id, name')
+        .in('name', newNames);
+      for (const p of extraProfiles || []) {
+        if (p.name) nameToUserIdMap.set(p.name, p.id);
+      }
+    }
+
     for (const item of overdueChecklistItems) {
       if (alreadyNotifiedChecklist.has(item.id)) continue;
 
@@ -187,14 +223,9 @@ export async function GET(req: NextRequest) {
       const assigneeNames: string[] = itemAssignees.length
         ? itemAssignees
         : bc.assignees?.length ? bc.assignees : bc.assignee ? [bc.assignee] : [];
-      if (assigneeNames.length > 0) {
-        const { data: profiles } = await db
-          .from('user_profiles')
-          .select('id')
-          .in('name', assigneeNames);
-        if (profiles) {
-          for (const p of profiles) userIds.add(p.id);
-        }
+      for (const name of assigneeNames) {
+        const uid = nameToUserIdMap.get(name);
+        if (uid) userIds.add(uid);
       }
 
       const dueDisplay = new Date(item.due_date.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });

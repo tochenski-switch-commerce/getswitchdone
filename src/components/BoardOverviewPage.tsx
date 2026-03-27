@@ -6,7 +6,7 @@ import { useProjectBoard } from '@/hooks/useProjectBoard';
 import type { BoardCard } from '@/types/board-types';
 import FlameLoader from '@/components/FlameLoader';
 import {
-  ArrowLeft, Search, FolderKanban, BarChart3, Download,
+  ArrowLeft, Search, FolderKanban, Printer,
   ChevronDown,
   getBoardIcon, DEFAULT_ICON_COLOR,
 } from '@/components/BoardIcons';
@@ -14,16 +14,79 @@ import { PRIORITY_CONFIG, PRIORITY_WEIGHT } from '@/components/board-detail/help
 import {
   getTodayStr,
   computeSummary,
-  computeColumnBreakdown,
-  computePriorityBreakdown,
+computePriorityBreakdown,
   computeAssigneeWorkload,
   computeTimeline,
   filterCards,
 } from '@/components/board-overview/overviewMetrics';
 import { overviewStyles } from '@/components/board-overview/overview-styles';
-import ExportModal from '@/components/board-overview/ExportModal';
 
 const PRIORITY_ORDER = ['urgent', 'high', 'medium', 'low', 'none'] as const;
+
+const fmtDate = (d: string | null | undefined) => {
+  if (!d) return '—';
+  const [y, m, day] = d.split('-');
+  return `${m}-${day}-${y}`;
+};
+
+const esc = (s: string) => s
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
+
+const PRIORITY_PRINT: Record<string, { color: string; bg: string; label: string }> = {
+  urgent: { color: '#dc2626', bg: '#fee2e2', label: 'URGENT' },
+  high:   { color: '#c2410c', bg: '#ffedd5', label: 'HIGH' },
+  medium: { color: '#b45309', bg: '#fef3c7', label: 'MEDIUM' },
+  low:    { color: '#16a34a', bg: '#dcfce7', label: 'LOW' },
+};
+
+// Shared base CSS for all print windows.
+// @page margin:0 removes the browser-generated running header/footer.
+// Body padding provides content clearance instead.
+const PRINT_BASE_CSS = `
+  @page { size: landscape; margin: 0; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    color: #0f172a; background: #fff; margin: 0;
+    padding: 14mm 12mm;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .doc-hdr { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 16px; }
+  .doc-title { font-size: 18px; font-weight: 700; margin: 0 0 3px; color: #0f172a; }
+  .doc-sub { font-size: 11px; color: #64748b; margin: 0; }
+  .doc-date { font-size: 11px; color: #94a3b8; }
+  .section-hdr { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #64748b; margin: 18px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
+  .group-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin: 12px 0 4px; display: flex; align-items: center; gap: 6px; }
+  .group-count { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 8px; background: #f1f5f9; color: #64748b; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 6px; }
+  thead th { background: #f1f5f9; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b; padding: 6px 10px; text-align: left; border-bottom: 2px solid #cbd5e1; white-space: nowrap; }
+  thead th.center { text-align: center; }
+  tbody td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+  tbody tr:nth-child(even) td { background: #f8fafc; }
+  tbody tr:last-child td { border-bottom: none; }
+  .ftr { margin-top: 12px; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
+  .page-break { page-break-before: always; }
+`;
+
+const openPrint = (title: string, bodyHtml: string) => {
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(title)}</title><style>${PRINT_BASE_CSS}</style></head><body>${bodyHtml}</body></html>`;
+  const win = window.open('', '_blank', 'width=1100,height=800');
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); win.close(); }, 350);
+};
+
+const priorityBadge = (priority: string | null | undefined) => {
+  const p = priority ? PRIORITY_PRINT[priority] : null;
+  return p
+    ? `<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:3px;background:${p.bg};color:${p.color}">${p.label}</span>`
+    : '<span style="color:#94a3b8">—</span>';
+};
 
 export default function BoardOverviewPage() {
   const params = useParams();
@@ -35,7 +98,6 @@ export default function BoardOverviewPage() {
   const [filterPriority, setFilterPriority] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterDone, setFilterDone] = useState<'' | 'yes' | 'no'>('');
-  const [showExportModal, setShowExportModal] = useState(false);
   const [sortCol, setSortCol] = useState<'title' | 'column' | 'priority' | 'assignee' | 'due' | 'done' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -46,8 +108,7 @@ export default function BoardOverviewPage() {
   const todayStr = useMemo(() => getTodayStr(), []);
 
   const summary = useMemo(() => board ? computeSummary(board, todayStr) : null, [board, todayStr]);
-  const columnBreakdown = useMemo(() => board ? computeColumnBreakdown(board) : [], [board]);
-  const priorityBreakdown = useMemo(() => board ? computePriorityBreakdown(board) : null, [board]);
+const priorityBreakdown = useMemo(() => board ? computePriorityBreakdown(board) : null, [board]);
   const assigneeWorkload = useMemo(() => board ? computeAssigneeWorkload(board, userProfiles, todayStr) : [], [board, userProfiles, todayStr]);
   const timeline = useMemo(() => board ? computeTimeline(board, todayStr) : null, [board, todayStr]);
 
@@ -64,6 +125,11 @@ export default function BoardOverviewPage() {
   const sortedCards = useMemo(() => {
     if (!sortCol) return filteredCards;
     const dir = sortDir === 'asc' ? 1 : -1;
+    const profileMap = new Map(userProfiles.map(p => [p.id, p.name]));
+    const getAssigneeName = (card: BoardCard) => {
+      const ids = (card.assignees && card.assignees.length > 0) ? card.assignees : (card.assignee ? [card.assignee] : []);
+      return ids.length > 0 ? (profileMap.get(ids[0]) ?? '\uffff') : '\uffff';
+    };
     return [...filteredCards].sort((a, b) => {
       switch (sortCol) {
         case 'title':
@@ -78,13 +144,8 @@ export default function BoardOverviewPage() {
           const wb = PRIORITY_WEIGHT[b.priority ?? 'none'] ?? 4;
           return dir * (wa - wb);
         }
-        case 'assignee': {
-          const getFirst = (card: typeof a) => {
-            const ids = (card.assignees && card.assignees.length > 0) ? card.assignees : (card.assignee ? [card.assignee] : []);
-            return ids.length > 0 ? (userProfiles.find(p => p.id === ids[0])?.name ?? '') : '';
-          };
-          return dir * getFirst(a).localeCompare(getFirst(b));
-        }
+        case 'assignee':
+          return dir * getAssigneeName(a).localeCompare(getAssigneeName(b));
         case 'due': {
           const da = a.due_date ?? '\uffff';
           const db = b.due_date ?? '\uffff';
@@ -126,8 +187,124 @@ export default function BoardOverviewPage() {
     router.push(`/boards/${boardId}?card=${card.id}`);
   };
 
-  const handleExportClick = () => {
-    setShowExportModal(true);
+  const buildTimelineHtml = () => {
+    if (!timeline) return '';
+    const profileById = new Map(userProfiles.map(p => [p.id, p.name]));
+    const getAssignee = (card: BoardCard) => {
+      const ids = (card.assignees && card.assignees.length > 0) ? card.assignees : (card.assignee ? [card.assignee] : []);
+      return ids.length > 0 ? (profileById.get(ids[0]) ?? '—') : '—';
+    };
+    const groups = [
+      { label: 'Overdue',        cards: timeline.overdue,    color: '#dc2626' },
+      { label: 'Due Today',      cards: timeline.today,      color: '#d97706' },
+      { label: 'Due This Week',  cards: timeline.thisWeek,   color: '#7c3aed' },
+      { label: 'Due This Month', cards: timeline.thisMonth,  color: '#4b5563' },
+      { label: 'No Due Date',    cards: timeline.noDate,     color: '#9ca3af' },
+    ].filter(g => g.cards.length > 0);
+
+    const groupsHtml = groups.map(({ label, cards, color }) => {
+      const rows = cards.map(card => `<tr>
+        <td style="max-width:300px;word-break:break-word">${esc(card.title)}</td>
+        <td style="color:#475569;white-space:nowrap">${esc(columnById.get(card.column_id) ?? '—')}</td>
+        <td>${priorityBadge(card.priority)}</td>
+        <td style="color:#475569;white-space:nowrap">${esc(getAssignee(card))}</td>
+        <td style="color:#475569;white-space:nowrap">${fmtDate(card.due_date)}</td>
+      </tr>`).join('');
+      return `
+        <div class="group-label" style="color:${color}">${esc(label)}<span class="group-count">${cards.length}</span></div>
+        <table>
+          <thead><tr><th>Card</th><th>Column</th><th>Priority</th><th>Assignee</th><th>Due</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }).join('');
+    return groupsHtml;
+  };
+
+  const buildCardSearchHtml = () => {
+    const profileById = new Map(userProfiles.map(p => [p.id, p.name]));
+    const totalNonArchived = board?.cards.filter(c => !c.is_archived).length ?? 0;
+    const rows = sortedCards.map(card => {
+      const assignees = (card.assignees && card.assignees.length > 0) ? card.assignees : (card.assignee ? [card.assignee] : []);
+      const assigneeNames = assignees.map(id => profileById.get(id) ?? id.slice(0, 8)).join(', ') || '—';
+      const doneCell = card.is_complete
+        ? '<span style="color:#16a34a;font-weight:600">Yes</span>'
+        : '<span style="color:#94a3b8">No</span>';
+      return `<tr>
+        <td style="max-width:320px;word-break:break-word">${esc(card.title)}</td>
+        <td style="color:#475569;white-space:nowrap">${esc(columnById.get(card.column_id) ?? '—')}</td>
+        <td>${priorityBadge(card.priority)}</td>
+        <td style="color:#475569;white-space:nowrap">${esc(assigneeNames)}</td>
+        <td style="color:#475569;white-space:nowrap">${fmtDate(card.due_date)}</td>
+        <td style="text-align:center">${doneCell}</td>
+      </tr>`;
+    }).join('');
+    return { rows, totalNonArchived };
+  };
+
+  const handlePrint = () => {
+    const boardTitle = esc(board?.title ?? 'Board');
+    const printedAt = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const { rows, totalNonArchived } = buildCardSearchHtml();
+    const body = `
+      <div class="doc-hdr">
+        <div>
+          <div class="doc-title">${boardTitle} — Card Search</div>
+          <div class="doc-sub">${sortedCards.length} of ${totalNonArchived} cards</div>
+        </div>
+        <div class="doc-date">Printed ${printedAt}</div>
+      </div>
+      <table>
+        <thead><tr><th>Card</th><th>Column</th><th>Priority</th><th>Assignee</th><th>Due</th><th class="center">Done</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="ftr"><span>Lumio · ${boardTitle}</span><span>${sortedCards.length} cards</span></div>`;
+    openPrint(`${board?.title ?? 'Board'} — Card Search`, body);
+  };
+
+  const handlePrintTimeline = () => {
+    if (!timeline) return;
+    const boardTitle = esc(board?.title ?? 'Board');
+    const printedAt = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const totalCards = [timeline.overdue, timeline.today, timeline.thisWeek, timeline.thisMonth, timeline.noDate].reduce((n, g) => n + g.length, 0);
+    const body = `
+      <div class="doc-hdr">
+        <div>
+          <div class="doc-title">${boardTitle} — Timeline &amp; Due Dates</div>
+          <div class="doc-sub">${totalCards} cards</div>
+        </div>
+        <div class="doc-date">Printed ${printedAt}</div>
+      </div>
+      ${buildTimelineHtml()}
+      <div class="ftr"><span>Lumio · ${boardTitle}</span><span>${totalCards} cards</span></div>`;
+    openPrint(`${board?.title ?? 'Board'} — Timeline`, body);
+  };
+
+  const handlePrintAll = () => {
+    const boardTitle = esc(board?.title ?? 'Board');
+    const printedAt = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const { rows, totalNonArchived } = buildCardSearchHtml();
+    const timelineTotal = timeline
+      ? [timeline.overdue, timeline.today, timeline.thisWeek, timeline.thisMonth, timeline.noDate].reduce((n, g) => n + g.length, 0)
+      : 0;
+    const body = `
+      <div class="doc-hdr">
+        <div>
+          <div class="doc-title">${boardTitle} — Overview Report</div>
+          <div class="doc-sub">Timeline &amp; Due Dates · Card Search</div>
+        </div>
+        <div class="doc-date">Printed ${printedAt}</div>
+      </div>
+
+      <div class="section-hdr">Timeline &amp; Due Dates <span style="font-weight:400;text-transform:none;letter-spacing:0">(${timelineTotal} cards)</span></div>
+      ${buildTimelineHtml()}
+
+      <div class="section-hdr page-break">Card Search <span style="font-weight:400;text-transform:none;letter-spacing:0">(${sortedCards.length} of ${totalNonArchived})</span></div>
+      <table>
+        <thead><tr><th>Card</th><th>Column</th><th>Priority</th><th>Assignee</th><th>Due</th><th class="center">Done</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="ftr"><span>Lumio · ${boardTitle}</span><span>${sortedCards.length + timelineTotal} total cards</span></div>`;
+    openPrint(`${board?.title ?? 'Board'} — Overview Report`, body);
   };
 
   if (loading || !board || !summary) {
@@ -161,8 +338,8 @@ export default function BoardOverviewPage() {
           </div>
         </div>
         <div className="kb-ov-header-actions">
-          <button className="kb-ov-export-btn" onClick={handleExportClick}>
-            <Download size={13} /> Export to Excel
+          <button className="kb-ov-print-btn" onClick={handlePrintAll}>
+            <Printer size={13} /> Print All
           </button>
         </div>
       </div>
@@ -193,27 +370,6 @@ export default function BoardOverviewPage() {
           </div>
         </div>
 
-        {/* ── Progress by Column ── */}
-        {columnBreakdown.length > 0 && (
-          <div className="kb-ov-section">
-            <div className="kb-ov-section-heading">
-              <BarChart3 size={13} /> Progress by Column
-            </div>
-            {columnBreakdown.map(({ column, total, completed, pct }) => (
-              <div key={column.id} className="kb-ov-progress-row">
-                <div className="kb-ov-progress-col-name">
-                  <span className="kb-ov-col-dot" style={{ background: column.color }} />
-                  {column.title}
-                </div>
-                <div className="kb-ov-bar-wrap">
-                  <div className="kb-ov-bar-fill" style={{ width: `${pct}%`, background: column.color, opacity: 0.7 }} />
-                </div>
-                <div className="kb-ov-progress-count">{completed}/{total}</div>
-                <div className="kb-ov-progress-pct">{pct}%</div>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* ── Priority Breakdown ── */}
         {priorityBreakdown && priorityBreakdown.total > 0 && (
@@ -273,7 +429,12 @@ export default function BoardOverviewPage() {
         {/* ── Timeline / Due Dates ── */}
         {timeline && (
           <div className="kb-ov-section">
-            <div className="kb-ov-section-heading">Timeline &amp; Due Dates</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div className="kb-ov-section-heading" style={{ marginBottom: 0 }}>Timeline &amp; Due Dates</div>
+              <button className="kb-ov-print-btn" onClick={handlePrintTimeline}>
+                <Printer size={13} /> Print
+              </button>
+            </div>
             {[
               { label: 'Overdue', cards: timeline.overdue, color: '#f87171' },
               { label: 'Due Today', cards: timeline.today, color: '#fbbf24' },
@@ -302,8 +463,13 @@ export default function BoardOverviewPage() {
 
         {/* ── Card Search & Filter ── */}
         <div className="kb-ov-section">
-          <div className="kb-ov-section-heading">
-            <Search size={13} /> Card Search
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div className="kb-ov-section-heading" style={{ marginBottom: 0 }}>
+              <Search size={13} /> Card Search
+            </div>
+            <button className="kb-ov-print-btn" onClick={handlePrint}>
+              <Printer size={13} /> Print
+            </button>
           </div>
           <div className="kb-ov-filter-bar">
             <div className="kb-ov-search-wrap">
@@ -397,7 +563,7 @@ export default function BoardOverviewPage() {
                           ) : '—'}
                         </td>
                         <td style={{ color: '#9ca3af', whiteSpace: 'nowrap' }}>{assigneeNames || '—'}</td>
-                        <td style={{ color: '#9ca3af', whiteSpace: 'nowrap' }}>{card.due_date ?? '—'}</td>
+                        <td style={{ color: '#9ca3af', whiteSpace: 'nowrap' }}>{fmtDate(card.due_date)}</td>
                         <td style={{ color: card.is_complete ? '#34d399' : '#4b5563' }}>{card.is_complete ? 'Yes' : 'No'}</td>
                       </tr>
                     );
@@ -410,15 +576,6 @@ export default function BoardOverviewPage() {
 
       </div>
 
-      {/* ── Export Modal ── */}
-      {showExportModal && board && (
-        <ExportModal
-          board={board}
-          userProfiles={userProfiles}
-          todayStr={todayStr}
-          onClose={() => setShowExportModal(false)}
-        />
-      )}
     </div>
   );
 }

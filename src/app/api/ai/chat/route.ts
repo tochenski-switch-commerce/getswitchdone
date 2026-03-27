@@ -24,16 +24,27 @@ async function verifyAuth(req: NextRequest) {
 
 /* ── Build board context for the system prompt ── */
 async function buildBoardContext(boardId: string) {
-  const [boardRes, colsRes, cardsRes, labelsRes, fieldsRes, profilesRes] = await Promise.all([
-    supabaseAdmin.from('project_boards').select('*').eq('id', boardId).single(),
+  // Phase 1: fetch board to get team_id for targeted profile lookup
+  const boardRes = await supabaseAdmin.from('project_boards').select('*').eq('id', boardId).single();
+  const board = boardRes.data;
+  if (!board) return { board: null, columns: [], cards: [], labels: [], fields: [], profiles: [], systemContext: '' };
+
+  // Phase 2: fetch everything else in parallel, with targeted profile lookup
+  const [colsRes, cardsRes, labelsRes, fieldsRes, profilesRes] = await Promise.all([
     supabaseAdmin.from('board_columns').select('*').eq('board_id', boardId).order('position'),
     supabaseAdmin.from('board_cards').select('id, title, column_id, position, priority, due_date, assignees, is_archived, created_at, updated_at').eq('board_id', boardId).eq('is_archived', false),
-    supabaseAdmin.from('board_labels').select('*').eq('board_id', boardId),
-    supabaseAdmin.from('board_custom_fields').select('*').eq('board_id', boardId),
-    supabaseAdmin.from('user_profiles').select('*'),
+    supabaseAdmin.from('board_labels').select('id, name, color').eq('board_id', boardId),
+    supabaseAdmin.from('board_custom_fields').select('id, title, field_type').eq('board_id', boardId),
+    // Fetch only profiles for this board's team (or just the board owner for solo boards)
+    board.team_id
+      ? supabaseAdmin.from('team_members').select('user_id').eq('team_id', board.team_id)
+          .then(r => {
+            const ids = [...new Set([(board.user_id as string), ...((r.data || []).map((m: { user_id: string }) => m.user_id))])];
+            return supabaseAdmin.from('user_profiles').select('id, name').in('id', ids);
+          })
+      : supabaseAdmin.from('user_profiles').select('id, name').in('id', [board.user_id]),
   ]);
 
-  const board = boardRes.data;
   const columns = colsRes.data || [];
   const cards = cardsRes.data || [];
   const labels = labelsRes.data || [];
@@ -95,8 +106,9 @@ export async function POST(req: NextRequest) {
     const { messages, boardId } = await req.json();
     if (!boardId) return new Response('boardId required', { status: 400 });
 
-  const { board, columns, cards, labels, profiles, systemContext } = await buildBoardContext(boardId);
-  if (!board) return new Response('Board not found', { status: 404 });
+  const context = await buildBoardContext(boardId);
+  if (!context.board) return new Response('Board not found', { status: 404 });
+  const { board, columns, cards, labels, profiles, systemContext } = context;
 
   const systemPrompt = `You are Lumio AI, a smart project management assistant built into the Lumio kanban app. You help the user manage their board, answer questions, provide analytics/insights, and perform actions.
 

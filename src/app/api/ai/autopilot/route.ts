@@ -215,11 +215,21 @@ export async function POST(req: NextRequest) {
   const { boardId, includeStandup } = await req.json();
   if (!boardId) return NextResponse.json({ error: 'boardId required' }, { status: 400 });
 
-  // Fetch board data
+  // Fetch board data — profiles scoped to board team only
+  const boardRes = await supabaseAdmin.from('project_boards').select('id, user_id, team_id').eq('id', boardId).single();
+  if (boardRes.error || !boardRes.data) return NextResponse.json({ error: 'Board not found' }, { status: 404 });
+  const boardMeta = boardRes.data;
+
   const [colsRes, cardsRes, profilesRes] = await Promise.all([
-    supabaseAdmin.from('board_columns').select('*').eq('board_id', boardId).order('position'),
+    supabaseAdmin.from('board_columns').select('id, title, position').eq('board_id', boardId).order('position'),
     supabaseAdmin.from('board_cards').select('id, title, column_id, position, priority, due_date, assignee, assignees, is_archived, created_at, updated_at').eq('board_id', boardId).eq('is_archived', false),
-    supabaseAdmin.from('user_profiles').select('*'),
+    boardMeta.team_id
+      ? supabaseAdmin.from('team_members').select('user_id').eq('team_id', boardMeta.team_id)
+          .then(r => {
+            const ids = [...new Set([(boardMeta.user_id as string), ...((r.data || []).map((m: { user_id: string }) => m.user_id))])];
+            return supabaseAdmin.from('user_profiles').select('id, name').in('id', ids);
+          })
+      : supabaseAdmin.from('user_profiles').select('id, name').in('id', [boardMeta.user_id]),
   ]);
 
   const columns = colsRes.data || [];

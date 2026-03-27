@@ -61,25 +61,25 @@ export const overviewStyles = `
     align-items: center;
     gap: 8px;
   }
-  .kb-ov-export-btn {
+  .kb-ov-print-btn {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
-    padding: 7px 14px;
-    border-radius: 8px;
-    background: rgba(99,102,241,0.15);
-    border: 1px solid rgba(99,102,241,0.35);
-    color: #a5b4fc;
+    padding: 5px 12px;
+    border-radius: 7px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid #1e2130;
+    color: #9ca3af;
     cursor: pointer;
     transition: all 0.12s;
     white-space: nowrap;
   }
-  .kb-ov-export-btn:hover {
-    background: rgba(99,102,241,0.25);
-    border-color: rgba(99,102,241,0.6);
-    color: #c7d2fe;
+  .kb-ov-print-btn:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: #374151;
+    color: #e5e7eb;
   }
 
   /* ── Page body ── */
@@ -457,139 +457,6 @@ export const overviewStyles = `
     padding: 32px 16px;
     color: #4b5563;
     font-size: 13px;
-  }
-
-  /* ── Modal overlay ── */
-  .kb-ov-modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 20px;
-  }
-  .kb-ov-modal {
-    background: #141621;
-    border: 1px solid #1e2130;
-    border-radius: 14px;
-    width: 100%;
-    max-width: 440px;
-    box-shadow: 0 24px 48px rgba(0,0,0,0.5);
-  }
-  .kb-ov-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 18px 20px 14px;
-    border-bottom: 1px solid #1e2130;
-  }
-  .kb-ov-modal-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: #f9fafb;
-  }
-  .kb-ov-modal-body {
-    padding: 20px;
-  }
-  .kb-ov-modal-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 14px 20px 18px;
-    border-top: 1px solid #1e2130;
-  }
-  .kb-ov-checkbox-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 0;
-    border-bottom: 1px solid #1a1d2a;
-    cursor: pointer;
-    user-select: none;
-  }
-  .kb-ov-checkbox-row:last-child {
-    border-bottom: none;
-  }
-  .kb-ov-checkbox-row input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    accent-color: #6366f1;
-    cursor: pointer;
-  }
-  .kb-ov-checkbox-label {
-    font-size: 14px;
-    color: #d1d5db;
-  }
-  .kb-ov-modal-select-all {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-  .kb-ov-modal-select-all button {
-    font-size: 12px;
-    color: #6366f1;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-  }
-  .kb-ov-modal-select-all button:hover {
-    color: #a5b4fc;
-  }
-  .kb-ov-btn-primary {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    background: #6366f1;
-    border: none;
-    border-radius: 8px;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.12s;
-  }
-  .kb-ov-btn-primary:hover:not(:disabled) {
-    background: #4f46e5;
-  }
-  .kb-ov-btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .kb-ov-btn-ghost {
-    padding: 8px 14px;
-    background: none;
-    border: 1px solid #1e2130;
-    border-radius: 8px;
-    color: #9ca3af;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.12s;
-  }
-  .kb-ov-btn-ghost:hover {
-    background: rgba(255,255,255,0.05);
-    color: #e5e7eb;
-  }
-  .kb-ov-btn-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    background: none;
-    border: none;
-    border-radius: 6px;
-    color: #6b7280;
-    cursor: pointer;
-    transition: all 0.12s;
-  }
-  .kb-ov-btn-icon:hover {
-    background: rgba(255,255,255,0.06);
-    color: #e5e7eb;
   }
 
   /* ── Completion ring (header accent) ── */

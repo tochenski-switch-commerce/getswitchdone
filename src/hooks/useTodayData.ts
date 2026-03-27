@@ -70,7 +70,7 @@ export function toDateStr(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-const CARD_SELECT = 'id, board_id, title, description, priority, due_date, due_time, start_date, assignees, is_complete, is_archived';
+const CARD_SELECT = 'id, board_id, title, description, priority, due_date, due_time, start_date, assignees, is_complete, is_archived, focused_by';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -113,10 +113,11 @@ export function useTodayData(): TodayData {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
       // ── Phase 1: main card queries ────────────────────────────────
-      const [dueDateRes, assignedRes, boardsRes, completedTodayRes, onDeckRes, focusedRes, streakRes] = await Promise.all([
+      const [dueDateRes, assignedRes, boardsRes, completedTodayRes, onDeckRes, focusedRes, streakRes, checklistAssignedRes] = await Promise.all([
         supabase.from('board_cards').select(CARD_SELECT)
           .eq('is_archived', false).eq('is_complete', false)
           .not('due_date', 'is', null).lte('due_date', todayStr)
+          .contains('assignees', [userId])
           .order('due_date', { ascending: true }),
 
         supabase.from('board_cards').select(CARD_SELECT)
@@ -129,22 +130,29 @@ export function useTodayData(): TodayData {
 
         supabase.from('board_cards').select(CARD_SELECT)
           .eq('is_complete', true).eq('is_archived', false)
+          .contains('assignees', [userId])
           .gte('updated_at', todayMidnight.toISOString())
           .order('updated_at', { ascending: false }),
 
         supabase.from('board_cards').select(CARD_SELECT)
           .eq('is_archived', false).eq('is_complete', false)
           .gt('due_date', todayStr).lte('due_date', threeDaysOutStr)
+          .contains('assignees', [userId])
           .order('due_date', { ascending: true }),
 
         supabase.from('board_cards').select(CARD_SELECT)
           .eq('is_archived', false).eq('is_complete', false)
-          .eq('is_focused', true)
+          .contains('focused_by', [userId])
           .order('updated_at', { ascending: false }),
 
         supabase.from('board_cards').select('updated_at')
           .eq('is_complete', true).eq('is_archived', false)
+          .contains('assignees', [userId])
           .gte('updated_at', sevenDaysAgo.toISOString()),
+
+        supabase.from('card_checklists').select('card_id')
+          .eq('is_completed', false)
+          .filter('assignees', 'cs', JSON.stringify([userId])),
       ]);
 
       if (dueDateRes.error) throw dueDateRes.error;
@@ -176,7 +184,7 @@ export function useTodayData(): TodayData {
       type RawCard = {
         id: string; board_id: string; title: string; description: string | null;
         priority: string | null; due_date: string | null; due_time: string | null;
-        start_date: string | null; assignees: string[] | null; is_focused?: boolean;
+        start_date: string | null; assignees: string[] | null; focused_by?: string[];
       };
       const toCard = (raw: RawCard): TodayCard => ({
         id: raw.id,
@@ -220,11 +228,27 @@ export function useTodayData(): TodayData {
       const shownIds = new Set([...overdueCards, ...dueTodayCards].map(c => c.id));
       const assignedCards = (assignedRes.data || []).map(toCard);
 
-      const myCardsFiltered = assignedCards.filter(c => {
+      let myCardsFiltered = assignedCards.filter(c => {
         if (shownIds.has(c.id)) return false;
         if (!c.dueDate) return true;
         return c.dueDate <= weekOutStr;
       });
+
+      // Also include parent cards of checklist items assigned to me
+      const checklistCardIds = [...new Set((checklistAssignedRes.data || []).map(ci => ci.card_id))];
+      if (checklistCardIds.length > 0) {
+        const alreadyShown = new Set([...overdueCards, ...dueTodayCards, ...myCardsFiltered].map(c => c.id));
+        const extraIds = checklistCardIds.filter(id => !alreadyShown.has(id));
+        if (extraIds.length > 0) {
+          const { data: extraCards } = await supabase
+            .from('board_cards').select(CARD_SELECT)
+            .in('id', extraIds)
+            .eq('is_archived', false).eq('is_complete', false);
+          if (extraCards && extraCards.length > 0) {
+            myCardsFiltered = [...myCardsFiltered, ...extraCards.map(toCard)];
+          }
+        }
+      }
 
       const dueThisWeek = assignedCards.filter(c =>
         c.dueDate && c.dueDate > todayStr && c.dueDate <= weekOutStr
@@ -407,8 +431,13 @@ export function useTodayData(): TodayData {
   }, [overdue, dueToday, myCards, focused, refresh]);
 
   const unfocusCard = useCallback(async (cardId: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    const userId = session.user.id;
     setFocused(prev => prev.filter(c => c.id !== cardId));
-    await supabase.from('board_cards').update({ is_focused: false }).eq('id', cardId);
+    const { data: card } = await supabase.from('board_cards').select('focused_by').eq('id', cardId).single();
+    const newFocusedBy = (card?.focused_by || []).filter((id: string) => id !== userId);
+    await supabase.from('board_cards').update({ focused_by: newFocusedBy }).eq('id', cardId);
   }, []);
 
   const toggleBoardStar = useCallback(async (boardId: string) => {

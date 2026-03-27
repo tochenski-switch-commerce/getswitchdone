@@ -169,11 +169,11 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
 
     const channel = supabase
       .channel(`board-realtime-${boardId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_cards' }, handleBoardScoped)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_columns' }, handleBoardScoped)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_labels' }, handleBoardScoped)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_boards' }, handleBoardScoped)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_custom_fields' }, handleBoardScoped)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_cards', filter: `board_id=eq.${boardId}` }, handleBoardScoped)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_columns', filter: `board_id=eq.${boardId}` }, handleBoardScoped)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_labels', filter: `board_id=eq.${boardId}` }, handleBoardScoped)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_boards', filter: `id=eq.${boardId}` }, handleBoardScoped)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_custom_fields', filter: `board_id=eq.${boardId}` }, handleBoardScoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'card_comments' }, handleCardScoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'card_checklists' }, handleCardScoped)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'card_label_assignments' }, handleCardScoped)

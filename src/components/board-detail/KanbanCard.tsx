@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import type { BoardCard, CardPriority } from '@/types/board-types';
 import {
   MessageSquare, CheckSquare, CalendarDays,
@@ -7,7 +8,7 @@ import {
 } from '@/components/BoardIcons';
 import { PRIORITY_CONFIG, formatRepeatSummary } from './helpers';
 
-export default function KanbanCard({
+function KanbanCard({
   card,
   onClick,
   isDragging,
@@ -16,6 +17,7 @@ export default function KanbanCard({
   onMoveToNext,
   onToggleComplete,
   isSnoozed,
+  currentUserId,
 }: {
   card: BoardCard;
   onClick: () => void;
@@ -25,6 +27,7 @@ export default function KanbanCard({
   onMoveToNext?: () => void;
   onToggleComplete?: () => void;
   isSnoozed?: boolean;
+  currentUserId?: string;
 }) {
   const pri = card.priority ? PRIORITY_CONFIG[card.priority] : null;
   const labels = card.labels || [];
@@ -126,7 +129,7 @@ export default function KanbanCard({
         >
           {card.title}
         </p>
-        {card.is_focused && (
+        {(card.focused_by ?? []).includes(currentUserId ?? '') && (
           <span title="Focused on Today" style={{ display: 'flex', alignItems: 'center', color: '#fa420f', flexShrink: 0 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"
               strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -236,3 +239,23 @@ export default function KanbanCard({
     </div>
   );
 }
+
+// Skip re-render if the card's content and visual state haven't changed.
+// Callbacks are intentionally excluded from the comparison: they are
+// recreated on every parent render but their logic depends only on card.id
+// (which is stable) and board state that changes in sync with updated_at.
+function areEqual(prev: React.ComponentProps<typeof KanbanCard>, next: React.ComponentProps<typeof KanbanCard>) {
+  return (
+    prev.card.id === next.card.id &&
+    prev.card.updated_at === next.card.updated_at &&
+    prev.card.is_complete === next.card.is_complete &&
+    JSON.stringify(prev.card.focused_by) === JSON.stringify(next.card.focused_by) &&
+    prev.currentUserId === next.currentUserId &&
+    prev.card.snoozed_until === next.card.snoozed_until &&
+    prev.isDragging === next.isDragging &&
+    prev.hasAlert === next.hasAlert &&
+    prev.isSnoozed === next.isSnoozed
+  );
+}
+
+export default React.memo(KanbanCard, areEqual);

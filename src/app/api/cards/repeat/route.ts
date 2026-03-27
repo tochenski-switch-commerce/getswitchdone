@@ -121,20 +121,45 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: 'No cards match today\'s schedule', created: 0 });
   }
 
-  // 3. Duplicate each matching card
+  // 3. Batch-fetch max positions for all unique column_ids and all label assignments up front
+  const uniqueColumnIds = [...new Set(cardsToRepeat.map(c => c.column_id))];
+  const sourceCardIds = cardsToRepeat.map(c => c.id);
+
+  const [posResults, labelsResults] = await Promise.all([
+    supabase
+      .from('board_cards')
+      .select('column_id, position')
+      .in('column_id', uniqueColumnIds)
+      .eq('is_archived', false)
+      .order('position', { ascending: false }),
+    supabase
+      .from('card_label_assignments')
+      .select('card_id, label_id')
+      .in('card_id', sourceCardIds),
+  ]);
+
+  // Max position per column_id (track in-flight inserts so same-column cards don't collide)
+  const maxPosMap = new Map<string, number>();
+  for (const row of posResults.data || []) {
+    if (!maxPosMap.has(row.column_id)) {
+      maxPosMap.set(row.column_id, row.position);
+    }
+  }
+  // Labels per source card_id
+  const labelsMap = new Map<string, string[]>();
+  for (const row of labelsResults.data || []) {
+    if (!labelsMap.has(row.card_id)) labelsMap.set(row.card_id, []);
+    labelsMap.get(row.card_id)!.push(row.label_id);
+  }
+
+  // 4. Duplicate each matching card
   let created = 0;
   const errors: string[] = [];
 
   for (const card of cardsToRepeat) {
-    const { data: posData } = await supabase
-      .from('board_cards')
-      .select('position')
-      .eq('column_id', card.column_id)
-      .eq('is_archived', false)
-      .order('position', { ascending: false })
-      .limit(1)
-      .single();
-    const nextPos = (posData?.position ?? 0) + 1;
+    const currentMax = maxPosMap.get(card.column_id) ?? 0;
+    const nextPos = currentMax + 1;
+    maxPosMap.set(card.column_id, nextPos); // bump for any subsequent card in same column
 
     // Compute new due_date: preserve the offset between start_date and due_date
     let newDueDate: string | null = null;
@@ -176,17 +201,12 @@ export async function GET(request: Request) {
       errors.push(`${card.id}: ${insertErr.message}`);
     } else {
       created++;
-      // Copy label assignments
-      if (inserted) {
-        const { data: labels } = await supabase
+      // Copy label assignments using pre-fetched data
+      const labelIds = labelsMap.get(card.id);
+      if (inserted && labelIds && labelIds.length > 0) {
+        await supabase
           .from('card_label_assignments')
-          .select('label_id')
-          .eq('card_id', card.id);
-        if (labels && labels.length > 0) {
-          await supabase
-            .from('card_label_assignments')
-            .insert(labels.map(l => ({ card_id: inserted.id, label_id: l.label_id })));
-        }
+          .insert(labelIds.map(label_id => ({ card_id: inserted.id, label_id })));
       }
     }
   }
