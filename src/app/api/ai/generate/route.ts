@@ -21,13 +21,14 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
-  const { action, boardTitle, columnName, cardTitle, cardDescription, existingChecklists, availableLabels, currentPriority } = body;
+  const { action, boardTitle, columnName, cardTitle, cardDescription, existingChecklists, checklistItems, availableLabels, currentPriority } = body;
 
   const context = [
     `Board: "${boardTitle}"`,
     columnName && `Column: "${columnName}"`,
     `Card title: "${cardTitle}"`,
     cardDescription && `Current description: "${cardDescription}"`,
+    checklistItems?.length && `Checklist items:\n${(checklistItems as string[]).map((t: string) => `- ${t}`).join('\n')}`,
   ].filter(Boolean).join('\n');
 
   try {
@@ -37,8 +38,8 @@ export async function POST(req: NextRequest) {
         model: gsdModel,
         schema: z.object({ description: z.string() }),
         prompt: hasExisting
-          ? `You are a project management assistant. Improve and expand this card description while keeping the original intent. Return clean HTML suitable for a contentEditable div (use <b>, <i>, <ul>, <li>, <p>, <h3> tags only — no wrapper div, no markdown).\n\n${context}`
-          : `You are a project management assistant. Write a concise, actionable card description based on the card title and context. Return clean HTML suitable for a contentEditable div (use <b>, <i>, <ul>, <li>, <p>, <h3> tags only — no wrapper div, no markdown). Keep it 2-4 sentences.\n\n${context}`,
+          ? `You are a senior project manager writing a professional card description. Improve and expand the existing content while keeping the original intent. Be clear and outcome-focused. Do NOT repeat or include the card title in the output. Return ONLY clean HTML using these tags: <b>, <ul>, <li>, <p>, <h3>. No markdown, no wrapper div, no inline styles, no other tags.\n\n${context}`
+          : `You are a senior project manager writing a professional card description. Based on the card title and any context provided, write a clear, outcome-focused description. Use authoritative language. Keep it brief — 2-4 sentences or a short bulleted structure if appropriate. Do NOT repeat or include the card title in the output. Return ONLY clean HTML using these tags: <b>, <ul>, <li>, <p>, <h3>. No markdown, no wrapper div, no inline styles, no other tags.\n\n${context}`,
       });
       return NextResponse.json(object);
     }

@@ -10,7 +10,7 @@ import FlameLoader from '@/components/FlameLoader';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import type { CardPriority } from '@/types/board-types';
 import { getBoardIcon, DEFAULT_ICON_COLOR } from '@/components/BoardIcons';
-import { Check, ArrowUpRight, X, Plus, Square, SquareCheck, MessageSquare, RotateCcw, Star, CircleCheck, Flame } from 'lucide-react';
+import { Check, X, Plus, Square, SquareCheck, MessageSquare, RotateCcw, Star, CircleCheck, Flame } from 'lucide-react';
 
 // ─── date/time helpers ───────────────────────────────────────────────────────
 
@@ -151,7 +151,7 @@ function FocusCard({ card, onComplete, onUnfocus }: { card: TodayCard; onComplet
         <span className="td-focus-board">{card.boardTitle}</span>
       </div>
 
-      <p className="td-focus-title">{card.title}</p>
+      <button className="td-focus-title" onClick={handleOpen}>{card.title}</button>
 
       {card.dueDate && (
         <p className="td-focus-due" style={{ color: dueDateColor(card.dueDate) }}>
@@ -166,10 +166,6 @@ function FocusCard({ card, onComplete, onUnfocus }: { card: TodayCard; onComplet
         >
           <Check size={14} strokeWidth={2.5} />
           Mark done
-        </button>
-        <button className="td-focus-open-btn" onClick={handleOpen}>
-          Open card
-          <ArrowUpRight size={12} strokeWidth={1.5} />
         </button>
         {onUnfocus && (
           <button
@@ -1067,8 +1063,22 @@ const todayStyles = `
     font-weight: 600;
     color: #f9fafb;
     margin: 0;
+    padding: 0;
     line-height: 1.35;
     letter-spacing: -0.01em;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    display: block;
+    width: 100%;
+    transition: color 0.15s;
+  }
+
+  .td-focus-title:hover {
+    color: #ffffff;
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .td-focus-due {
@@ -1108,28 +1118,7 @@ const todayStyles = `
     opacity: 0.6;
   }
 
-  .td-focus-open-btn {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 7px 14px;
-    background: transparent;
-    border: 1px solid #2a2d3a;
-    border-radius: 8px;
-    color: #6b7280;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .td-focus-open-btn:hover {
-    background: rgba(255,255,255,0.04);
-    color: #9ca3af;
-    border-color: #374151;
-  }
-
-  .td-focus-unfocus-btn {
+.td-focus-unfocus-btn {
     display: flex;
     align-items: center;
     justify-content: center;

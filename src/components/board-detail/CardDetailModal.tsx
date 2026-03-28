@@ -9,7 +9,7 @@ import {
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, Pencil,
   Check, Copy, LinkIcon, SlidersHorizontal, Repeat, ClipboardList,
   Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered,
-  ThumbsUp, ThumbsDown,
+  ThumbsUp, ThumbsDown, Star, GripVertical, Sparkles,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import CustomFieldInput from './CustomFieldInput';
@@ -33,6 +33,7 @@ export default function CardDetailModal({
   onEditChecklistItem,
   onToggleChecklistItem,
   onDeleteChecklistItem,
+  onReorderChecklistItems,
   onUpdateChecklistDueDate,
   onUpdateChecklistAssignees,
   onMoveCard,
@@ -48,6 +49,7 @@ export default function CardDetailModal({
   onSearchCards,
   userProfiles,
   onAddLabel,
+  accessToken,
 }: {
   card: BoardCard;
   board: FullBoard;
@@ -66,6 +68,7 @@ export default function CardDetailModal({
   onEditChecklistItem: (itemId: string, title: string) => Promise<void>;
   onToggleChecklistItem: (itemId: string, val: boolean) => Promise<void>;
   onDeleteChecklistItem: (itemId: string) => Promise<void>;
+  onReorderChecklistItems: (orderedIds: string[]) => Promise<void>;
   onUpdateChecklistDueDate: (itemId: string, dueDate: string | null) => Promise<void>;
   onUpdateChecklistAssignees: (itemId: string, assignees: string[]) => Promise<void>;
   onMoveCard: (newColumnId: string) => Promise<void>;
@@ -81,6 +84,7 @@ export default function CardDetailModal({
   onSearchCards: (query: string) => Promise<{ id: string; title: string; board_id: string; column_id: string; is_archived: boolean }[]>;
   userProfiles: UserProfile[];
   onAddLabel: (name: string, color: string) => Promise<BoardLabel>;
+  accessToken: string;
 }) {
   const [editTitle, setEditTitle] = useState(card.title);
   const [editDesc, setEditDesc] = useState(card.description || '');
@@ -107,15 +111,20 @@ export default function CardDetailModal({
   const [editingChecklistItemText, setEditingChecklistItemText] = useState('');
   const [editingDueDateItemId, setEditingDueDateItemId] = useState<string | null>(null);
   const [assigneePickerItemId, setAssigneePickerItemId] = useState<string | null>(null);
+  const [dragChecklistId, setDragChecklistId] = useState<string | null>(null);
+  const [dragOverChecklistId, setDragOverChecklistId] = useState<string | null>(null);
   // Checklist group state
-  const [addingChecklist, setAddingChecklist] = useState(false);
-  const [newChecklistName, setNewChecklistName] = useState('');
+  const [autoFocusNewChecklist, setAutoFocusNewChecklist] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState('');
   const [cardLinkSearch, setCardLinkSearch] = useState('');
   const [cardLinkResults, setCardLinkResults] = useState<{ id: string; title: string; board_id: string; column_id: string; is_archived: boolean }[]>([]);
   const [cardLinkSearching, setCardLinkSearching] = useState(false);
   const cardLinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // AI description state
+  const [aiDescGenerating, setAiDescGenerating] = useState(false);
+  const [aiDescPreview, setAiDescPreview] = useState<string | null>(null);
 
   // Repeat state
   const existingRule = card.repeat_rule;
@@ -436,10 +445,8 @@ export default function CardDetailModal({
   };
 
   const handleAddChecklistGroup = async () => {
-    const name = newChecklistName.trim() || 'Checklist';
-    await onAddChecklistGroup(name);
-    setNewChecklistName('');
-    setAddingChecklist(false);
+    await onAddChecklistGroup('Checklist');
+    setAutoFocusNewChecklist(true);
   };
 
   const handleCommitGroupName = async (groupId: string) => {
@@ -477,6 +484,42 @@ export default function CardDetailModal({
 
   const column = board.columns.find(c => c.id === card.column_id);
   const checklists = card.checklists || [];
+
+  const handleGenerateDesc = async () => {
+    setAiDescGenerating(true);
+    setAiDescPreview(null);
+    try {
+      const res = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          action: 'describe',
+          boardTitle: board.title,
+          columnName: column?.title,
+          cardTitle: editTitle,
+          cardDescription: editDesc ? editDesc.replace(/<[^>]+>/g, '').trim() : undefined,
+          checklistItems: checklists.map(c => c.title),
+        }),
+      });
+      if (!res.ok) throw new Error('AI request failed');
+      const data = await res.json();
+      setAiDescPreview(data.description || null);
+    } catch {
+      setAiDescPreview(null);
+    } finally {
+      setAiDescGenerating(false);
+    }
+  };
+
+  const applyAiDesc = (mode: 'replace' | 'append') => {
+    if (!aiDescPreview) return;
+    const newDesc = mode === 'append' && editDesc
+      ? editDesc + '<br>' + aiDescPreview
+      : aiDescPreview;
+    setEditDesc(newDesc);
+    if (descRef.current) descRef.current.innerHTML = newDesc;
+    setAiDescPreview(null);
+  };
   const checklistGroups = card.checklist_groups || [];
   const completedCount = checklists.filter(c => c.is_completed).length;
   const ungroupedItems = checklists.filter(cl => !cl.group_id);
@@ -484,9 +527,35 @@ export default function CardDetailModal({
   return (
     <div className="kb-modal-overlay" onMouseDown={handleClose}>
       <div className="kb-detail-modal" onMouseDown={e => e.stopPropagation()}>
-        {/* Close */}
+        {/* Header actions */}
         <div className="kb-detail-header-actions">
-          <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={handleClose}><X size={18} /></button>
+          <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+            {(() => {
+              const isFocused = (card.focused_by ?? []).includes(currentUserId ?? '');
+              return (
+                <button
+                  className="kb-detail-nav-btn"
+                  title={isFocused ? 'Remove focus' : 'Focus on Today'}
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={async () => {
+                    const prev = card.focused_by ?? [];
+                    const next = isFocused
+                      ? prev.filter(id => id !== currentUserId)
+                      : [...prev, currentUserId!];
+                    await onUpdate({ focused_by: next });
+                  }}
+                  style={isFocused ? {
+                    color: '#fa420f',
+                    borderColor: 'rgba(250,66,15,0.35)',
+                    background: 'rgba(250,66,15,0.08)',
+                  } : {}}
+                >
+                  <Star size={15} style={isFocused ? { fill: 'currentColor' } : {}} />
+                </button>
+              );
+            })()}
+            <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={handleClose}><X size={18} /></button>
+          </div>
         </div>
 
         <div className="kb-detail-body">
@@ -587,7 +656,39 @@ export default function CardDetailModal({
                     <Pencil size={11} />
                   </button>
                 )}
+                <button
+                  className="kb-btn kb-btn-sm kb-btn-ghost"
+                  onClick={handleGenerateDesc}
+                  disabled={aiDescGenerating}
+                  style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}
+                  title="Generate description with AI"
+                >
+                  <Sparkles size={11} />
+                  {aiDescGenerating ? 'Generating…' : 'AI'}
+                </button>
               </div>
+
+              {aiDescPreview !== null && (
+                <div className="kb-ai-preview">
+                  <div className="kb-ai-preview-label">
+                    <Sparkles size={11} /> AI-Generated Description
+                  </div>
+                  <div className="kb-ai-preview-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(aiDescPreview) }} />
+                  <div className="kb-ai-preview-actions">
+                    <button className="kb-btn kb-btn-sm kb-btn-primary" onClick={() => applyAiDesc('replace')}>
+                      {editDesc ? 'Replace existing' : 'Use this'}
+                    </button>
+                    {editDesc && (
+                      <button className="kb-btn kb-btn-sm kb-btn-primary" onClick={() => applyAiDesc('append')}>
+                        Append to existing
+                      </button>
+                    )}
+                    <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={() => setAiDescPreview(null)}>
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
               {editingDesc ? (
                 <div className="kb-rt-editor">
                   <div className="kb-rt-toolbar">
@@ -626,7 +727,7 @@ export default function CardDetailModal({
                   title="Double-click to edit"
                 >
                   {editDesc ? (
-                    <div dangerouslySetInnerHTML={{ __html: sanitizeRichText(editDesc) }} />
+                    <div style={{ whiteSpace: 'normal' }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(editDesc) }} />
                   ) : (
                     <span className="kb-desc-placeholder">Double-click to add a description...</span>
                   )}
@@ -648,33 +749,12 @@ export default function CardDetailModal({
                       Apply Template <ChevronDown size={11} />
                     </button>
                   )}
-                  {!addingChecklist && (
-                    <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={() => setAddingChecklist(true)}>
-                      <Plus size={11} /> Add Checklist
-                    </button>
-                  )}
+                  <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={handleAddChecklistGroup}>
+                    <Plus size={11} /> Add Checklist
+                  </button>
                 </div>
               </div>
 
-              {/* New checklist name input */}
-              {addingChecklist && (
-                <div className="kb-checklist-add" style={{ marginBottom: 8 }}>
-                  <input
-                    className="kb-input"
-                    value={newChecklistName}
-                    onChange={e => setNewChecklistName(e.target.value)}
-                    placeholder="Checklist name..."
-                    autoFocus
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleAddChecklistGroup();
-                      if (e.key === 'Escape') { setAddingChecklist(false); setNewChecklistName(''); }
-                    }}
-                    style={{ flex: 1 }}
-                  />
-                  <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={handleAddChecklistGroup}>Add</button>
-                  <button className="kb-btn kb-btn-sm" onClick={() => { setAddingChecklist(false); setNewChecklistName(''); }}>Cancel</button>
-                </div>
-              )}
 
               {/* Template picker */}
               {showTemplatePicker && checklistTemplates.length > 0 && (
@@ -790,7 +870,7 @@ export default function CardDetailModal({
               {[
                 ...(ungroupedItems.length > 0 ? [{ id: null as string | null, name: 'Checklist', items: ungroupedItems }] : []),
                 ...checklistGroups.map(g => ({ id: g.id, name: g.name, items: checklists.filter(cl => cl.group_id === g.id) })),
-              ].map(section => {
+              ].map((section, sectionIdx, sectionsArr) => {
                 const sectionKey = section.id ?? '__ungrouped__';
                 const sectionItems = section.items;
                 const sectionCompleted = sectionItems.filter(i => i.is_completed).length;
@@ -850,8 +930,36 @@ export default function CardDetailModal({
                         const dueDateVal = item.due_date ? item.due_date.slice(0, 10) : '';
                         const isOverdue = dueDateVal && !item.is_completed && dueDateVal < new Date().toISOString().slice(0, 10);
                         const isDueToday = dueDateVal && dueDateVal === new Date().toISOString().slice(0, 10);
+                        const isDragging = dragChecklistId === item.id;
+                        const isDragOver = dragOverChecklistId === item.id && dragChecklistId !== item.id;
                         return (
-                          <div key={item.id} className="kb-checklist-item">
+                          <div
+                            key={item.id}
+                            className={`kb-checklist-item${isDragOver ? ' drag-over' : ''}`}
+                            style={{ opacity: isDragging ? 0.4 : 1 }}
+                            draggable
+                            onDragStart={e => { e.stopPropagation(); setDragChecklistId(item.id); }}
+                            onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverChecklistId(item.id); }}
+                            onDragEnd={() => { setDragChecklistId(null); setDragOverChecklistId(null); }}
+                            onDrop={e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (!dragChecklistId || dragChecklistId === item.id) return;
+                              const ids = sectionItems.map(i => i.id);
+                              const fromIdx = ids.indexOf(dragChecklistId);
+                              const toIdx = ids.indexOf(item.id);
+                              if (fromIdx === -1 || toIdx === -1) return;
+                              const reordered = [...ids];
+                              reordered.splice(fromIdx, 1);
+                              reordered.splice(toIdx, 0, dragChecklistId);
+                              onReorderChecklistItems(reordered);
+                              setDragChecklistId(null);
+                              setDragOverChecklistId(null);
+                            }}
+                          >
+                            <span className="kb-checklist-drag-handle" onMouseDown={e => e.stopPropagation()}>
+                              <GripVertical size={12} />
+                            </span>
                             <button
                               className={`kb-checkbox ${item.is_completed ? 'checked' : ''}`}
                               onClick={() => onToggleChecklistItem(item.id, !item.is_completed)}
@@ -972,6 +1080,8 @@ export default function CardDetailModal({
                         onChange={e => setChecklistTexts(prev => ({ ...prev, [sectionKey]: e.target.value }))}
                         placeholder="Add checklist item..."
                         onKeyDown={e => e.key === 'Enter' && handleAddChecklistItem(section.id)}
+                        autoFocus={autoFocusNewChecklist && sectionIdx === sectionsArr.length - 1}
+                        onFocus={() => { if (autoFocusNewChecklist && sectionIdx === sectionsArr.length - 1) setAutoFocusNewChecklist(false); }}
                         style={{ flex: 1 }}
                       />
                       <button

@@ -1256,6 +1256,25 @@ export function useProjectBoard() {
     }
   }, []);
 
+  const reorderChecklistItems = useCallback(async (boardId: string, cardId: string, orderedIds: string[]) => {
+    setBoard(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cards: prev.cards.map(c => {
+          if (c.id !== cardId) return c;
+          const itemMap = new Map((c.checklists || []).map(cl => [cl.id, cl]));
+          const reordered = orderedIds.map((id, idx) => ({ ...itemMap.get(id)!, position: idx }));
+          const rest = (c.checklists || []).filter(cl => !orderedIds.includes(cl.id));
+          return { ...c, checklists: [...reordered, ...rest] };
+        }),
+      };
+    });
+    await Promise.all(orderedIds.map((id, idx) =>
+      supabase.from('card_checklists').update({ position: idx }).eq('id', id)
+    ));
+  }, []);
+
   // ─── Checklist Templates ────────────────────────────────────
   const fetchChecklistTemplates = useCallback(async (boardId: string) => {
     try {
@@ -2077,7 +2096,7 @@ export function useProjectBoard() {
     addCardLink, removeCardLink, searchCards, fetchCardDetail,
     addComment, editComment, deleteComment, reactToComment,
     addChecklistGroup, updateChecklistGroup, deleteChecklistGroup,
-    addChecklistItem, editChecklistItem, toggleChecklistItem, deleteChecklistItem, updateChecklistItemDueDate, updateChecklistItemAssignees,
+    addChecklistItem, editChecklistItem, toggleChecklistItem, deleteChecklistItem, reorderChecklistItems, updateChecklistItemDueDate, updateChecklistItemAssignees,
     fetchChecklistTemplates, saveChecklistTemplate, updateChecklistTemplate, deleteChecklistTemplate, applyChecklistTemplate,
     addLabel, updateLabel, deleteLabel,
     addCustomField, updateCustomField, deleteCustomField, setCardCustomFieldValue,

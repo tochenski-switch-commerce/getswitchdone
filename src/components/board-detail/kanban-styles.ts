@@ -1457,7 +1457,20 @@ export const kanbanStyles = `
     align-items: center;
     gap: 8px;
     padding: 4px 0;
+    border-radius: 6px;
+    transition: background 0.1s;
   }
+  .kb-checklist-item.drag-over { background: rgba(99, 102, 241, 0.12); }
+  .kb-checklist-drag-handle {
+    color: #4b5563;
+    cursor: grab;
+    opacity: 0;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    margin-left: -4px;
+  }
+  .kb-checklist-item:hover .kb-checklist-drag-handle { opacity: 1; }
   .kb-checkbox {
     width: 18px;
     height: 18px;
@@ -2057,6 +2070,12 @@ export const kanbanStyles = `
     margin: 4px 0;
     padding-left: 20px;
   }
+  .kb-rt-display ul { list-style-type: disc; }
+  .kb-rt-display ol { list-style-type: decimal; }
+  .kb-rt-display li { margin: 2px 0; display: list-item; }
+  .kb-rt-display p { margin: 4px 0; }
+  .kb-rt-display strong, .kb-rt-display b { font-weight: 600; }
+  .kb-rt-display em, .kb-rt-display i { font-style: italic; }
   .kb-comment-add { display: flex; flex-direction: column; position: relative; }
 
   /* ── @Mention Dropdown ── */

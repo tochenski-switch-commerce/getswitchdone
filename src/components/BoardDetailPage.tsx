@@ -64,7 +64,7 @@ function BoardPage() {
     addCard, updateCard, deleteCard, moveCard, reorderCardsInColumn,
     addComment, editComment, deleteComment, reactToComment,
     addChecklistGroup, updateChecklistGroup, deleteChecklistGroup,
-    addChecklistItem, editChecklistItem, toggleChecklistItem, deleteChecklistItem, updateChecklistItemDueDate, updateChecklistItemAssignees,
+    addChecklistItem, editChecklistItem, toggleChecklistItem, deleteChecklistItem, reorderChecklistItems, updateChecklistItemDueDate, updateChecklistItemAssignees,
     fetchChecklistTemplates, saveChecklistTemplate, updateChecklistTemplate, deleteChecklistTemplate, applyChecklistTemplate,
     checklistTemplates,
     addLabel, updateLabel, deleteLabel,
@@ -2004,6 +2004,7 @@ function BoardPage() {
           onEditChecklistItem={async (itemId, title) => { await editChecklistItem(boardId, activeCard.id, itemId, title); }}
           onToggleChecklistItem={async (itemId, val) => { await toggleChecklistItem(boardId, activeCard.id, itemId, val); }}
           onDeleteChecklistItem={async (itemId) => { await deleteChecklistItem(boardId, activeCard.id, itemId); }}
+          onReorderChecklistItems={async (orderedIds) => { await reorderChecklistItems(boardId, activeCard.id, orderedIds); }}
           onUpdateChecklistDueDate={async (itemId, dueDate) => { await updateChecklistItemDueDate(boardId, activeCard.id, itemId, dueDate); }}
           onUpdateChecklistAssignees={async (itemId, assignees) => {
             const item = activeCard.checklists?.find(cl => cl.id === itemId);
@@ -2066,6 +2067,7 @@ function BoardPage() {
           onRemoveCardLink={async (linkId) => { await removeCardLink(linkId); }}
           onSearchCards={async (query) => searchCards(boardId, query)}
           onAddLabel={async (name, color) => (await addLabel(boardId, name, color))!}
+          accessToken={session?.access_token || ''}
         />
         );
       })()}

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { X } from 'lucide-react';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
 import type { BoardCard } from '@/types/board-types';
 import FlameLoader from '@/components/FlameLoader';
@@ -94,16 +95,42 @@ export default function BoardOverviewPage() {
   const boardId = params?.id as string;
   const { fetchBoard, board, userProfiles, loading } = useProjectBoard();
 
-  const [searchText, setSearchText] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
-  const [filterAssignee, setFilterAssignee] = useState('');
-  const [filterDone, setFilterDone] = useState<'' | 'yes' | 'no'>('');
-  const [sortCol, setSortCol] = useState<'title' | 'column' | 'priority' | 'assignee' | 'due' | 'done' | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const filtersKey = `ov-filters-${boardId}`;
+  const readSaved = () => {
+    if (typeof window === 'undefined' || !boardId) return {} as Record<string, unknown>;
+    try { return JSON.parse(localStorage.getItem(filtersKey) ?? '{}'); } catch { return {}; }
+  };
+
+  const [searchText, setSearchText] = useState<string>(() => (readSaved().searchText as string) ?? '');
+  const [filterPriority, setFilterPriority] = useState<string>(() => (readSaved().filterPriority as string) ?? '');
+  const [filterAssignee, setFilterAssignee] = useState<string>(() => (readSaved().filterAssignee as string) ?? '');
+  const [filterDone, setFilterDone] = useState<'' | 'yes' | 'no'>(() => (readSaved().filterDone as '' | 'yes' | 'no') ?? '');
+  const [sortCol, setSortCol] = useState<'title' | 'column' | 'priority' | 'assignee' | 'due' | 'done' | null>(() => (readSaved().sortCol as 'title' | 'column' | 'priority' | 'assignee' | 'due' | 'done' | null) ?? null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() => (readSaved().sortDir as 'asc' | 'desc') ?? 'asc');
 
   useEffect(() => {
     if (boardId) fetchBoard(boardId);
   }, [boardId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist filters to localStorage whenever they change
+  useEffect(() => {
+    if (!boardId) return;
+    try {
+      localStorage.setItem(filtersKey, JSON.stringify({ searchText, filterPriority, filterAssignee, filterDone, sortCol, sortDir }));
+    } catch {}
+  }, [boardId, searchText, filterPriority, filterAssignee, filterDone, sortCol, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hasActiveFilters = !!(searchText || filterPriority || filterAssignee || filterDone || sortCol);
+
+  const handleResetFilters = () => {
+    setSearchText('');
+    setFilterPriority('');
+    setFilterAssignee('');
+    setFilterDone('');
+    setSortCol(null);
+    setSortDir('asc');
+    try { localStorage.removeItem(filtersKey); } catch {}
+  };
 
   const todayStr = useMemo(() => getTodayStr(), []);
 
@@ -128,7 +155,8 @@ const priorityBreakdown = useMemo(() => board ? computePriorityBreakdown(board) 
     const profileMap = new Map(userProfiles.map(p => [p.id, p.name]));
     const getAssigneeName = (card: BoardCard) => {
       const ids = (card.assignees && card.assignees.length > 0) ? card.assignees : (card.assignee ? [card.assignee] : []);
-      return ids.length > 0 ? (profileMap.get(ids[0]) ?? '\uffff') : '\uffff';
+      if (ids.length === 0) return '\uffff';
+      return profileMap.get(ids[0]) ?? ids[0];
     };
     return [...filteredCards].sort((a, b) => {
       switch (sortCol) {
@@ -514,6 +542,11 @@ const priorityBreakdown = useMemo(() => board ? computePriorityBreakdown(board) 
             <span className="kb-ov-filter-count">
               {filteredCards.length} of {board.cards.filter(c => !c.is_archived).length}
             </span>
+            {hasActiveFilters && (
+              <button className="kb-ov-reset-btn" onClick={handleResetFilters} title="Reset filters">
+                <X size={12} /> Reset
+              </button>
+            )}
           </div>
           {sortedCards.length === 0 ? (
             <div className="kb-ov-empty">No cards match your filters.</div>

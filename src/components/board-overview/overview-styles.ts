@@ -396,6 +396,25 @@ export const overviewStyles = `
     color: #6b7280;
     white-space: nowrap;
   }
+  .kb-ov-reset-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #9ca3af;
+    background: transparent;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .kb-ov-reset-btn:hover {
+    color: #f87171;
+    border-color: #f87171;
+  }
 
   /* ── Card table (filter results) ── */
   .kb-ov-card-table {
