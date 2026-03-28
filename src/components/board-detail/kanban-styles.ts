@@ -2899,6 +2899,11 @@ export const kanbanStyles = `
     /* Detail modal mobile */
     .kb-modal-overlay { padding: 8px 8px 80px; padding-top: max(8px, env(safe-area-inset-top, 8px)); }
     .kb-detail-modal { border-radius: 14px; max-width: calc(100vw - 16px); }
+    .kb-detail-header-actions { padding: 6px 8px 0; }
+    .kb-detail-nav-btn { width: 44px; height: 44px; border-radius: 10px; }
+    .kb-detail-close { padding: 10px; min-width: 44px; min-height: 44px; justify-content: center; align-items: center; border-radius: 10px; }
+    .kb-checklist-header { flex-wrap: wrap; gap: 4px 6px; }
+    .kb-checklist-actions { width: 100%; }
     .kb-detail-title-input { font-size: 17px !important; }
     .kb-detail-sidebar { padding: 20px 16px; }
     .kb-textarea { font-size: 14px !important; }

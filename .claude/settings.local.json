@@ -45,7 +45,14 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
       "Read(//Users/tripochenski/.cache/**)",
       "Read(//Users/tripochenski/Library/Caches/ms-playwright/**)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(node -e \"const p = require\\(''./node_modules/ai/package.json''\\); console.log\\(p.version\\)\")",
+      "Bash(node -e \"const ai = require\\(''./node_modules/ai''\\); const keys = Object.keys\\(ai\\).filter\\(k => k.includes\\(''generate''\\) || k.includes\\(''Generate''\\)\\); console.log\\(keys\\)\")",
+      "Bash(grep -rn generateObject node_modules/ai/dist/*.d.ts)",
+      "Bash(ls -la /Users/tripochenski/Documents/Projects/gsd-boards/src/app/\\\\\\(app\\\\\\)/)",
+      "Bash(ls -la /Users/tripochenski/Documents/Projects/gsd-boards/src/app/\\\\\\(app\\\\\\)/focus/)",
+      "Bash(grep -r focus /Users/tripochenski/Documents/Projects/gsd-boards/src/app --include=*.tsx --include=*.ts)",
+      "Bash(cat /Users/tripochenski/Documents/Projects/gsd-boards/src/app/\\\\\\(app\\\\\\)/today/page.tsx)"
     ],
     "additionalDirectories": [
       "/Users/tripochenski/Documents/Projects/gsd-boards/373s|href=\"\"\"\"/auth\"\"\"\"|href=\"\"\"\"",

@@ -61,7 +61,7 @@ export default function CardDetailModal({
   onDeleteComment: (commentId: string) => Promise<void>;
   onReactToComment: (commentId: string, reaction: 'like' | 'dislike') => Promise<void>;
   currentUserId?: string;
-  onAddChecklistGroup: (name: string) => Promise<void>;
+  onAddChecklistGroup: (name: string) => Promise<{ id: string } | null | void>;
   onUpdateChecklistGroup: (groupId: string, name: string) => Promise<void>;
   onDeleteChecklistGroup: (groupId: string) => Promise<void>;
   onAddChecklistItem: (title: string, groupId?: string | null) => Promise<void>;
@@ -125,6 +125,12 @@ export default function CardDetailModal({
   // AI description state
   const [aiDescGenerating, setAiDescGenerating] = useState(false);
   const [aiDescPreview, setAiDescPreview] = useState<string | null>(null);
+
+  // AI checklist state
+  const [aiChecklistGenerating, setAiChecklistGenerating] = useState(false);
+  const [aiChecklistItems, setAiChecklistItems] = useState<{ title: string; selected: boolean }[] | null>(null);
+  const [aiChecklistTargetGroup, setAiChecklistTargetGroup] = useState<string>('__ungrouped__');
+  const [aiChecklistNewGroupName, setAiChecklistNewGroupName] = useState('New Checklist');
 
   // Repeat state
   const existingRule = card.repeat_rule;
@@ -520,6 +526,72 @@ export default function CardDetailModal({
     if (descRef.current) descRef.current.innerHTML = newDesc;
     setAiDescPreview(null);
   };
+
+  const handleGenerateChecklist = async () => {
+    setAiChecklistGenerating(true);
+    setAiChecklistItems(null);
+    try {
+      const res = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          action: 'checklist',
+          boardTitle: board.title,
+          columnName: column?.title,
+          cardTitle: editTitle,
+          cardDescription: editDesc ? editDesc.replace(/<[^>]+>/g, '').trim() : undefined,
+          existingChecklists: checklists.map(c => c.title),
+        }),
+      });
+      if (!res.ok) throw new Error('AI request failed');
+      const data = await res.json();
+      const items: { title: string; selected: boolean }[] = (data.items || []).map((t: string) => ({ title: t, selected: true }));
+      setAiChecklistItems(items);
+      // Default target group: first group if any, otherwise ungrouped
+      const groups = card.checklist_groups || [];
+      setAiChecklistTargetGroup(groups.length > 0 ? groups[0].id : '__ungrouped__');
+    } catch {
+      setAiChecklistItems(null);
+    } finally {
+      setAiChecklistGenerating(false);
+    }
+  };
+
+  const applyAiChecklist = async (mode: 'add' | 'replace') => {
+    if (!aiChecklistItems) return;
+    const selected = aiChecklistItems.filter(i => i.selected);
+    if (selected.length === 0) { setAiChecklistItems(null); return; }
+
+    let groupId: string | null;
+
+    if (aiChecklistTargetGroup === '__new__') {
+      const name = aiChecklistNewGroupName.trim() || 'New Checklist';
+      const result = await onAddChecklistGroup(name);
+      groupId = (result && typeof result === 'object' && 'id' in result) ? result.id : null;
+      if (!groupId) {
+        // Fallback: find the newly created group by name in updated card state
+        const created = (card.checklist_groups || []).find(g => g.name === name);
+        groupId = created?.id ?? null;
+      }
+    } else {
+      groupId = aiChecklistTargetGroup === '__ungrouped__' ? null : aiChecklistTargetGroup;
+    }
+
+    if (mode === 'replace') {
+      const targetItems = groupId
+        ? checklists.filter(c => c.group_id === groupId)
+        : checklists.filter(c => !c.group_id);
+      for (const item of targetItems) {
+        await onDeleteChecklistItem(item.id);
+      }
+    }
+
+    for (const item of selected) {
+      await onAddChecklistItem(item.title, groupId);
+    }
+    setAiChecklistItems(null);
+  };
+
   const checklistGroups = card.checklist_groups || [];
   const completedCount = checklists.filter(c => c.is_completed).length;
   const ungroupedItems = checklists.filter(cl => !cl.group_id);
@@ -529,33 +601,31 @@ export default function CardDetailModal({
       <div className="kb-detail-modal" onMouseDown={e => e.stopPropagation()}>
         {/* Header actions */}
         <div className="kb-detail-header-actions">
-          <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
-            {(() => {
-              const isFocused = (card.focused_by ?? []).includes(currentUserId ?? '');
-              return (
-                <button
-                  className="kb-detail-nav-btn"
-                  title={isFocused ? 'Remove focus' : 'Focus on Today'}
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={async () => {
-                    const prev = card.focused_by ?? [];
-                    const next = isFocused
-                      ? prev.filter(id => id !== currentUserId)
-                      : [...prev, currentUserId!];
-                    await onUpdate({ focused_by: next });
-                  }}
-                  style={isFocused ? {
-                    color: '#fa420f',
-                    borderColor: 'rgba(250,66,15,0.35)',
-                    background: 'rgba(250,66,15,0.08)',
-                  } : {}}
-                >
-                  <Star size={15} style={isFocused ? { fill: 'currentColor' } : {}} />
-                </button>
-              );
-            })()}
-            <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={handleClose}><X size={18} /></button>
-          </div>
+          {(() => {
+            const isFocused = (card.focused_by ?? []).includes(currentUserId ?? '');
+            return (
+              <button
+                className="kb-detail-nav-btn"
+                title={isFocused ? 'Remove focus' : 'Focus on Today'}
+                onMouseDown={e => e.preventDefault()}
+                onClick={async () => {
+                  const prev = card.focused_by ?? [];
+                  const next = isFocused
+                    ? prev.filter(id => id !== currentUserId)
+                    : [...prev, currentUserId!];
+                  await onUpdate({ focused_by: next });
+                }}
+                style={isFocused ? {
+                  color: '#fa420f',
+                  borderColor: 'rgba(250,66,15,0.35)',
+                  background: 'rgba(250,66,15,0.08)',
+                } : {}}
+              >
+                <Star size={15} style={isFocused ? { fill: 'currentColor' } : {}} />
+              </button>
+            );
+          })()}
+          <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={handleClose}><X size={18} /></button>
         </div>
 
         <div className="kb-detail-body">
@@ -738,23 +808,131 @@ export default function CardDetailModal({
             {/* Checklists */}
             <div style={{ marginBottom: 16 }}>
               {/* Section header */}
-              <div className="kb-detail-section-label" style={{ justifyContent: 'space-between' }}>
+              <div className="kb-detail-section-label kb-checklist-header" style={{ justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <CheckSquare size={13} />
                   Checklists {checklists.length > 0 && `(${completedCount}/${checklists.length})`}
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
+                <div className="kb-checklist-actions" style={{ display: 'flex', gap: 4 }}>
                   {checklistTemplates.length > 0 && (
-                    <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={() => setShowTemplatePicker(!showTemplatePicker)}>
-                      Apply Template <ChevronDown size={11} />
+                    <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={() => setShowTemplatePicker(!showTemplatePicker)} title="Apply template" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <ClipboardList size={11} /><span className="kb-checklist-btn-label">+ Template</span> <ChevronDown size={11} />
                     </button>
                   )}
-                  <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={handleAddChecklistGroup}>
-                    <Plus size={11} /> Add Checklist
+                  <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={handleAddChecklistGroup} title="Add checklist" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Plus size={11} /><span className="kb-checklist-btn-label">Checklist</span>
+                  </button>
+                  <button
+                    className="kb-btn kb-btn-sm kb-btn-ghost"
+                    onClick={handleGenerateChecklist}
+                    disabled={aiChecklistGenerating}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                    title="Suggest checklist items with AI"
+                  >
+                    <Sparkles size={11} />
+                    <span className="kb-checklist-btn-label">{aiChecklistGenerating ? 'Generating…' : 'AI'}</span>
                   </button>
                 </div>
               </div>
 
+              {/* AI checklist preview */}
+              {aiChecklistItems !== null && (
+                <div className="kb-ai-preview">
+                  <div className="kb-ai-preview-label">
+                    <Sparkles size={11} /> AI-Suggested Checklist Items
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+                    {aiChecklistItems.map((item, idx) => (
+                      <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#d1d5db' }}>
+                        <input
+                          type="checkbox"
+                          checked={item.selected}
+                          onChange={() => setAiChecklistItems(prev => prev!.map((it, i) => i === idx ? { ...it, selected: !it.selected } : it))}
+                          style={{ accentColor: '#6366f1', width: 14, height: 14, cursor: 'pointer' }}
+                        />
+                        {item.title}
+                      </label>
+                    ))}
+                  </div>
+                  {(() => {
+                    const groups = card.checklist_groups || [];
+                    const sections: { id: string; name: string }[] = [
+                      ...(ungroupedItems.length > 0 || groups.length === 0 ? [{ id: '__ungrouped__', name: 'Checklist' }] : []),
+                      ...groups.map(g => ({ id: g.id, name: g.name })),
+                      { id: '__new__', name: '+ New list' },
+                    ];
+                    return (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Add to</div>
+                        <div style={{ display: 'inline-flex', border: '1px solid #2a2d3a', borderRadius: 6, overflow: 'hidden' }}>
+                          {sections.map((s, i) => (
+                            <button
+                              key={s.id}
+                              onClick={() => setAiChecklistTargetGroup(s.id)}
+                              style={{
+                                padding: '5px 12px',
+                                fontSize: 12,
+                                border: 'none',
+                                borderRight: i < sections.length - 1 ? '1px solid #2a2d3a' : 'none',
+                                background: aiChecklistTargetGroup === s.id ? 'rgba(99,102,241,0.18)' : 'transparent',
+                                color: aiChecklistTargetGroup === s.id ? '#a5b4fc' : (s.id === '__new__' ? '#6366f1' : '#9ca3af'),
+                                cursor: 'pointer',
+                                fontWeight: aiChecklistTargetGroup === s.id ? 600 : 400,
+                                transition: 'background 0.12s, color 0.12s',
+                              }}
+                            >
+                              {s.name}
+                            </button>
+                          ))}
+                        </div>
+                        {aiChecklistTargetGroup === '__new__' && (
+                          <input
+                            type="text"
+                            value={aiChecklistNewGroupName}
+                            onChange={e => setAiChecklistNewGroupName(e.target.value)}
+                            placeholder="List name"
+                            autoFocus
+                            style={{
+                              display: 'block',
+                              marginTop: 8,
+                              width: '100%',
+                              padding: '5px 8px',
+                              fontSize: 13,
+                              background: '#1a1d27',
+                              border: '1px solid #2a2d3a',
+                              borderRadius: 5,
+                              color: '#e5e7eb',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <div style={{ borderTop: '1px solid rgba(99,102,241,0.15)', paddingTop: 8 }} className="kb-ai-preview-actions">
+                    <button
+                      className="kb-btn kb-btn-sm kb-btn-primary"
+                      onClick={() => applyAiChecklist('add')}
+                      disabled={!aiChecklistItems.some(i => i.selected)}
+                    >
+                      {checklists.length > 0 ? 'Add selected' : 'Use selected'}
+                    </button>
+                    {checklists.length > 0 && (
+                      <button
+                        className="kb-btn kb-btn-sm kb-btn-primary"
+                        onClick={() => applyAiChecklist('replace')}
+                        disabled={!aiChecklistItems.some(i => i.selected)}
+                      >
+                        Replace existing
+                      </button>
+                    )}
+                    <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={() => setAiChecklistItems(null)}>
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Template picker */}
               {showTemplatePicker && checklistTemplates.length > 0 && (

@@ -833,7 +833,6 @@ const todayStyles = `
     background: linear-gradient(160deg, #12151f 0%, #0f1117 100%);
     border-bottom: 1px solid #1e2130;
     padding: 0 16px 20px;
-    padding-top: env(safe-area-inset-top, 0px);
   }
 
   .td-banner-inner {

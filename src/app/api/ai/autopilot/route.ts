@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateObject } from 'ai';
+import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { gsdModel } from '@/lib/ai';
 import { createClient } from '@supabase/supabase-js';
@@ -185,9 +185,9 @@ async function generateStandupSummary(
   const recentlyUpdated = cards.filter(c => (c.updated_at as string) >= yesterday);
   const dueSoon = cards.filter(c => c.due_date && (c.due_date as string) >= today && (c.due_date as string) <= new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0]);
 
-  const { object } = await generateObject({
+  const result = await generateText({
     model: gsdModel,
-    schema: z.object({ summary: z.string() }),
+    output: Output.object({ schema: z.object({ summary: z.string() }) }),
     prompt: `Write a brief standup-style board summary (3-5 sentences, plain text). Be direct and actionable.
 
 Board state:
@@ -200,7 +200,7 @@ Due in next 3 days: ${dueSoon.length > 0 ? dueSoon.map(c => `"${c.title}" (${c.d
 Focus on: what's moving, what's stuck, and what's coming up.`,
   });
 
-  return object.summary;
+  return result.output.summary;
 }
 
 /* ── POST handler ── */

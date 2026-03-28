@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateObject } from 'ai';
+import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { gsdModel } from '@/lib/ai';
 import { createClient } from '@supabase/supabase-js';
@@ -38,16 +38,18 @@ export async function POST(req: NextRequest) {
   const today = new Date().toISOString().split('T')[0];
 
   try {
-    const { object } = await generateObject({
+    const result = await generateText({
       model: gsdModel,
-      schema: z.object({
-        cards: z.array(z.object({
-          title: z.string(),
-          description: z.string().optional(),
-          priority: z.enum(['low', 'medium', 'high', 'urgent']),
-          assigneeName: z.string().optional(),
-          dueDate: z.string().optional(),
-        })),
+      output: Output.object({
+        schema: z.object({
+          cards: z.array(z.object({
+            title: z.string(),
+            description: z.string().optional(),
+            priority: z.enum(['low', 'medium', 'high', 'urgent']),
+            assigneeName: z.string().optional(),
+            dueDate: z.string().optional(),
+          })),
+        }),
       }),
       prompt: [
         'You are a project management assistant. Extract action items from the meeting notes below.',
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest) {
       ].join('\n'),
     });
 
-    return NextResponse.json(object);
+    return NextResponse.json(result.output);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'AI extraction failed';
     return NextResponse.json({ error: message }, { status: 500 });

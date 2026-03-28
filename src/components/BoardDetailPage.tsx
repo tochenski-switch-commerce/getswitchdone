@@ -1133,18 +1133,6 @@ function BoardPage() {
           </button>
 
 
-          {/* GSD AI */}
-          <button
-            className={`kb-btn-icon ${showAiPanel ? 'kb-btn-icon-active' : ''}`}
-            onClick={() => {
-              if (!canUseAI) { showPaywall(); return; }
-              setShowAiPanel(!showAiPanel);
-            }}
-            title="GSD AI"
-          >
-            <BotMessageSquare size={16} />
-          </button>
-
           {/* Star board */}
           <button
             className="kb-btn-icon"
@@ -1997,7 +1985,7 @@ function BoardPage() {
             }
           }}
           currentUserId={user?.id}
-          onAddChecklistGroup={async (name) => { await addChecklistGroup(boardId, activeCard.id, name); }}
+          onAddChecklistGroup={async (name) => { return await addChecklistGroup(boardId, activeCard.id, name); }}
           onUpdateChecklistGroup={async (groupId, name) => { await updateChecklistGroup(boardId, activeCard.id, groupId, name); }}
           onDeleteChecklistGroup={async (groupId) => { await deleteChecklistGroup(boardId, activeCard.id, groupId); }}
           onAddChecklistItem={async (title, groupId) => { await addChecklistItem(boardId, activeCard.id, title, groupId); }}
