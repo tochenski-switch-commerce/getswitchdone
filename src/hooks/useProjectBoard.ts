@@ -2086,6 +2086,70 @@ export function useProjectBoard() {
     });
   }, []);
 
+  const archiveCard = useCallback(async (boardId: string, cardId: string, currentColumnId: string) => {
+    setError(null);
+    try {
+      const now = new Date().toISOString();
+      const { error: err } = await supabase
+        .from('board_cards')
+        .update({ is_archived: true, archived_at: now, pre_archive_column_id: currentColumnId })
+        .eq('id', cardId);
+      if (err) throw err;
+
+      setBoard(prev => {
+        if (!prev) return prev;
+        return { ...prev, cards: prev.cards.filter(c => c.id !== cardId) };
+      });
+    } catch (err: any) {
+      console.error('[archiveCard] failed:', err.message);
+      setError(err.message);
+    }
+  }, []);
+
+  const restoreCard = useCallback(async (boardId: string, cardId: string, targetColumnId: string) => {
+    setError(null);
+    try {
+      const { data, error: err } = await supabase
+        .from('board_cards')
+        .update({ is_archived: false, archived_at: null, pre_archive_column_id: null, column_id: targetColumnId, position: 0 })
+        .eq('id', cardId)
+        .select('*, labels:card_label_assignments(label:board_labels(*))')
+        .single();
+      if (err) throw err;
+
+      const restored: BoardCard = {
+        ...data,
+        labels: (data.labels || []).map((a: any) => a.label).filter(Boolean),
+        comments: [],
+        checklists: [],
+      };
+
+      setBoard(prev => {
+        if (!prev) return prev;
+        return { ...prev, cards: [restored, ...prev.cards] };
+      });
+    } catch (err: any) {
+      console.error('[restoreCard] failed:', err.message);
+      setError(err.message);
+    }
+  }, []);
+
+  const fetchArchivedCards = useCallback(async (boardId: string): Promise<BoardCard[]> => {
+    try {
+      const { data, error: err } = await supabase
+        .from('board_cards')
+        .select('*')
+        .eq('board_id', boardId)
+        .eq('is_archived', true)
+        .order('archived_at', { ascending: false });
+      if (err) throw err;
+      return (data || []) as BoardCard[];
+    } catch (err: any) {
+      console.error('[fetchArchivedCards] failed:', err.message);
+      return [];
+    }
+  }, []);
+
   return {
     boards, board, loading, error, checklistTemplates, userProfiles, boardMembers, notifications,
     boardEmails, unroutedEmails,
@@ -2093,6 +2157,7 @@ export function useProjectBoard() {
     addColumn, updateColumn, deleteColumn, reorderColumns,
     addBoardLink, removeBoardLink, reorderBoardLinks,
     addCard, updateCard, deleteCard, moveCard, reorderCardsInColumn,
+    archiveCard, restoreCard, fetchArchivedCards,
     addCardLink, removeCardLink, searchCards, fetchCardDetail,
     addComment, editComment, deleteComment, reactToComment,
     addChecklistGroup, updateChecklistGroup, deleteChecklistGroup,

@@ -15,7 +15,7 @@ import {
   Zap, Bold, Italic, Underline, Strikethrough,
   LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, FileText, Mail, Clock,
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
-  BotMessageSquare, GripVertical, BarChart3,
+  BotMessageSquare, GripVertical, BarChart3, Archive,
 } from '@/components/BoardIcons';
 import dynamic from 'next/dynamic';
 import FlameLoader from '@/components/FlameLoader';
@@ -38,6 +38,7 @@ const ListActionsModal = dynamic(() => import('./board-detail/ListActionsModal')
 const CustomFieldManagerModal = dynamic(() => import('./board-detail/CustomFieldManagerModal'), { ssr: false });
 const ColumnAutomationsModal = dynamic(() => import('./board-detail/ColumnAutomationsModal'), { ssr: false });
 const BoardAutomationsModal = dynamic(() => import('./board-detail/BoardAutomationsModal'), { ssr: false });
+const ArchiveDrawer = dynamic(() => import('./board-detail/ArchiveDrawer'), { ssr: false });
 import { kanbanStyles } from './board-detail/kanban-styles';
 import { hapticLight, hapticMedium, hapticHeavy, hapticSelection } from '@/lib/haptics';
 
@@ -62,6 +63,7 @@ function BoardPage() {
     addColumn, updateColumn, deleteColumn, reorderColumns,
     addBoardLink, removeBoardLink, reorderBoardLinks,
     addCard, updateCard, deleteCard, moveCard, reorderCardsInColumn,
+    archiveCard, restoreCard, fetchArchivedCards,
     addComment, editComment, deleteComment, reactToComment,
     addChecklistGroup, updateChecklistGroup, deleteChecklistGroup,
     addChecklistItem, editChecklistItem, toggleChecklistItem, deleteChecklistItem, reorderChecklistItems, updateChecklistItemDueDate, updateChecklistItemAssignees,
@@ -162,6 +164,9 @@ function BoardPage() {
   const [automationsColId, setAutomationsColId] = useState<string | null>(null);
   const [colorPickerColId, setColorPickerColId] = useState<string | null>(null);
   const [showBoardAutomations, setShowBoardAutomations] = useState(false);
+  const [showArchiveDrawer, setShowArchiveDrawer] = useState(false);
+  const [archivedCards, setArchivedCards] = useState<import('@/types/board-types').BoardCard[]>([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
   const boardAutoRanRef = useRef<string | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [zoomedColId, setZoomedColId] = useState<string | null>(null);
@@ -661,7 +666,6 @@ function BoardPage() {
       await addCard(boardId, { column_id: colId, title: cleanTitle, ...(labelIds.length ? { label_ids: labelIds } : {}) });
       hapticMedium();
       setNewCardTitle('');
-      setAddingCardCol(null);
     } finally {
       addingCardRef.current = false;
     }
@@ -859,6 +863,9 @@ function BoardPage() {
             runBoardAutomation(card, 'assignee_added');
           }
         }
+      } else if (e.key === 'a') {
+        e.preventDefault();
+        archiveCard(boardId, card.id, card.column_id);
       } else if (e.key === 'Enter') {
         e.preventDefault();
         openCardDetail(card);
@@ -866,7 +873,7 @@ function BoardPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [hoveredCardId, activeCard, board, boardId, user, profile, addCard, deleteCard, updateCard, addChecklistItem, openCardDetail, navigateCard]);
+  }, [hoveredCardId, activeCard, board, boardId, user, profile, addCard, deleteCard, updateCard, addChecklistItem, openCardDetail, navigateCard, archiveCard]);
 
   if (!board) {
     return (
@@ -1160,6 +1167,25 @@ function BoardPage() {
             {showNotePanel ? 'Close Notes' : 'Notes'}
           </button>
 
+
+          {/* Archive drawer */}
+          <button
+            className={`kb-btn-icon${showArchiveDrawer ? ' kb-btn-icon-active' : ''}`}
+            onClick={async () => {
+              if (!showArchiveDrawer) {
+                setArchiveLoading(true);
+                setShowArchiveDrawer(true);
+                const cards = await fetchArchivedCards(boardId);
+                setArchivedCards(cards);
+                setArchiveLoading(false);
+              } else {
+                setShowArchiveDrawer(false);
+              }
+            }}
+            title="View archived cards"
+          >
+            <Archive size={16} />
+          </button>
 
           {/* Star board */}
           <button
@@ -1953,6 +1979,8 @@ function BoardPage() {
           <span className="kb-shortcut-bar-sep">·</span>
           <span className="kb-shortcut-bar-item"><kbd>M</kbd> Assign me</span>
           <span className="kb-shortcut-bar-sep">·</span>
+          <span className="kb-shortcut-bar-item"><kbd>A</kbd> Archive</span>
+          <span className="kb-shortcut-bar-sep">·</span>
           <span className="kb-shortcut-bar-item"><kbd>⌫</kbd> Delete</span>
         </div>
       )}
@@ -2010,6 +2038,7 @@ function BoardPage() {
             }
           }}
           onDelete={async () => { await deleteCard(boardId, activeCard.id); setSelectedCard(null); }}
+          onArchive={async () => { await archiveCard(boardId, activeCard.id, activeCard.column_id); setSelectedCard(null); }}
           onAddComment={async (content) => {
             const result = await addComment(boardId, activeCard.id, content);
             if (!result) return;
@@ -2158,6 +2187,12 @@ function BoardPage() {
             board={board}
             onUpdateCard={async (cardId, updates) => { markCardUpdated(cardId); await updateCard(boardId, cardId, updates); }}
             onDeleteCard={async (cardId) => { await deleteCard(boardId, cardId); }}
+            onArchiveCards={async (cardIds) => {
+              for (const id of cardIds) {
+                const card = board?.cards.find(c => c.id === id);
+                if (card) await archiveCard(boardId, id, card.column_id);
+              }
+            }}
             onMoveCard={async (cardId, newColId) => {
               await moveCard(boardId, cardId, newColId, 0);
               await runColumnAutomations(cardId, newColId);
@@ -2210,6 +2245,20 @@ function BoardPage() {
             await updateBoard(boardId, { automations } as any);
           }}
           onClose={() => setShowBoardAutomations(false)}
+        />
+      )}
+
+      {/* ── Archive Drawer ── */}
+      {showArchiveDrawer && board && (
+        <ArchiveDrawer
+          board={board}
+          archivedCards={archivedCards}
+          loading={archiveLoading}
+          onClose={() => setShowArchiveDrawer(false)}
+          onRestore={async (cardId, columnId) => {
+            await restoreCard(boardId, cardId, columnId);
+            setArchivedCards(prev => prev.filter(c => c.id !== cardId));
+          }}
         />
       )}
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { X } from 'lucide-react';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
 import type { BoardCard } from '@/types/board-types';
@@ -92,7 +92,9 @@ const priorityBadge = (priority: string | null | undefined) => {
 export default function BoardOverviewPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const boardId = params?.id as string;
+  const autoPrint = searchParams?.get('print') === '1';
   const { fetchBoard, board, userProfiles, loading } = useProjectBoard();
 
   const filtersKey = `ov-filters-${boardId}`;
@@ -334,6 +336,13 @@ const priorityBreakdown = useMemo(() => board ? computePriorityBreakdown(board) 
       <div class="ftr"><span>Lumio · ${boardTitle}</span><span>${sortedCards.length + timelineTotal} total cards</span></div>`;
     openPrint(`${board?.title ?? 'Board'} — Overview Report`, body);
   };
+
+  // Auto-trigger Print All when navigated here with ?print=1
+  useEffect(() => {
+    if (!autoPrint || loading || !board || !summary) return;
+    handlePrintAll();
+    router.replace(`/boards/${boardId}/overview`);
+  }, [autoPrint, loading, board, summary]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || !board || !summary) {
     return (

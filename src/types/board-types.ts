@@ -141,6 +141,8 @@ export interface BoardCard {
   is_focused?: boolean;
   focused_by?: string[];
   snoozed_until?: string | null;
+  archived_at?: string | null;
+  pre_archive_column_id?: string | null;
 }
 
 export interface CardLabelAssignment {

@@ -5,7 +5,7 @@ import type { BoardCard, BoardColumn, CardPriority, ChecklistTemplate, UserProfi
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   CalendarDays, User, Flag, Tag, ArrowDownAZ,
-  CheckSquare, FolderKanban, Trash2, X, Zap, Check, Target, Palette,
+  CheckSquare, FolderKanban, Trash2, X, Zap, Check, Target, Palette, Archive,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import { PRIORITY_CONFIG, LABEL_COLORS } from './helpers';
@@ -22,6 +22,7 @@ export default function ListActionsModal({
   onApplyTemplate,
   onSortCards,
   onUpdateColumn,
+  onArchiveCards,
   onClose,
   userProfiles,
 }: {
@@ -36,6 +37,7 @@ export default function ListActionsModal({
   onApplyTemplate: (cardId: string, templateId: string) => Promise<void>;
   onSortCards: (columnId: string, direction: 'asc' | 'desc') => Promise<void>;
   onUpdateColumn: (updates: { card_limit?: number | null; color?: string }) => Promise<void>;
+  onArchiveCards: (cardIds: string[]) => Promise<void>;
   onClose: () => void;
   userProfiles: UserProfile[];
 }) {
@@ -435,6 +437,26 @@ export default function ListActionsModal({
                   </div>
                 </div>
               )}
+
+              {/* Archive All */}
+              <div className="kb-list-action-row">
+                <div className="kb-list-action-label"><Archive size={13} /> Archive All Cards</div>
+                <div className="kb-list-action-controls">
+                  <button
+                    className="kb-btn kb-btn-sm"
+                    style={{ background: 'transparent', color: '#9ca3af', border: '1px solid #374151' }}
+                    disabled={applying}
+                    onClick={() => {
+                      if (!confirm(`Archive all ${cards.length} cards from "${column.title}"?`)) return;
+                      apply('Archive', async () => {
+                        await onArchiveCards(cards.map(c => c.id));
+                      });
+                    }}
+                  >
+                    Archive {cards.length} Card{cards.length !== 1 ? 's' : ''}
+                  </button>
+                </div>
+              </div>
 
               {/* Clear All */}
               <div className="kb-list-action-row kb-list-action-danger">

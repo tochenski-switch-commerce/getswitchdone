@@ -9,7 +9,7 @@ import {
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, Pencil,
   Check, Copy, LinkIcon, SlidersHorizontal, Repeat, ClipboardList,
   Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered,
-  ThumbsUp, ThumbsDown, Star, GripVertical, Sparkles,
+  ThumbsUp, ThumbsDown, Star, GripVertical, Sparkles, Archive,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import CustomFieldInput from './CustomFieldInput';
@@ -43,6 +43,7 @@ export default function CardDetailModal({
   onDeleteTemplate,
   onApplyTemplate,
   onDuplicate,
+  onArchive,
   onSetCustomFieldValue,
   onAddCardLink,
   onRemoveCardLink,
@@ -78,6 +79,7 @@ export default function CardDetailModal({
   onDeleteTemplate: (templateId: string) => Promise<void>;
   onApplyTemplate: (templateId: string) => Promise<void>;
   onDuplicate: () => Promise<void>;
+  onArchive: () => Promise<void>;
   onSetCustomFieldValue: (cardId: string, fieldId: string, value?: string, multiValue?: string[]) => Promise<void>;
   onAddCardLink: (targetCardId: string) => Promise<void>;
   onRemoveCardLink: (linkId: string) => Promise<void>;
@@ -2044,6 +2046,19 @@ export default function CardDetailModal({
                   </div>
                 </div>
               )}
+
+              <button
+                className="kb-btn kb-btn-ghost"
+                onClick={async () => {
+                  await onArchive();
+                  onClose();
+                }}
+                style={{ width: '100%', justifyContent: 'center' }}
+                title="Archive this card (A)"
+              >
+                <Archive size={13} />
+                Archive Card
+              </button>
 
               <button
                 className="kb-btn kb-btn-danger"

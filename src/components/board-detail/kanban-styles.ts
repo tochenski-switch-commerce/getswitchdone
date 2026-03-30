@@ -3220,4 +3220,105 @@ export const kanbanStyles = `
       flex-shrink: 0;
     }
   }
+
+  /* ── Archive Drawer ── */
+  .kb-archive-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    background: rgba(0, 0, 0, 0.45);
+  }
+  .kb-archive-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 360px;
+    max-width: 100vw;
+    background: #131620;
+    border-left: 1px solid #1e2130;
+    display: flex;
+    flex-direction: column;
+    z-index: 301;
+    box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+  }
+  .kb-archive-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid #1e2130;
+    flex-shrink: 0;
+  }
+  .kb-archive-search-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid #1e2130;
+    flex-shrink: 0;
+  }
+  .kb-archive-search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e5e7eb;
+    font-size: 13px;
+  }
+  .kb-archive-search-input::placeholder {
+    color: #4b5563;
+  }
+  .kb-archive-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+  .kb-archive-empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: #4b5563;
+    font-size: 13px;
+  }
+  .kb-archive-card {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid #1a1d2a;
+    transition: background 0.1s;
+  }
+  .kb-archive-card:hover {
+    background: rgba(255,255,255,0.02);
+  }
+  .kb-archive-card-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .kb-archive-card-title {
+    font-size: 13px;
+    color: #d1d5db;
+    font-weight: 500;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kb-archive-card-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .kb-archive-restore-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+    width: 160px;
+  }
 `;
+

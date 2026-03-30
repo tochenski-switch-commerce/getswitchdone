@@ -25,6 +25,7 @@ import {
   Flag,
   Clock,
   Star,
+  Printer,
   getBoardIcon,
   DEFAULT_ICON_COLOR,
 } from '@/components/BoardIcons';
@@ -286,6 +287,12 @@ function BoardsListPage() {
     });
   }, [boards]);
 
+  // ── Print a single board — navigate to overview with auto-print flag ────────
+  const handlePrintBoard = (e: React.MouseEvent, board: typeof boards[0]) => {
+    e.stopPropagation();
+    router.push(`/boards/${board.id}/overview?print=1`);
+  };
+
   // ── Board card renderer ────────────────────────────────────────────────────
   const renderBoardCard = (board: typeof boards[0], teamName?: string) => {
     const stats = boardStatsMap.get(board.id);
@@ -424,37 +431,46 @@ function BoardsListPage() {
             <Clock size={12} />
             {STATS_ENABLED && stats ? relativeTime(stats.lastActivity) : new Date(board.created_at).toLocaleDateString()}
           </span>
-          {board.user_id === user?.id && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <button
-                className="kb-btn-icon"
-                onClick={async e => {
-                  e.stopPropagation();
-                  setDuplicatingId(board.id);
-                  const dup = await duplicateBoard(board.id);
-                  setDuplicatingId(null);
-                  if (dup) router.push(`/boards/${dup.id}`);
-                }}
-                title="Duplicate board"
-                disabled={duplicatingId === board.id}
-                style={duplicatingId === board.id ? { opacity: 0.5 } : undefined}
-              >
-                <Copy size={14} />
-              </button>
-              <button
-                className="kb-btn-icon kb-btn-icon-danger"
-                onClick={e => {
-                  e.stopPropagation();
-                  if (confirm('Delete this board? This cannot be undone.')) {
-                    deleteBoard(board.id);
-                  }
-                }}
-                title="Delete board"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <button
+              className="kb-btn-icon"
+              onClick={e => handlePrintBoard(e, board)}
+              title="Print board overview"
+            >
+              <Printer size={14} />
+            </button>
+            {board.user_id === user?.id && (
+              <>
+                <button
+                  className="kb-btn-icon"
+                  onClick={async e => {
+                    e.stopPropagation();
+                    setDuplicatingId(board.id);
+                    const dup = await duplicateBoard(board.id);
+                    setDuplicatingId(null);
+                    if (dup) router.push(`/boards/${dup.id}`);
+                  }}
+                  title="Duplicate board"
+                  disabled={duplicatingId === board.id}
+                  style={duplicatingId === board.id ? { opacity: 0.5 } : undefined}
+                >
+                  <Copy size={14} />
+                </button>
+                <button
+                  className="kb-btn-icon kb-btn-icon-danger"
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (confirm('Delete this board? This cannot be undone.')) {
+                      deleteBoard(board.id);
+                    }
+                  }}
+                  title="Delete board"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     );
