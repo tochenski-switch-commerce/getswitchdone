@@ -92,7 +92,14 @@ export default function CardDetailModal({
   const [editStartDate, setEditStartDate] = useState(card.start_date || '');
   const [editDueDate, setEditDueDate] = useState(card.due_date || '');
   const [editDueTime, setEditDueTime] = useState(card.due_time || '');
-  const [editAssignee, setEditAssignee] = useState(card.assignee || '');
+  // Normalise assignee to UUID — legacy cards stored the display name instead
+  const [editAssignee, setEditAssignee] = useState(() => {
+    const raw = card.assignee || '';
+    if (!raw) return '';
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (UUID_RE.test(raw)) return raw;
+    return userProfiles.find(p => p.name?.toLowerCase() === raw.toLowerCase())?.id ?? '';
+  });
   const [editLabels, setEditLabels] = useState<string[]>((card.labels || []).map(l => l.id));
   const [commentText, setCommentText] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -447,6 +454,18 @@ export default function CardDetailModal({
     const text = (checklistTexts[key] || '').trim();
     if (!text) return;
     await onAddChecklistItem(text, groupId);
+    setChecklistTexts(prev => ({ ...prev, [key]: '' }));
+  };
+
+  const handleChecklistPaste = (e: React.ClipboardEvent<HTMLInputElement>, groupId?: string | null) => {
+    const pasted = e.clipboardData.getData('text');
+    const lines = pasted.split(/\r?\n/).map(l =>
+      l.replace(/^[\s]*(?:[-*•·–—]|\d+[.)]\s*|\d+\s+)\s*/, '').trim()
+    ).filter(Boolean);
+    if (lines.length <= 1) return; // let default paste handle single lines
+    e.preventDefault();
+    const key = groupId ?? '__ungrouped__';
+    lines.forEach(line => onAddChecklistItem(line, groupId));
     setChecklistTexts(prev => ({ ...prev, [key]: '' }));
   };
 
@@ -1257,6 +1276,7 @@ export default function CardDetailModal({
                         value={sectionText}
                         onChange={e => setChecklistTexts(prev => ({ ...prev, [sectionKey]: e.target.value }))}
                         placeholder="Add checklist item..."
+                        onPaste={e => handleChecklistPaste(e, section.id)}
                         onKeyDown={e => e.key === 'Enter' && handleAddChecklistItem(section.id)}
                         autoFocus={autoFocusNewChecklist && sectionIdx === sectionsArr.length - 1}
                         onFocus={() => { if (autoFocusNewChecklist && sectionIdx === sectionsArr.length - 1) setAutoFocusNewChecklist(false); }}
@@ -1589,7 +1609,7 @@ export default function CardDetailModal({
               >
                 <option value="">Unassigned</option>
                 {userProfiles.filter(p => p.name).map(p => (
-                  <option key={p.id} value={p.name}>@{p.name}</option>
+                  <option key={p.id} value={p.id}>@{p.name}</option>
                 ))}
               </select>
             </div>

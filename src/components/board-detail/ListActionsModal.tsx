@@ -5,10 +5,10 @@ import type { BoardCard, BoardColumn, CardPriority, ChecklistTemplate, UserProfi
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
   CalendarDays, User, Flag, Tag, ArrowDownAZ,
-  CheckSquare, FolderKanban, Trash2, X, Zap, Check, Target,
+  CheckSquare, FolderKanban, Trash2, X, Zap, Check, Target, Palette,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
-import { PRIORITY_CONFIG } from './helpers';
+import { PRIORITY_CONFIG, LABEL_COLORS } from './helpers';
 
 export default function ListActionsModal({
   column,
@@ -35,7 +35,7 @@ export default function ListActionsModal({
   checklistTemplates: ChecklistTemplate[];
   onApplyTemplate: (cardId: string, templateId: string) => Promise<void>;
   onSortCards: (columnId: string, direction: 'asc' | 'desc') => Promise<void>;
-  onUpdateColumn: (updates: { card_limit?: number | null }) => Promise<void>;
+  onUpdateColumn: (updates: { card_limit?: number | null; color?: string }) => Promise<void>;
   onClose: () => void;
   userProfiles: UserProfile[];
 }) {
@@ -50,6 +50,8 @@ export default function ListActionsModal({
   const [result, setResult] = useState('');
   const [limitInput, setLimitInput] = useState(column.card_limit != null ? String(column.card_limit) : '');
   const [savingLimit, setSavingLimit] = useState(false);
+  const [columnColor, setColumnColor] = useState(column.color || '#6366f1');
+  const [savingColor, setSavingColor] = useState(false);
 
   const otherColumns = board.columns.filter(c => c.id !== column.id);
 
@@ -72,7 +74,7 @@ export default function ListActionsModal({
         {/* Header */}
         <div className="kb-import-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className="kb-column-dot" style={{ background: column.color }} />
+            <span className="kb-column-dot" style={{ background: columnColor }} />
             <h3 className="kb-import-title">List Actions — {column.title}</h3>
             <span className="kb-column-count">{cards.length} cards</span>
           </div>
@@ -80,6 +82,37 @@ export default function ListActionsModal({
         </div>
 
         <div className="kb-list-actions-body">
+          {/* Column Color */}
+          <div className="kb-list-action-row">
+            <div className="kb-list-action-label"><Palette size={13} /> Column Color</div>
+            <div className="kb-list-action-controls" style={{ flexWrap: 'wrap', gap: 5 }}>
+              {LABEL_COLORS.map(({ hex, name }) => (
+                <button
+                  key={hex}
+                  title={name}
+                  disabled={savingColor}
+                  onClick={async () => {
+                    if (hex === columnColor) return;
+                    setSavingColor(true);
+                    setColumnColor(hex);
+                    await onUpdateColumn({ color: hex });
+                    setSavingColor(false);
+                  }}
+                  style={{
+                    width: 22, height: 22, borderRadius: '50%', border: 'none',
+                    background: hex, cursor: 'pointer', flexShrink: 0,
+                    outline: columnColor.toLowerCase() === hex.toLowerCase()
+                      ? '2px solid #fff' : '2px solid transparent',
+                    outlineOffset: 2,
+                    boxShadow: columnColor.toLowerCase() === hex.toLowerCase()
+                      ? `0 0 0 4px ${hex}55` : 'none',
+                    transition: 'outline 0.1s, box-shadow 0.1s',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
           {/* Card Limit */}
           <div className="kb-list-action-row">
             <div className="kb-list-action-label"><Target size={13} /> Card Limit</div>

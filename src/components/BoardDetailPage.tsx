@@ -28,7 +28,7 @@ const AiPanel = dynamic(() => import('@/components/AiPanel'), { ssr: false });
 // const AutopilotBanner = dynamic(() => import('@/components/AutopilotBanner'), { ssr: false });
 const DatePickerInput = dynamic(() => import('@/components/DatePickerInput'), { ssr: false });
 
-import { PRIORITY_CONFIG, PRIORITY_WEIGHT, sanitizeEmailHtml, emailTimeAgo } from './board-detail/helpers';
+import { PRIORITY_CONFIG, PRIORITY_WEIGHT, sanitizeEmailHtml, emailTimeAgo, LABEL_COLORS } from './board-detail/helpers';
 import InlineEdit from './board-detail/InlineEdit';
 import KanbanCard from './board-detail/KanbanCard';
 
@@ -100,6 +100,7 @@ function BoardPage() {
   const addingCardRef = useRef(false);
   const [addingCardCol, setAddingCardCol] = useState<string | null>(null);
   const [newCardTitle, setNewCardTitle] = useState('');
+  const [bulkCardPreview, setBulkCardPreview] = useState<{ colId: string; items: string[] } | null>(null);
   const [addingColumn, setAddingColumn] = useState(false);
   const [addingColumnType, setAddingColumnType] = useState<'normal' | 'board_links'>('normal');
   const [newColTitle, setNewColTitle] = useState('');
@@ -159,6 +160,7 @@ function BoardPage() {
   const [dragOverColReorder, setDragOverColReorder] = useState<{ colId: string; side: 'before' | 'after' } | null>(null);
   const [listActionsColId, setListActionsColId] = useState<string | null>(null);
   const [automationsColId, setAutomationsColId] = useState<string | null>(null);
+  const [colorPickerColId, setColorPickerColId] = useState<string | null>(null);
   const [showBoardAutomations, setShowBoardAutomations] = useState(false);
   const boardAutoRanRef = useRef<string | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
@@ -665,6 +667,29 @@ function BoardPage() {
     }
   };
 
+  const handleCardPaste = (e: React.ClipboardEvent<HTMLInputElement>, colId: string) => {
+    const pasted = e.clipboardData.getData('text');
+    const lines = pasted.split(/\r?\n/).map(l =>
+      l.replace(/^[\s]*(?:[-*•·–—]|\d+[.)]\s*|\d+\s+)\s*/, '').trim()
+    ).filter(Boolean);
+    if (lines.length <= 1) return;
+    e.preventDefault();
+    setBulkCardPreview({ colId, items: lines });
+    setNewCardTitle('');
+  };
+
+  const confirmBulkAddCards = async () => {
+    if (!bulkCardPreview) return;
+    const { colId, items } = bulkCardPreview;
+    setBulkCardPreview(null);
+    setAddingCardCol(null);
+    for (const title of items) {
+      if (!canCreateCard(activeCardCount)) { showPaywall(); break; }
+      await addCard(boardId, { column_id: colId, title });
+    }
+    hapticMedium();
+  };
+
   // ── Mobile add card ──
   const openMobileAdd = useCallback((colId?: string) => {
     const normalCols = board?.columns.filter(c => c.column_type !== 'board_links').sort((a, b) => a.position - b.position) || [];
@@ -692,7 +717,10 @@ function BoardPage() {
   // ── Add column ──
   const handleAddColumn = async () => {
     if (!newColTitle.trim()) return;
-    await addColumn(boardId, newColTitle, undefined, addingColumnType);
+    const usedColors = new Set((board?.columns ?? []).map(c => c.color.toLowerCase()));
+    const nextColor = LABEL_COLORS.find(c => !usedColors.has(c.hex.toLowerCase()))?.hex
+      ?? LABEL_COLORS[(board?.columns.length ?? 0) % LABEL_COLORS.length].hex;
+    await addColumn(boardId, newColTitle, nextColor, addingColumnType);
     setNewColTitle('');
     setAddingColumn(false);
     setAddingColumnType('normal');
@@ -820,11 +848,11 @@ function BoardPage() {
         if (newDueDate) runBoardAutomation(card, 'due_date_overdue');
       } else if (e.key === 'm') {
         e.preventDefault();
-        const myName = profile?.name;
-        if (myName) {
+        const myId = user?.id;
+        if (myId) {
           const currentAssignees = card.assignees || (card.assignee ? [card.assignee] : []);
-          const isAssigned = currentAssignees.some(a => a.toLowerCase() === myName.toLowerCase());
-          const newAssignees = isAssigned ? currentAssignees.filter(a => a.toLowerCase() !== myName.toLowerCase()) : [...currentAssignees, myName];
+          const isAssigned = currentAssignees.includes(myId);
+          const newAssignees = isAssigned ? currentAssignees.filter(a => a !== myId) : [...currentAssignees, myId];
           markCardUpdated(card.id);
           updateCard(boardId, card.id, { assignee: newAssignees[0] || null, assignees: newAssignees });
           if (!isAssigned) {
@@ -838,7 +866,7 @@ function BoardPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [hoveredCardId, activeCard, board, boardId, profile, addCard, deleteCard, updateCard, addChecklistItem, openCardDetail, navigateCard]);
+  }, [hoveredCardId, activeCard, board, boardId, user, profile, addCard, deleteCard, updateCard, addChecklistItem, openCardDetail, navigateCard]);
 
   if (!board) {
     return (
@@ -1112,9 +1140,9 @@ function BoardPage() {
             <SlidersHorizontal size={15} />
           </button>
 
-          {/* Overview link */}
+          {/* Overview link — hidden on mobile (accessible via ... menu) */}
           <button
-            className="kb-note-toggle"
+            className="kb-note-toggle kb-topbar-mobile-hidden"
             onClick={() => router.push(`/boards/${boardId}/overview`)}
             title="Board Overview"
           >
@@ -1122,9 +1150,9 @@ function BoardPage() {
             Overview
           </button>
 
-          {/* Note panel toggle */}
+          {/* Note panel toggle — hidden on mobile (accessible via ... menu) */}
           <button
-            className={`kb-note-toggle ${showNotePanel ? 'kb-note-toggle-active' : ''}`}
+            className={`kb-note-toggle kb-topbar-mobile-hidden ${showNotePanel ? 'kb-note-toggle-active' : ''}`}
             onClick={() => showNotePanel ? closeNotePanel() : setShowNotePanel(true)}
             title={showNotePanel ? 'Close Notes' : 'Open Notes'}
           >
@@ -1156,6 +1184,9 @@ function BoardPage() {
                   </button>
                   <button className="kb-dropdown-item" onClick={() => { setShowBoardMenu(false); router.push(`/boards/${boardId}/overview`); }}>
                     <BarChart3 size={14} /> Board Overview
+                  </button>
+                  <button className="kb-dropdown-item" onClick={() => { setShowBoardMenu(false); showNotePanel ? closeNotePanel() : setShowNotePanel(true); }}>
+                    <StickyNote size={14} /> {showNotePanel ? 'Close Notes' : 'Notes'}
                   </button>
                   <button className="kb-dropdown-item" onClick={() => { setShowBoardMenu(false); setShowLabelManager(true); }}>
                     <Tag size={14} /> Manage Labels
@@ -1470,7 +1501,38 @@ function BoardPage() {
                     >
                       <GripVertical size={13} />
                     </span>
-                    <span className="kb-column-dot" style={{ background: col.color }} />
+                    <div style={{ position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                      <span
+                        className="kb-column-dot"
+                        style={{ background: col.color, cursor: 'pointer' }}
+                        onClick={e => { e.stopPropagation(); setColorPickerColId(colorPickerColId === col.id ? null : col.id); }}
+                        title="Change color"
+                      />
+                      {colorPickerColId === col.id && (
+                        <>
+                          <div className="kb-click-away" onClick={() => setColorPickerColId(null)} />
+                          <div className="kb-col-color-picker">
+                            {LABEL_COLORS.map(({ hex, name }) => (
+                              <button
+                                key={hex}
+                                title={name}
+                                onClick={() => {
+                                  updateColumn(boardId, col.id, { color: hex });
+                                  setColorPickerColId(null);
+                                }}
+                                style={{
+                                  width: 20, height: 20, borderRadius: '50%', border: 'none',
+                                  background: hex, cursor: 'pointer', flexShrink: 0, padding: 0,
+                                  outline: col.color.toLowerCase() === hex.toLowerCase() ? '2px solid #fff' : '2px solid transparent',
+                                  outlineOffset: 2,
+                                  boxShadow: col.color.toLowerCase() === hex.toLowerCase() ? `0 0 0 4px ${hex}55` : 'none',
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
                     {isLinkCol && <LinkIcon size={13} style={{ color: col.color, marginRight: 2, flexShrink: 0 }} />}
                     <InlineEdit
                       value={col.title}
@@ -1728,25 +1790,49 @@ function BoardPage() {
                       {/* Quick add */}
                       {addingCardCol === col.id && (
                         <div className="kb-quick-add">
-                          <input
-                            ref={newCardRef}
-                            className="kb-input"
-                            value={newCardTitle}
-                            onChange={e => setNewCardTitle(e.target.value)}
-                            placeholder="Card title..."
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') handleQuickAddCard(col.id);
-                              if (e.key === 'Escape') { setAddingCardCol(null); setNewCardTitle(''); }
-                            }}
-                          />
-                          <div className="kb-quick-add-actions">
-                            <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={() => handleQuickAddCard(col.id)}>
-                              Add Card
-                            </button>
-                            <button className="kb-btn-icon-sm" onClick={() => { setAddingCardCol(null); setNewCardTitle(''); }}>
-                              <X size={14} />
-                            </button>
-                          </div>
+                          {bulkCardPreview?.colId === col.id ? (
+                            <div className="kb-ai-preview">
+                              <div className="kb-ai-preview-label">
+                                Add {bulkCardPreview.items.length} cards?
+                              </div>
+                              <div className="kb-ai-preview-content">
+                                {bulkCardPreview.items.map((item, i) => (
+                                  <div key={i} style={{ padding: '2px 0' }}>• {item}</div>
+                                ))}
+                              </div>
+                              <div className="kb-ai-preview-actions">
+                                <button className="kb-btn kb-btn-sm kb-btn-primary" onClick={confirmBulkAddCards}>
+                                  Add {bulkCardPreview.items.length} cards
+                                </button>
+                                <button className="kb-btn kb-btn-sm kb-btn-ghost" onClick={() => { setBulkCardPreview(null); setAddingCardCol(null); }}>
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <input
+                                ref={newCardRef}
+                                className="kb-input"
+                                value={newCardTitle}
+                                onChange={e => setNewCardTitle(e.target.value)}
+                                placeholder="Card title..."
+                                onPaste={e => handleCardPaste(e, col.id)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') handleQuickAddCard(col.id);
+                                  if (e.key === 'Escape') { setAddingCardCol(null); setNewCardTitle(''); }
+                                }}
+                              />
+                              <div className="kb-quick-add-actions">
+                                <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={() => handleQuickAddCard(col.id)}>
+                                  Add Card
+                                </button>
+                                <button className="kb-btn-icon-sm" onClick={() => { setAddingCardCol(null); setNewCardTitle(''); }}>
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>

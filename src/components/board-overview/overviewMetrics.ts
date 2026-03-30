@@ -154,23 +154,42 @@ export function computeAssigneeWorkload(board: FullBoard, profiles: UserProfile[
     }
   }
 
-  const result: AssigneeWorkload[] = [];
+  // Merge by resolved name to handle legacy assignee strings vs UUID entries
+  const byName = new Map<string, AssigneeWorkload>();
   let unassigned: AssigneeWorkload | null = null;
 
   for (const [userId, data] of map.entries()) {
-    const entry: AssigneeWorkload = {
-      userId,
-      name: userId ? (profileById.get(userId)?.name ?? userId.slice(0, 8)) : 'Unassigned',
-      ...data,
-      completionPct: data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0,
-    };
     if (userId === null) {
-      unassigned = entry;
+      const totals = data;
+      unassigned = {
+        userId: null,
+        name: 'Unassigned',
+        ...totals,
+        completionPct: totals.total > 0 ? Math.round((totals.completed / totals.total) * 100) : 0,
+      };
+      continue;
+    }
+
+    const name = profileById.get(userId)?.name ?? userId.slice(0, 8);
+    const existing = byName.get(name);
+    if (existing) {
+      existing.total += data.total;
+      existing.completed += data.completed;
+      existing.overdue += data.overdue;
+      existing.completionPct = existing.total > 0
+        ? Math.round((existing.completed / existing.total) * 100)
+        : 0;
     } else {
-      result.push(entry);
+      byName.set(name, {
+        userId,
+        name,
+        ...data,
+        completionPct: data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0,
+      });
     }
   }
 
+  const result = Array.from(byName.values());
   result.sort((a, b) => b.total - a.total);
   if (unassigned) result.push(unassigned);
   return result;

@@ -3,7 +3,7 @@ export type PlanTier = 'free' | 'pro';
 export const PLANS = {
   free: {
     label: 'Free',
-    maxBoards: 1,
+    maxBoards: Infinity,
     maxActiveCards: Infinity,
     teamsEnabled: false,
     aiEnabled: false,

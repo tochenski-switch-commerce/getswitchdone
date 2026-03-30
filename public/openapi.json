@@ -1,0 +1,827 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Lumio API",
+    "version": "1",
+    "description": "REST API for Lumio — read and write boards, columns, cards, and labels. Authenticate with an API key generated in the Developer settings.",
+    "contact": {
+      "url": "https://lumio.app"
+    }
+  },
+  "servers": [
+    { "url": "https://getswitchdone.netlify.app", "description": "Production" },
+    { "url": "http://localhost:3000", "description": "Local development" }
+  ],
+  "security": [{ "ApiKeyAuth": [] }],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API key generated in Lumio Developer settings. All keys begin with `lum_`.",
+        "bearerFormat": "lum_<hex>"
+      }
+    },
+    "schemas": {
+      "Board": {
+        "type": "object",
+        "properties": {
+          "id":          { "type": "string", "format": "uuid" },
+          "title":       { "type": "string" },
+          "description": { "type": ["string", "null"] },
+          "is_archived": { "type": "boolean" },
+          "created_at":  { "type": "string", "format": "date-time" },
+          "updated_at":  { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "title", "is_archived", "created_at", "updated_at"]
+      },
+      "BoardDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Board" },
+          {
+            "type": "object",
+            "properties": {
+              "columns": { "type": "array", "items": { "$ref": "#/components/schemas/Column" } },
+              "labels":  { "type": "array", "items": { "$ref": "#/components/schemas/Label" } }
+            },
+            "required": ["columns", "labels"]
+          }
+        ]
+      },
+      "Column": {
+        "type": "object",
+        "properties": {
+          "id":          { "type": "string", "format": "uuid" },
+          "board_id":    { "type": "string", "format": "uuid" },
+          "title":       { "type": "string" },
+          "position":    { "type": "integer" },
+          "color":       { "type": ["string", "null"] },
+          "column_type": { "type": "string", "enum": ["normal", "board_links"] },
+          "created_at":  { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "board_id", "title", "position", "column_type", "created_at"]
+      },
+      "Card": {
+        "type": "object",
+        "properties": {
+          "id":          { "type": "string", "format": "uuid" },
+          "board_id":    { "type": "string", "format": "uuid" },
+          "column_id":   { "type": "string", "format": "uuid" },
+          "title":       { "type": "string" },
+          "description": { "type": ["string", "null"] },
+          "position":    { "type": "integer" },
+          "priority":    { "type": ["string", "null"], "enum": ["low", "medium", "high", "urgent", null] },
+          "due_date":    { "type": ["string", "null"], "format": "date" },
+          "is_complete": { "type": "boolean" },
+          "is_archived": { "type": "boolean" },
+          "created_at":  { "type": "string", "format": "date-time" },
+          "updated_at":  { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "board_id", "column_id", "title", "position", "is_archived", "created_at", "updated_at"]
+      },
+      "CardDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Card" },
+          {
+            "type": "object",
+            "properties": {
+              "labels": { "type": "array", "items": { "$ref": "#/components/schemas/Label" } }
+            },
+            "required": ["labels"]
+          }
+        ]
+      },
+      "Label": {
+        "type": "object",
+        "properties": {
+          "id":    { "type": "string", "format": "uuid" },
+          "name":  { "type": "string" },
+          "color": { "type": "string" }
+        },
+        "required": ["id", "name", "color"]
+      },
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "data":  {},
+          "error": { "type": ["string", "null"] }
+        },
+        "required": ["data", "error"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "data":  { "type": "null" },
+          "error": { "type": "string" }
+        },
+        "required": ["data", "error"]
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid API key.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "data": null, "error": "Invalid or missing API key" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found or not owned by the authenticated user.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "data": null, "error": "Board not found" }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Validation error.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "data": null, "error": "title is required" }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Internal server error.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+            "example": { "data": null, "error": "Internal server error" }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/boards": {
+      "get": {
+        "operationId": "listBoards",
+        "summary": "List boards",
+        "description": "Returns all non-archived boards owned by the authenticated user, sorted newest first.",
+        "tags": ["Boards"],
+        "responses": {
+          "200": {
+            "description": "List of boards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Board" } } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "post": {
+        "operationId": "createBoard",
+        "summary": "Create a board",
+        "tags": ["Boards"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title":       { "type": "string", "minLength": 1 },
+                  "description": { "type": "string" }
+                },
+                "required": ["title"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Board created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "$ref": "#/components/schemas/Board" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/boards/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Board ID" }
+      ],
+      "get": {
+        "operationId": "getBoard",
+        "summary": "Get a board",
+        "description": "Returns the board along with its columns and labels.",
+        "tags": ["Boards"],
+        "responses": {
+          "200": {
+            "description": "Board with columns and labels.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "$ref": "#/components/schemas/BoardDetail" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "patch": {
+        "operationId": "updateBoard",
+        "summary": "Update a board",
+        "tags": ["Boards"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title":       { "type": "string", "minLength": 1 },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated board.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "$ref": "#/components/schemas/Board" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteBoard",
+        "summary": "Delete a board",
+        "description": "Permanently deletes the board and all its columns, cards, and labels.",
+        "tags": ["Boards"],
+        "responses": {
+          "200": {
+            "description": "Board deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "type": "object", "properties": { "deleted": { "type": "boolean" } } } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/boards/{id}/columns": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Board ID" }
+      ],
+      "get": {
+        "operationId": "listColumns",
+        "summary": "List columns",
+        "tags": ["Columns"],
+        "responses": {
+          "200": {
+            "description": "Columns sorted by position.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Column" } } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "post": {
+        "operationId": "createColumn",
+        "summary": "Create a column",
+        "description": "Appends a new column at the end of the board.",
+        "tags": ["Columns"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string", "minLength": 1 },
+                  "color": { "type": "string" }
+                },
+                "required": ["title"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Column created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "$ref": "#/components/schemas/Column" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/boards/{id}/columns/{colId}": {
+      "parameters": [
+        { "name": "id",    "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Board ID" },
+        { "name": "colId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Column ID" }
+      ],
+      "patch": {
+        "operationId": "updateColumn",
+        "summary": "Update a column",
+        "tags": ["Columns"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title":    { "type": "string", "minLength": 1 },
+                  "color":    { "type": "string" },
+                  "position": { "type": "integer", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated column.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "$ref": "#/components/schemas/Column" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteColumn",
+        "summary": "Delete a column",
+        "description": "Deletes the column and all cards within it.",
+        "tags": ["Columns"],
+        "responses": {
+          "200": {
+            "description": "Column deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "type": "object", "properties": { "deleted": { "type": "boolean" } } } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/boards/{id}/cards": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Board ID" }
+      ],
+      "get": {
+        "operationId": "listCards",
+        "summary": "List cards",
+        "description": "Returns all non-archived cards on the board, sorted by position. Optionally filter by column.",
+        "tags": ["Cards"],
+        "parameters": [
+          {
+            "name": "column_id",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "Filter cards to a specific column."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of cards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Card" } } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "post": {
+        "operationId": "createCard",
+        "summary": "Create a card",
+        "description": "Creates a card and appends it to the bottom of the specified column.",
+        "tags": ["Cards"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title":       { "type": "string", "minLength": 1 },
+                  "column_id":   { "type": "string", "format": "uuid" },
+                  "description": { "type": "string" },
+                  "priority":    { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+                  "due_date":    { "type": "string", "format": "date", "description": "ISO 8601 date, e.g. 2026-04-01" },
+                  "label_ids":   { "type": "array", "items": { "type": "string", "format": "uuid" } }
+                },
+                "required": ["title", "column_id"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Card created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "$ref": "#/components/schemas/Card" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/cards/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Card ID" }
+      ],
+      "get": {
+        "operationId": "getCard",
+        "summary": "Get a card",
+        "description": "Returns the card with its label assignments.",
+        "tags": ["Cards"],
+        "responses": {
+          "200": {
+            "description": "Card detail.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "$ref": "#/components/schemas/CardDetail" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "patch": {
+        "operationId": "updateCard",
+        "summary": "Update a card",
+        "description": "Partial update. Pass `label_ids` to replace all label assignments.",
+        "tags": ["Cards"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title":       { "type": "string", "minLength": 1 },
+                  "description": { "type": "string" },
+                  "column_id":   { "type": "string", "format": "uuid" },
+                  "priority":    { "type": ["string", "null"], "enum": ["low", "medium", "high", "urgent", null] },
+                  "due_date":    { "type": ["string", "null"], "format": "date" },
+                  "is_complete": { "type": "boolean" },
+                  "label_ids":   { "type": "array", "items": { "type": "string", "format": "uuid" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated card.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "$ref": "#/components/schemas/Card" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteCard",
+        "summary": "Delete a card",
+        "tags": ["Cards"],
+        "responses": {
+          "200": {
+            "description": "Card deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "type": "object", "properties": { "deleted": { "type": "boolean" } } } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/cards/{id}/move": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Card ID" }
+      ],
+      "post": {
+        "operationId": "moveCard",
+        "summary": "Move a card",
+        "description": "Moves a card to a different column. If `position` is omitted, the card is appended at the bottom.",
+        "tags": ["Cards"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "column_id": { "type": "string", "format": "uuid" },
+                  "position":  { "type": "integer", "minimum": 0 }
+                },
+                "required": ["column_id"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Card moved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    {
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "cardId":    { "type": "string", "format": "uuid" },
+                            "column_id": { "type": "string", "format": "uuid" },
+                            "position":  { "type": "integer" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/boards/{id}/labels": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Board ID" }
+      ],
+      "get": {
+        "operationId": "listLabels",
+        "summary": "List labels",
+        "tags": ["Labels"],
+        "responses": {
+          "200": {
+            "description": "List of labels.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Label" } } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "post": {
+        "operationId": "createLabel",
+        "summary": "Create a label",
+        "tags": ["Labels"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name":  { "type": "string", "minLength": 1 },
+                  "color": { "type": "string", "description": "Any CSS color string, e.g. #ff6b35" }
+                },
+                "required": ["name", "color"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Label created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "$ref": "#/components/schemas/Label" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/boards/{id}/labels/{labelId}": {
+      "parameters": [
+        { "name": "id",      "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Board ID" },
+        { "name": "labelId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" }, "description": "Label ID" }
+      ],
+      "patch": {
+        "operationId": "updateLabel",
+        "summary": "Update a label",
+        "tags": ["Labels"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name":  { "type": "string", "minLength": 1 },
+                  "color": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated label.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "$ref": "#/components/schemas/Label" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteLabel",
+        "summary": "Delete a label",
+        "description": "Removes the label and all its card assignments.",
+        "tags": ["Labels"],
+        "responses": {
+          "200": {
+            "description": "Label deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ApiResponse" },
+                    { "properties": { "data": { "type": "object", "properties": { "deleted": { "type": "boolean" } } } } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Boards",  "description": "Top-level boards" },
+    { "name": "Columns", "description": "Columns within a board" },
+    { "name": "Cards",   "description": "Cards within columns" },
+    { "name": "Labels",  "description": "Labels attached to cards" }
+  ]
+}

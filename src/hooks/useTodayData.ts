@@ -70,7 +70,7 @@ export function toDateStr(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-const CARD_SELECT = 'id, board_id, title, description, priority, due_date, due_time, start_date, assignees, is_complete, is_archived, focused_by';
+const CARD_SELECT = 'id, board_id, title, description, priority, due_date, due_time, start_date, assignee, assignees, is_complete, is_archived, focused_by';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -112,17 +112,27 @@ export function useTodayData(): TodayData {
       const sevenDaysAgo = new Date(todayMidnight);
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
+      // Fetch current user's profile name so legacy cards (assignee stored as name, not UUID) are also matched
+      const { data: myProfile } = await supabase.from('user_profiles').select('name').eq('id', userId).single();
+      const myName = myProfile?.name ?? null;
+
       // ── Phase 1: main card queries ────────────────────────────────
+      // Cover both UUID format (new) and display-name format (legacy)
+      let assignedFilter = `assignees.cs.{${userId}},assignee.eq.${userId}`;
+      if (myName) {
+        assignedFilter += `,assignees.cs.{"${myName}"},assignee.eq.${myName}`;
+      }
+
       const [dueDateRes, assignedRes, boardsRes, completedTodayRes, onDeckRes, focusedRes, streakRes, checklistAssignedRes] = await Promise.all([
         supabase.from('board_cards').select(CARD_SELECT)
           .eq('is_archived', false).eq('is_complete', false)
           .not('due_date', 'is', null).lte('due_date', todayStr)
-          .contains('assignees', [userId])
+          .or(assignedFilter)
           .order('due_date', { ascending: true }),
 
         supabase.from('board_cards').select(CARD_SELECT)
           .eq('is_archived', false).eq('is_complete', false)
-          .contains('assignees', [userId])
+          .or(assignedFilter)
           .order('due_date', { ascending: true, nullsFirst: false }),
 
         supabase.from('project_boards').select('id, title, icon, icon_color, is_starred')
@@ -130,14 +140,14 @@ export function useTodayData(): TodayData {
 
         supabase.from('board_cards').select(CARD_SELECT)
           .eq('is_complete', true).eq('is_archived', false)
-          .contains('assignees', [userId])
+          .or(assignedFilter)
           .gte('updated_at', todayMidnight.toISOString())
           .order('updated_at', { ascending: false }),
 
         supabase.from('board_cards').select(CARD_SELECT)
           .eq('is_archived', false).eq('is_complete', false)
           .gt('due_date', todayStr).lte('due_date', threeDaysOutStr)
-          .contains('assignees', [userId])
+          .or(assignedFilter)
           .order('due_date', { ascending: true }),
 
         supabase.from('board_cards').select(CARD_SELECT)
@@ -147,7 +157,7 @@ export function useTodayData(): TodayData {
 
         supabase.from('board_cards').select('updated_at')
           .eq('is_complete', true).eq('is_archived', false)
-          .contains('assignees', [userId])
+          .or(assignedFilter)
           .gte('updated_at', sevenDaysAgo.toISOString()),
 
         supabase.from('card_checklists').select('card_id')
@@ -184,25 +194,32 @@ export function useTodayData(): TodayData {
       type RawCard = {
         id: string; board_id: string; title: string; description: string | null;
         priority: string | null; due_date: string | null; due_time: string | null;
-        start_date: string | null; assignees: string[] | null; focused_by?: string[];
+        start_date: string | null; assignee: string | null; assignees: string[] | null; focused_by?: string[];
       };
-      const toCard = (raw: RawCard): TodayCard => ({
-        id: raw.id,
-        boardId: raw.board_id,
-        boardTitle: boardMap.get(raw.board_id) ?? 'Unknown',
-        title: raw.title,
-        description: raw.description ?? null,
-        priority: raw.priority as CardPriority | null,
-        dueDate: raw.due_date ?? null,
-        dueTime: raw.due_time ?? null,
-        startDate: raw.start_date ?? null,
-        assignees: raw.assignees ?? [],
-        assigneeNames: [],
-        labels: [],
-        checklistTotal: 0,
-        checklistDone: 0,
-        commentCount: 0,
-      });
+      const toCard = (raw: RawCard): TodayCard => {
+        // Merge singular assignee + assignees array, deduped
+        const merged = [...new Set([
+          ...(raw.assignees ?? []),
+          ...(raw.assignee ? [raw.assignee] : []),
+        ])];
+        return {
+          id: raw.id,
+          boardId: raw.board_id,
+          boardTitle: boardMap.get(raw.board_id) ?? 'Unknown',
+          title: raw.title,
+          description: raw.description ?? null,
+          priority: raw.priority as CardPriority | null,
+          dueDate: raw.due_date ?? null,
+          dueTime: raw.due_time ?? null,
+          startDate: raw.start_date ?? null,
+          assignees: merged,
+          assigneeNames: [],
+          labels: [],
+          checklistTotal: 0,
+          checklistDone: 0,
+          commentCount: 0,
+        };
+      };
 
       const PRIORITY_ORDER: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 

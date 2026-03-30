@@ -311,6 +311,22 @@ export const kanbanStyles = `
   .kb-btn-icon-sm:hover { background: #1f2937 !important; color: #9ca3af !important; }
   .kb-btn-automation-active { color: #818cf8 !important; }
 
+  /* ── Column color picker ── */
+  .kb-col-color-picker {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 8px);
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 10px;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(6, 20px);
+    gap: 6px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    z-index: 1000;
+  }
+
   /* ── Dropdown ── */
   .kb-click-away { position: fixed; inset: 0; z-index: 999; }
   .kb-dropdown {
@@ -2875,8 +2891,12 @@ export const kanbanStyles = `
 
   /* ── Responsive ── */
   @media (max-width: 768px) {
-    .kb-topbar { flex-direction: column; align-items: flex-start; }
-    .kb-topbar-right { width: 100%; flex-wrap: wrap; gap: 8px; }
+    .kb-topbar { flex-direction: row; align-items: center; padding: 8px 12px; gap: 6px; flex-wrap: nowrap; }
+    .kb-topbar-left { flex: 1; min-width: 0; overflow: hidden; gap: 8px; }
+    .kb-topbar-right { flex-shrink: 0; flex-wrap: nowrap; gap: 6px; width: auto; }
+    .kb-topbar-mobile-hidden { display: none !important; }
+    .kb-board-title { font-size: 15px !important; }
+    .kb-board-icon-btn { width: 28px; height: 28px; flex-shrink: 0; }
     .kb-filters-inline { display: none !important; }
     .kb-mobile-filter-btn { display: flex !important; }
     .kb-mobile-filter-panel { display: flex; }
