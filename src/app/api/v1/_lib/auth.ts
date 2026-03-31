@@ -24,11 +24,11 @@ export async function resolveApiKey(req: NextRequest): Promise<ResolvedKey | nul
   if (error || !data) return null;
 
   // Fire-and-forget — never blocks response
-  db.from('api_keys')
-    .update({ last_used_at: new Date().toISOString() })
-    .eq('id', data.id)
-    .then(() => {})
-    .catch(() => {});
+  void Promise.resolve(
+    db.from('api_keys')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('id', data.id)
+  ).catch(() => {});
 
   return { userId: data.user_id };
 }

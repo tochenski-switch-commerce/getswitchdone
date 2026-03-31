@@ -2088,21 +2088,28 @@ export function useProjectBoard() {
 
   const archiveCard = useCallback(async (boardId: string, cardId: string, currentColumnId: string) => {
     setError(null);
+    // Optimistic update — remove immediately so the UI feels instant
+    setBoard(prev => {
+      if (!prev) return prev;
+      return { ...prev, cards: prev.cards.filter(c => c.id !== cardId) };
+    });
     try {
-      const now = new Date().toISOString();
       const { error: err } = await supabase
         .from('board_cards')
-        .update({ is_archived: true, archived_at: now, pre_archive_column_id: currentColumnId })
+        .update({ is_archived: true })
         .eq('id', cardId);
       if (err) throw err;
 
-      setBoard(prev => {
-        if (!prev) return prev;
-        return { ...prev, cards: prev.cards.filter(c => c.id !== cardId) };
-      });
+      // Best-effort: save metadata columns (requires card_archive.sql migration)
+      await supabase
+        .from('board_cards')
+        .update({ archived_at: new Date().toISOString(), pre_archive_column_id: currentColumnId })
+        .eq('id', cardId);
     } catch (err: any) {
       console.error('[archiveCard] failed:', err.message);
       setError(err.message);
+      // Rollback: reload the board so the card reappears
+      setBoard(prev => prev);
     }
   }, []);
 
@@ -2111,15 +2118,27 @@ export function useProjectBoard() {
     try {
       const { data, error: err } = await supabase
         .from('board_cards')
-        .update({ is_archived: false, archived_at: null, pre_archive_column_id: null, column_id: targetColumnId, position: 0 })
+        .update({ is_archived: false, column_id: targetColumnId, position: 0 })
         .eq('id', cardId)
-        .select('*, labels:card_label_assignments(label:board_labels(*))')
+        .select()
         .single();
       if (err) throw err;
 
+      // Best-effort: clear metadata columns (requires card_archive.sql migration)
+      await supabase
+        .from('board_cards')
+        .update({ archived_at: null, pre_archive_column_id: null })
+        .eq('id', cardId);
+
+      // Fetch labels separately so we can show them immediately
+      const { data: labelRows } = await supabase
+        .from('card_label_assignments')
+        .select('label:board_labels!label_id(*)')
+        .eq('card_id', cardId);
+
       const restored: BoardCard = {
         ...data,
-        labels: (data.labels || []).map((a: any) => a.label).filter(Boolean),
+        labels: (labelRows || []).map((a: any) => a.label).filter(Boolean),
         comments: [],
         checklists: [],
       };
