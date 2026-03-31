@@ -18,6 +18,7 @@ function KanbanCard({
   onToggleComplete,
   isSnoozed,
   currentUserId,
+  profiles,
 }: {
   card: BoardCard;
   onClick: () => void;
@@ -28,6 +29,7 @@ function KanbanCard({
   onToggleComplete?: () => void;
   isSnoozed?: boolean;
   currentUserId?: string;
+  profiles?: { id: string; name: string }[];
 }) {
   const pri = card.priority ? PRIORITY_CONFIG[card.priority] : null;
   const labels = card.labels || [];
@@ -222,7 +224,7 @@ function KanbanCard({
       {card.assignee && (
         <div className="kb-card-assignee">
           <User size={10} />
-          @{card.assignee}
+          @{profiles?.find(p => p.id === card.assignee)?.name ?? card.assignee}
         </div>
       )}
 

@@ -1789,6 +1789,7 @@ function BoardPage() {
                             hasAlert={alertCardIds.has(card.id)}
                             isSnoozed={!!(card.snoozed_until && new Date(card.snoozed_until) > snoozeNow)}
                             currentUserId={user?.id}
+                            profiles={boardMembers.length > 0 ? boardMembers : userProfiles}
                             onPriorityChange={async (p) => {
                               markCardUpdated(card.id);
                               await updateCard(boardId, card.id, { priority: p });
