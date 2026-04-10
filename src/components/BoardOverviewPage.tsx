@@ -579,6 +579,9 @@ const priorityBreakdown = useMemo(() => board ? computePriorityBreakdown(board) 
                         </span>
                       </th>
                     ))}
+                    <th className="kb-ov-sort-th" style={{ cursor: 'default', userSelect: 'none' }}>
+                      <span className="kb-ov-sort-th-inner">Checklist</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -607,6 +610,14 @@ const priorityBreakdown = useMemo(() => board ? computePriorityBreakdown(board) 
                         <td style={{ color: '#9ca3af', whiteSpace: 'nowrap' }}>{assigneeNames || '—'}</td>
                         <td style={{ color: '#9ca3af', whiteSpace: 'nowrap' }}>{fmtDate(card.due_date)}</td>
                         <td style={{ color: card.is_complete ? '#34d399' : '#4b5563' }}>{card.is_complete ? 'Yes' : 'No'}</td>
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          {(() => {
+                            const total = card.checklists?.length ?? 0;
+                            const done = card.checklists?.filter(cl => cl.is_completed).length ?? 0;
+                            if (total === 0) return <span style={{ color: '#374151' }}>—</span>;
+                            return <span style={{ color: done === total ? '#34d399' : '#9ca3af' }}>{done}/{total}</span>;
+                          })()}
+                        </td>
                       </tr>
                     );
                   })}
@@ -640,9 +651,22 @@ function TimelineCardRow({
     ? (profiles.find(p => p.id === assignees[0])?.name ?? assignees[0].slice(0, 8))
     : null;
 
+  const clTotal = card.checklists?.length ?? 0;
+  const clDone = card.checklists?.filter(cl => cl.is_completed).length ?? 0;
+
   return (
     <div className="kb-ov-card-row" onClick={onClick}>
       <span className="kb-ov-card-title">{card.title}</span>
+      {clTotal > 0 && (
+        <span style={{
+          fontSize: 11,
+          color: clDone === clTotal ? '#34d399' : '#9ca3af',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}>
+          {clDone}/{clTotal}
+        </span>
+      )}
       <span className="kb-ov-card-meta">{columnName}</span>
       {priorityCfg ? (
         <span

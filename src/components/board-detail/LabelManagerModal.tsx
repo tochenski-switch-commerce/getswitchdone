@@ -163,23 +163,20 @@ export default function LabelManagerModal({
                     <span className="kb-label-dot" style={{ background: label.color }} />
                     {label.name}
                   </span>
-                  {shortcutMap.get(label.id) && (
-                    <kbd style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: 22, height: 22, borderRadius: 4,
-                      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-                      color: '#94a3b8', fontSize: 11, fontFamily: 'monospace', flexShrink: 0
-                    }}>
-                      {shortcutMap.get(label.id)}
-                    </kbd>
-                  )}
-                  <div className="kb-lm-item-actions">
-                    <button className="kb-btn-icon-sm" onClick={() => startEdit(label)} title="Edit label">
-                      <Pencil size={13} />
-                    </button>
-                    <button className="kb-btn-icon-sm" onClick={() => handleDelete(label.id, label.name)} title="Delete label">
-                      <Trash2 size={13} />
-                    </button>
+                  <div className="kb-lm-row-right">
+                    {shortcutMap.get(label.id) && (
+                      <kbd className="kb-lm-shortcut" title={`Keyboard shortcut: ${shortcutMap.get(label.id)}`}>
+                        {shortcutMap.get(label.id)}
+                      </kbd>
+                    )}
+                    <div className="kb-lm-item-actions">
+                      <button className="kb-btn-icon-sm" onClick={() => startEdit(label)} title="Edit label">
+                        <Pencil size={13} />
+                      </button>
+                      <button className="kb-btn-icon-sm" onClick={() => handleDelete(label.id, label.name)} title="Delete label">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

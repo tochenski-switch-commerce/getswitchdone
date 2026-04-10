@@ -121,6 +121,21 @@ export default function PublicFormPage() {
     const hasError = !!fieldErrors[field.id];
     const baseInputStyle = hasError ? 'pf-input pf-input-error' : 'pf-input';
 
+    if (field.maps_to === 'assignee' && field.assignee_options && field.assignee_options.length > 0) {
+      return (
+        <select
+          className={baseInputStyle}
+          value={values[field.id] || ''}
+          onChange={e => setValues(prev => ({ ...prev, [field.id]: e.target.value }))}
+        >
+          <option value="">{field.placeholder || 'Select assignee…'}</option>
+          {field.assignee_options.map(opt => (
+            <option key={opt.id} value={opt.id}>{opt.name}</option>
+          ))}
+        </select>
+      );
+    }
+
     if (field.maps_to === 'due_date') {
       return (
         <DatePickerInput

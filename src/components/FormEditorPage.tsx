@@ -43,6 +43,7 @@ export default function FormEditorPage() {
   const [form, setForm] = useState<BoardForm | null>(null);
   const [columns, setColumns] = useState<BoardColumn[]>([]);
   const [customFields, setCustomFields] = useState<BoardCustomField[]>([]);
+  const [boardMembers, setBoardMembers] = useState<{ id: string; name: string }[]>([]);
   const [fields, setFields] = useState<FormField[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -100,6 +101,32 @@ export default function FormEditorPage() {
         .eq('board_id', data.board_id)
         .order('position');
       if (cfs) setCustomFields(cfs as BoardCustomField[]);
+
+      // Fetch board members for assignee selection
+      const { data: board } = await supabase
+        .from('project_boards')
+        .select('user_id, team_id')
+        .eq('id', data.board_id)
+        .single();
+      if (board) {
+        let memberIds: string[] = [];
+        if (board.team_id) {
+          const { data: members } = await supabase
+            .from('team_members')
+            .select('user_id')
+            .eq('team_id', board.team_id);
+          memberIds = (members || []).map((m: { user_id: string }) => m.user_id);
+        } else {
+          memberIds = [board.user_id];
+        }
+        if (memberIds.length > 0) {
+          const { data: profs } = await supabase
+            .from('user_profiles')
+            .select('id, name')
+            .in('id', memberIds);
+          setBoardMembers((profs || []) as { id: string; name: string }[]);
+        }
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -539,8 +566,8 @@ export default function FormEditorPage() {
                               className="kb-input"
                               value={field.type}
                               onChange={e => updateField(field.id, { type: e.target.value as FormFieldType })}
-                              disabled={field.maps_to === 'priority' || field.maps_to === 'due_date'}
-                              style={field.maps_to === 'priority' || field.maps_to === 'due_date' ? { opacity: 0.5 } : undefined}
+                              disabled={field.maps_to === 'priority' || field.maps_to === 'due_date' || field.maps_to === 'assignee'}
+                              style={field.maps_to === 'priority' || field.maps_to === 'due_date' || field.maps_to === 'assignee' ? { opacity: 0.5 } : undefined}
                             >
                               {FIELD_TYPES.map(t => (
                                 <option key={t.value} value={t.value}>{t.label}</option>
@@ -559,7 +586,7 @@ export default function FormEditorPage() {
                           />
                         </div>
 
-                        {field.type === 'select' && field.maps_to !== 'priority' && (
+                        {field.type === 'select' && field.maps_to !== 'priority' && field.maps_to !== 'assignee' && (
                           <div className="kb-form-group">
                             <label className="kb-label">Options (one per line)</label>
                             <textarea
@@ -574,6 +601,37 @@ export default function FormEditorPage() {
                         {field.maps_to === 'priority' && (
                           <p className="kb-hint" style={{ marginTop: 0 }}>Options locked to board priorities: {PRIORITY_OPTIONS.join(', ')}</p>
                         )}
+                        {field.maps_to === 'assignee' && (
+                          <div className="kb-form-group">
+                            <label className="kb-label">Available Assignees</label>
+                            {boardMembers.length === 0 ? (
+                              <p className="kb-hint">No board members found.</p>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 6 }}>
+                                {boardMembers.map(member => {
+                                  const isChecked = (field.assignee_options || []).some(o => o.id === member.id);
+                                  return (
+                                    <label key={member.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => {
+                                          const current = field.assignee_options || [];
+                                          const updated = isChecked
+                                            ? current.filter(o => o.id !== member.id)
+                                            : [...current, { id: member.id, name: member.name }];
+                                          updateField(field.id, { assignee_options: updated });
+                                        }}
+                                      />
+                                      <span style={{ fontSize: 13, color: '#e5e7eb' }}>{member.name}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <p className="kb-hint" style={{ marginTop: 0 }}>{(field.assignee_options || []).length === 0 ? 'No members checked — public form will use a free-text input.' : 'Checked members appear as options on the public form.'}</p>
+                          </div>
+                        )}
 
                         <div className="kb-field-row">
                           <div className="kb-form-group" style={{ flex: 1 }}>
@@ -587,6 +645,8 @@ export default function FormEditorPage() {
                                   updateField(field.id, { maps_to: mapping, type: 'select', options: PRIORITY_OPTIONS });
                                 } else if (mapping === 'due_date') {
                                   updateField(field.id, { maps_to: mapping, type: 'date' });
+                                } else if (mapping === 'assignee') {
+                                  updateField(field.id, { maps_to: mapping, type: 'select', assignee_options: boardMembers });
                                 } else if (mapping && mapping.startsWith('custom_field:')) {
                                   const cf = customFields.find(c => `custom_field:${c.id}` === mapping);
                                   if (cf && (cf.field_type === 'dropdown' || cf.field_type === 'multiselect')) {

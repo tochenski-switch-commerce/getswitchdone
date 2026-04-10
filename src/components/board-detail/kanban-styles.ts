@@ -2258,7 +2258,6 @@ export const kanbanStyles = `
   .kb-lm-display-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
   }
   .kb-lm-label-preview {
@@ -2270,6 +2269,35 @@ export const kanbanStyles = `
     padding: 5px 12px;
     border-radius: 8px;
     border: 1px solid;
+    flex: 1;
+    min-width: 0;
+  }
+  .kb-lm-row-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .kb-lm-shortcut {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #52596a;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+    flex-shrink: 0;
+    user-select: none;
+    transition: all 0.15s ease;
+  }
+  .kb-lm-item:hover .kb-lm-shortcut {
+    background: rgba(255,255,255,0.09);
+    border-color: rgba(255,255,255,0.18);
+    color: #8892a0;
   }
   .kb-lm-item-actions {
     display: flex;

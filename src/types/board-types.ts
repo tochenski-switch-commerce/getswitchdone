@@ -232,6 +232,7 @@ export interface FormField {
   placeholder?: string;
   options?: string[];         // for select fields
   maps_to?: 'title' | 'description' | 'priority' | 'due_date' | 'assignee' | `custom_field:${string}`; // card field mapping
+  assignee_options?: { id: string; name: string }[]; // board members available for selection when maps_to === 'assignee'
 }
 
 export interface BoardForm {
