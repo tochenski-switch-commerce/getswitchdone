@@ -91,7 +91,11 @@ export type ColumnAutomationAction =
   | { type: 'set_priority'; value: CardPriority | null }
   | { type: 'set_assignee'; value: string }
   | { type: 'set_labels'; value: string[] }
-  | { type: 'add_checklist'; value: string[] };  // array of ChecklistTemplate IDs
+  | { type: 'clear_labels'; value: true }
+  | { type: 'add_checklist'; value: string[] }   // array of ChecklistTemplate IDs
+  | { type: 'move_completed'; value: string }     // destination column id
+  | { type: 'set_due_date'; value: string }       // ISO date string
+  | { type: 'strip_due_date'; value: true };
 
 export interface BoardColumn {
   id: string;

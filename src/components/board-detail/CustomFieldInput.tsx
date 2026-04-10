@@ -56,10 +56,16 @@ export default function CustomFieldInput({
   }
 
   if (field.field_type === 'multiselect') {
-    const selected: string[] = existing?.multi_value || [];
+    const [localMulti, setLocalMulti] = useState<string[]>(existing?.multi_value || []);
+
+    useEffect(() => {
+      setLocalMulti(existing?.multi_value || []);
+    }, [JSON.stringify(existing?.multi_value)]);
+
     const options = (field.options as string[]) || [];
     const toggle = (opt: string) => {
-      const next = selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt];
+      const next = localMulti.includes(opt) ? localMulti.filter(s => s !== opt) : [...localMulti, opt];
+      setLocalMulti(next);
       onSetValue(field.id, undefined, next);
     };
     return (
@@ -67,7 +73,7 @@ export default function CustomFieldInput({
         {options.map(opt => (
           <button
             key={opt}
-            className={`kb-cf-multi-chip ${selected.includes(opt) ? 'active' : ''}`}
+            className={`kb-cf-multi-chip ${localMulti.includes(opt) ? 'active' : ''}`}
             onClick={() => toggle(opt)}
           >
             {opt}

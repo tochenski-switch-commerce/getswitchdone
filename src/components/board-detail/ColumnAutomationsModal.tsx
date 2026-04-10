@@ -11,37 +11,54 @@ const ACTION_TYPES: ColumnAutomationAction['type'][] = [
   'set_priority',
   'set_assignee',
   'set_labels',
+  'clear_labels',
   'add_checklist',
+  'move_completed',
+  'set_due_date',
+  'strip_due_date',
 ];
 
 const ACTION_LABELS: Record<ColumnAutomationAction['type'], string> = {
-  set_complete:  'Mark complete',
-  set_priority:  'Set priority',
-  set_assignee:  'Assign to',
-  set_labels:    'Set labels',
-  add_checklist: 'Add checklist',
+  set_complete:    'Set complete',
+  set_priority:    'Set priority',
+  set_assignee:    'Set assignee',
+  set_labels:      'Set labels',
+  clear_labels:    'Strip labels',
+  add_checklist:   'Add checklist',
+  move_completed:  'Move completed cards',
+  set_due_date:    'Set due date',
+  strip_due_date:  'Strip due date',
 };
 
 const ACTION_ICONS: Record<ColumnAutomationAction['type'], string> = {
-  set_complete:  '✓',
-  set_priority:  '↑',
-  set_assignee:  '@',
-  set_labels:    '⬤',
-  add_checklist: '☑',
+  set_complete:    '✓',
+  set_priority:    '↑',
+  set_assignee:    '@',
+  set_labels:      '⬤',
+  clear_labels:    '⊘',
+  add_checklist:   '☑',
+  move_completed:  '→',
+  set_due_date:    '📅',
+  strip_due_date:  '✕',
 };
 
 function defaultForType(type: ColumnAutomationAction['type']): ColumnAutomationAction {
   switch (type) {
-    case 'set_complete':  return { type: 'set_complete', value: true };
-    case 'set_priority':  return { type: 'set_priority', value: null };
-    case 'set_assignee':  return { type: 'set_assignee', value: '' };
-    case 'set_labels':    return { type: 'set_labels', value: [] };
-    case 'add_checklist': return { type: 'add_checklist', value: [] };
+    case 'set_complete':    return { type: 'set_complete', value: true };
+    case 'set_priority':    return { type: 'set_priority', value: null };
+    case 'set_assignee':    return { type: 'set_assignee', value: '' };
+    case 'set_labels':      return { type: 'set_labels', value: [] };
+    case 'clear_labels':    return { type: 'clear_labels', value: true };
+    case 'add_checklist':   return { type: 'add_checklist', value: [] };
+    case 'move_completed':  return { type: 'move_completed', value: '' };
+    case 'set_due_date':    return { type: 'set_due_date', value: '' };
+    case 'strip_due_date':  return { type: 'strip_due_date', value: true };
   }
 }
 
 export default function ColumnAutomationsModal({
   column,
+  columns,
   labels,
   userProfiles,
   checklistTemplates,
@@ -49,6 +66,7 @@ export default function ColumnAutomationsModal({
   onClose,
 }: {
   column: BoardColumn;
+  columns: BoardColumn[];
   labels: BoardLabel[];
   userProfiles: UserProfile[];
   checklistTemplates: ChecklistTemplate[];
@@ -219,6 +237,47 @@ export default function ColumnAutomationsModal({
             })}
             {checklistTemplates.length === 0 && <span style={{ fontSize: 11, color: '#4b5563' }}>No saved checklists yet</span>}
           </div>
+        );
+
+      case 'clear_labels':
+        return <span style={{ fontSize: 11, color: '#6b7280' }}>All labels will be removed from the card.</span>;
+
+      case 'strip_due_date':
+        return <span style={{ fontSize: 11, color: '#6b7280' }}>The due date will be removed from the card.</span>;
+
+      case 'move_completed':
+        return (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {columns.map(c => (
+              <button
+                key={c.id}
+                onClick={() => updateAction({ type: 'move_completed', value: c.id })}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: 11, padding: '3px 9px', borderRadius: 5, cursor: 'pointer',
+                  background: action.value === c.id ? '#1f2937' : 'transparent',
+                  color: action.value === c.id ? '#e5e7eb' : '#6b7280',
+                  border: `1px solid ${action.value === c.id ? '#4b5563' : '#374151'}`,
+                  transition: 'all 0.1s',
+                }}
+              >
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
+                {c.title}
+              </button>
+            ))}
+            {columns.length === 0 && <span style={{ fontSize: 11, color: '#4b5563' }}>No other columns</span>}
+          </div>
+        );
+
+      case 'set_due_date':
+        return (
+          <input
+            type="date"
+            className="kb-automation-input"
+            value={action.value}
+            onChange={e => updateAction({ type: 'set_due_date', value: e.target.value })}
+            style={{ fontSize: 12, padding: '4px 8px', borderRadius: 5, background: '#0d1117', color: '#e5e7eb', border: '1px solid #374151' }}
+          />
         );
     }
   }

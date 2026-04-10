@@ -165,6 +165,12 @@ export default function TopNav() {
 
   const initial = (profile?.name?.[0] || user.email?.[0] || '?').toUpperCase();
 
+  const totalUnread = notifications.filter(n => !n.is_read).length;
+
+  useEffect(() => {
+    document.title = totalUnread > 0 ? `(${totalUnread}) Lumio` : 'Lumio';
+  }, [totalUnread]);
+
   const unreadByTab = Object.fromEntries(
     Object.entries(TAB_NOTIFICATION_TYPES).map(([href, types]) => [
       href,

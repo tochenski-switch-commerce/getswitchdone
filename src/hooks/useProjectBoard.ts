@@ -32,7 +32,20 @@ import type {
   BoardSummaryStats,
   CardLink,
   TemplateData,
+  RepeatRule,
 } from '@/types/board-types';
+
+export interface RepeatSeriesRow {
+  id: string;
+  board_id: string;
+  repeat_rule: RepeatRule;
+  is_active: boolean;
+  created_at: string;
+  /** Latest non-archived card title in this series — joined client-side */
+  cardTitle?: string;
+  /** Latest non-archived card start_date — for next-occurrence display */
+  cardStartDate?: string | null;
+}
 
 // ── Full board shape ──
 export interface FullBoard extends ProjectBoard {
@@ -743,6 +756,19 @@ export function useProjectBoard() {
         }
       }
 
+      // Sync repeat_series table when repeat fields change
+      if ('repeat_series_id' in cardUpdates) {
+        const { repeat_series_id, repeat_rule } = cardUpdates as { repeat_series_id?: string | null; repeat_rule?: RepeatRule | null };
+        if (repeat_series_id && repeat_rule) {
+          await supabase.from('repeat_series').upsert({
+            id: repeat_series_id,
+            board_id: boardId,
+            repeat_rule,
+            is_active: true,
+          }, { onConflict: 'id' });
+        }
+      }
+
       setBoard(prev => {
         if (!prev) return prev;
         let updatedLabels: BoardLabel[] | undefined;
@@ -807,6 +833,32 @@ export function useProjectBoard() {
       if (err) throw err;
     } catch (err: any) {
       setError(err.message);
+    }
+  }, []);
+
+  const fetchBoardColumns = useCallback(async (boardId: string) => {
+    const { data, error: err } = await supabase
+      .from('board_columns')
+      .select('id, title, color')
+      .eq('board_id', boardId)
+      .order('position');
+    if (err) return [];
+    return data as { id: string; title: string; color: string }[];
+  }, []);
+
+  const moveCardToBoard = useCallback(async (cardId: string, targetBoardId: string, targetColumnId: string) => {
+    setError(null);
+    try {
+      const { error: err } = await supabase
+        .from('board_cards')
+        .update({ board_id: targetBoardId, column_id: targetColumnId, position: 0 })
+        .eq('id', cardId);
+      if (err) throw err;
+      setBoard(prev => prev ? { ...prev, cards: prev.cards.filter(c => c.id !== cardId) } : prev);
+      return true;
+    } catch (err: any) {
+      setError(err.message);
+      return false;
     }
   }, []);
 
@@ -2169,13 +2221,86 @@ export function useProjectBoard() {
     }
   }, []);
 
+  // ── Repeat series management ──
+
+  const fetchRepeatSeries = useCallback(async (boardId: string): Promise<RepeatSeriesRow[]> => {
+    try {
+      const [seriesResult, cardsResult] = await Promise.all([
+        supabase
+          .from('repeat_series')
+          .select('*')
+          .eq('board_id', boardId)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('board_cards')
+          .select('repeat_series_id, title, start_date, created_at')
+          .eq('board_id', boardId)
+          .eq('is_archived', false)
+          .not('repeat_series_id', 'is', null)
+          .order('created_at', { ascending: false }),
+      ]);
+      if (seriesResult.error) throw seriesResult.error;
+
+      // Map latest card per series
+      const latestCard = new Map<string, { title: string; start_date: string | null }>();
+      for (const card of cardsResult.data || []) {
+        if (card.repeat_series_id && !latestCard.has(card.repeat_series_id)) {
+          latestCard.set(card.repeat_series_id, { title: card.title, start_date: card.start_date });
+        }
+      }
+
+      return (seriesResult.data || []).map(s => ({
+        ...s,
+        cardTitle: latestCard.get(s.id)?.title,
+        cardStartDate: latestCard.get(s.id)?.start_date ?? null,
+      })) as RepeatSeriesRow[];
+    } catch (err: any) {
+      console.error('[fetchRepeatSeries] failed:', err.message);
+      return [];
+    }
+  }, []);
+
+  const updateRepeatSeries = useCallback(async (seriesId: string, rule: RepeatRule): Promise<boolean> => {
+    try {
+      const { error: err } = await supabase
+        .from('repeat_series')
+        .update({ repeat_rule: rule })
+        .eq('id', seriesId);
+      if (err) throw err;
+      // Keep all non-archived cards in the series in sync
+      await supabase
+        .from('board_cards')
+        .update({ repeat_rule: rule })
+        .eq('repeat_series_id', seriesId)
+        .eq('is_archived', false);
+      return true;
+    } catch (err: any) {
+      console.error('[updateRepeatSeries] failed:', err.message);
+      return false;
+    }
+  }, []);
+
+  const stopRepeatSeries = useCallback(async (seriesId: string): Promise<boolean> => {
+    try {
+      const { error: err } = await supabase
+        .from('repeat_series')
+        .update({ is_active: false })
+        .eq('id', seriesId);
+      if (err) throw err;
+      return true;
+    } catch (err: any) {
+      console.error('[stopRepeatSeries] failed:', err.message);
+      return false;
+    }
+  }, []);
+
   return {
     boards, board, loading, error, checklistTemplates, userProfiles, boardMembers, notifications,
     boardEmails, unroutedEmails,
     fetchBoards, createBoard, createBoardFromTemplate, fetchBoard, updateBoard, toggleBoardStar, deleteBoard, duplicateBoard,
     addColumn, updateColumn, deleteColumn, reorderColumns,
     addBoardLink, removeBoardLink, reorderBoardLinks,
-    addCard, updateCard, deleteCard, moveCard, reorderCardsInColumn,
+    addCard, updateCard, deleteCard, moveCard, moveCardToBoard, fetchBoardColumns, reorderCardsInColumn,
     archiveCard, restoreCard, fetchArchivedCards,
     addCardLink, removeCardLink, searchCards, fetchCardDetail,
     addComment, editComment, deleteComment, reactToComment,
@@ -2187,6 +2312,7 @@ export function useProjectBoard() {
     fetchUserProfiles,
     fetchNotifications, createNotification, markNotificationRead, markCardNotificationsRead, markAllNotificationsRead, deleteNotification, clearAllNotifications,
     fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
+    fetchRepeatSeries, updateRepeatSeries, stopRepeatSeries,
     setBoard, applyRealtimeEvent,
   };
 }

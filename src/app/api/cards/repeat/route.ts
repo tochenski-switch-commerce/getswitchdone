@@ -48,10 +48,8 @@ function isRepeatDueToday(startDate: string, every: number, unit: string): boole
 
 /**
  * GET /api/cards/repeat
- * Cron endpoint — finds cards with an active repeat_rule whose schedule
- * hits today (anchored to each card's start_date), then duplicates them.
- *
- * Only duplicates the LATEST card in each repeat_series_id.
+ * Cron endpoint — finds active repeat series whose schedule hits today,
+ * then duplicates the latest non-archived card in each series.
  *
  * Protect with a secret header in production:
  *   Authorization: Bearer <CRON_SECRET>
@@ -67,63 +65,85 @@ export async function GET(request: Request) {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // 1. Fetch all non-archived cards with an active repeat_rule
-  const { data: repeatCards, error } = await supabase
-    .from('board_cards')
-    .select('*')
-    .not('repeat_rule', 'is', null)
-    .eq('is_archived', false)
-    .order('created_at', { ascending: false });
+  // 1. Fetch all active repeat series
+  const { data: activeSeries, error: seriesError } = await supabase
+    .from('repeat_series')
+    .select('id, board_id, repeat_rule')
+    .eq('is_active', true);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (seriesError) {
+    return NextResponse.json({ error: seriesError.message }, { status: 500 });
   }
 
-  if (!repeatCards || repeatCards.length === 0) {
-    return NextResponse.json({ message: 'No repeating cards found', created: 0 });
-  }
-
-  // 2. Group by repeat_series_id, pick the latest card per series
-  const seriesMap = new Map<string, typeof repeatCards[0]>();
-  for (const card of repeatCards) {
-    const sid = card.repeat_series_id;
-    if (!sid) continue;
-    if (!seriesMap.has(sid)) {
-      seriesMap.set(sid, card);
-    }
+  if (!activeSeries || activeSeries.length === 0) {
+    return NextResponse.json({ message: 'No active repeat series found', created: 0 });
   }
 
   const todayStr = new Date().toISOString().slice(0, 10);
-  const cardsToRepeat: typeof repeatCards = [];
 
-  for (const card of seriesMap.values()) {
-    const rule = card.repeat_rule as { mode?: string; every: number; unit: string; nth?: number; weekday?: number; endDate?: string };
-    if (!rule) continue;
-
-    // Check end date
-    if (rule.endDate && todayStr > rule.endDate) continue;
+  // 2. Filter to series whose schedule hits today
+  type RepeatRule = { mode?: string; every: number; unit: string; nth?: number; weekday?: number; endDate?: string };
+  const dueSeries = activeSeries.filter(series => {
+    const rule = series.repeat_rule as RepeatRule;
+    if (!rule) return false;
+    if (rule.endDate && todayStr > rule.endDate) return false;
 
     if (rule.mode === 'monthly-weekday') {
-      if (rule.nth != null && rule.weekday != null && isMonthlyWeekdayDueToday(rule.nth, rule.weekday)) {
-        cardsToRepeat.push(card);
-      }
+      return rule.nth != null && rule.weekday != null && isMonthlyWeekdayDueToday(rule.nth, rule.weekday);
+    }
+    // Interval mode — needs a card with a start_date (checked below)
+    return !!(rule.every && rule.unit);
+  });
+
+  if (dueSeries.length === 0) {
+    return NextResponse.json({ message: "No series match today's schedule", created: 0 });
+  }
+
+  // 3. For each due series, find the latest non-archived card
+  const seriesIds = dueSeries.map(s => s.id);
+  const { data: cards, error: cardsError } = await supabase
+    .from('board_cards')
+    .select('*')
+    .in('repeat_series_id', seriesIds)
+    .eq('is_archived', false)
+    .order('created_at', { ascending: false });
+
+  if (cardsError) {
+    return NextResponse.json({ error: cardsError.message }, { status: 500 });
+  }
+
+  // Latest card per series
+  const latestCardBySeries = new Map<string, typeof cards[0]>();
+  for (const card of cards || []) {
+    if (card.repeat_series_id && !latestCardBySeries.has(card.repeat_series_id)) {
+      latestCardBySeries.set(card.repeat_series_id, card);
+    }
+  }
+
+  // Filter interval-mode series that have a card with a start_date
+  const cardsToRepeat: Array<{ card: typeof cards[0]; rule: RepeatRule }> = [];
+  for (const series of dueSeries) {
+    const rule = series.repeat_rule as RepeatRule;
+    const card = latestCardBySeries.get(series.id);
+    if (!card) continue;
+
+    if (rule.mode === 'monthly-weekday') {
+      cardsToRepeat.push({ card, rule });
     } else {
-      // Interval mode (default)
-      if (!rule.every || !rule.unit) continue;
       if (!card.start_date) continue;
       if (isRepeatDueToday(card.start_date, rule.every, rule.unit)) {
-        cardsToRepeat.push(card);
+        cardsToRepeat.push({ card, rule });
       }
     }
   }
 
   if (cardsToRepeat.length === 0) {
-    return NextResponse.json({ message: 'No cards match today\'s schedule', created: 0 });
+    return NextResponse.json({ message: "No cards match today's schedule", created: 0 });
   }
 
-  // 3. Batch-fetch max positions for all unique column_ids and all label assignments up front
-  const uniqueColumnIds = [...new Set(cardsToRepeat.map(c => c.column_id))];
-  const sourceCardIds = cardsToRepeat.map(c => c.id);
+  // 4. Batch-fetch max positions and label assignments
+  const uniqueColumnIds = [...new Set(cardsToRepeat.map(({ card }) => card.column_id))];
+  const sourceCardIds = cardsToRepeat.map(({ card }) => card.id);
 
   const [posResults, labelsResults] = await Promise.all([
     supabase
@@ -138,7 +158,7 @@ export async function GET(request: Request) {
       .in('card_id', sourceCardIds),
   ]);
 
-  // Max position per column_id (track in-flight inserts so same-column cards don't collide)
+  // Max position per column_id
   const maxPosMap = new Map<string, number>();
   for (const row of posResults.data || []) {
     if (!maxPosMap.has(row.column_id)) {
@@ -152,14 +172,14 @@ export async function GET(request: Request) {
     labelsMap.get(row.card_id)!.push(row.label_id);
   }
 
-  // 4. Duplicate each matching card
+  // 5. Duplicate each matching card
   let created = 0;
   const errors: string[] = [];
 
-  for (const card of cardsToRepeat) {
+  for (const { card, rule } of cardsToRepeat) {
     const currentMax = maxPosMap.get(card.column_id) ?? 0;
     const nextPos = currentMax + 1;
-    maxPosMap.set(card.column_id, nextPos); // bump for any subsequent card in same column
+    maxPosMap.set(card.column_id, nextPos);
 
     // Compute new due_date: preserve the offset between start_date and due_date
     let newDueDate: string | null = null;
@@ -171,7 +191,6 @@ export async function GET(request: Request) {
       newDue.setDate(newDue.getDate() + offsetDays);
       newDueDate = newDue.toISOString().slice(0, 10);
     } else if (card.due_date && !card.start_date) {
-      // No start_date to anchor offset — set due_date to today
       newDueDate = todayStr;
     }
 
@@ -187,7 +206,7 @@ export async function GET(request: Request) {
       due_date: newDueDate,
       due_time: card.due_time || null,
       position: nextPos,
-      repeat_rule: card.repeat_rule,
+      repeat_rule: rule,
       repeat_series_id: card.repeat_series_id,
     };
 
@@ -201,7 +220,6 @@ export async function GET(request: Request) {
       errors.push(`${card.id}: ${insertErr.message}`);
     } else {
       created++;
-      // Copy label assignments using pre-fetched data
       const labelIds = labelsMap.get(card.id);
       if (inserted && labelIds && labelIds.length > 0) {
         await supabase

@@ -15,7 +15,7 @@ import {
   Zap, Bold, Italic, Underline, Strikethrough,
   LinkIcon, Heading, ListBullet, ListOrdered, SlidersHorizontal, FileText, Mail, Clock,
   getBoardIcon, BOARD_ICONS, ICON_COLORS, DEFAULT_ICON_COLOR,
-  BotMessageSquare, GripVertical, BarChart3, Archive,
+  BotMessageSquare, GripVertical, BarChart3, Archive, Repeat,
 } from '@/components/BoardIcons';
 import dynamic from 'next/dynamic';
 import FlameLoader from '@/components/FlameLoader';
@@ -39,6 +39,7 @@ const CustomFieldManagerModal = dynamic(() => import('./board-detail/CustomField
 const ColumnAutomationsModal = dynamic(() => import('./board-detail/ColumnAutomationsModal'), { ssr: false });
 const BoardAutomationsModal = dynamic(() => import('./board-detail/BoardAutomationsModal'), { ssr: false });
 const ArchiveDrawer = dynamic(() => import('./board-detail/ArchiveDrawer'), { ssr: false });
+const RepeatSeriesDrawer = dynamic(() => import('./board-detail/RepeatSeriesDrawer'), { ssr: false });
 import { kanbanStyles } from './board-detail/kanban-styles';
 import { hapticLight, hapticMedium, hapticHeavy, hapticSelection } from '@/lib/haptics';
 
@@ -62,8 +63,9 @@ function BoardPage() {
     boards, board, fetchBoards, fetchBoard, updateBoard, deleteBoard: deleteBoardFn,
     addColumn, updateColumn, deleteColumn, reorderColumns,
     addBoardLink, removeBoardLink, reorderBoardLinks,
-    addCard, updateCard, deleteCard, moveCard, reorderCardsInColumn,
+    addCard, updateCard, deleteCard, moveCard, moveCardToBoard, fetchBoardColumns, reorderCardsInColumn,
     archiveCard, restoreCard, fetchArchivedCards,
+    fetchRepeatSeries, updateRepeatSeries, stopRepeatSeries,
     addComment, editComment, deleteComment, reactToComment,
     addChecklistGroup, updateChecklistGroup, deleteChecklistGroup,
     addChecklistItem, editChecklistItem, toggleChecklistItem, deleteChecklistItem, reorderChecklistItems, updateChecklistItemDueDate, updateChecklistItemAssignees,
@@ -167,6 +169,9 @@ function BoardPage() {
   const [showArchiveDrawer, setShowArchiveDrawer] = useState(false);
   const [archivedCards, setArchivedCards] = useState<import('@/types/board-types').BoardCard[]>([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
+  const [showRepeatDrawer, setShowRepeatDrawer] = useState(false);
+  const [repeatSeries, setRepeatSeries] = useState<import('@/hooks/useProjectBoard').RepeatSeriesRow[]>([]);
+  const [repeatDrawerLoading, setRepeatDrawerLoading] = useState(false);
   const boardAutoRanRef = useRef<string | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [zoomedColId, setZoomedColId] = useState<string | null>(null);
@@ -919,6 +924,9 @@ function BoardPage() {
       else if (action.type === 'set_priority') cardUpdates.priority = action.value;
       else if (action.type === 'set_assignee') cardUpdates.assignee = action.value;
       else if (action.type === 'set_labels') cardUpdates.label_ids = action.value;
+      else if (action.type === 'clear_labels') cardUpdates.label_ids = [];
+      else if (action.type === 'set_due_date') cardUpdates.due_date = action.value;
+      else if (action.type === 'strip_due_date') cardUpdates.due_date = null;
     }
     if (Object.keys(cardUpdates).length > 0) {
       await updateCard(boardId, cardId, cardUpdates);
@@ -927,6 +935,15 @@ function BoardPage() {
     if (checklistAction && checklistAction.type === 'add_checklist') {
       for (const templateId of checklistAction.value) {
         await applyChecklistTemplate(boardId, cardId, templateId);
+      }
+    }
+    // move_completed: if the card is now complete (or was just set complete), move it
+    const moveCompletedAction = automations.find(a => a.type === 'move_completed');
+    if (moveCompletedAction && moveCompletedAction.type === 'move_completed') {
+      const card = board.cards.find(c => c.id === cardId);
+      const isComplete = 'is_complete' in cardUpdates ? cardUpdates.is_complete : card?.is_complete;
+      if (isComplete) {
+        await moveCard(boardId, cardId, moveCompletedAction.value, 0);
       }
     }
   };
@@ -1206,6 +1223,25 @@ function BoardPage() {
             title="View archived cards"
           >
             <Archive size={16} />
+          </button>
+
+          {/* Repeat series drawer */}
+          <button
+            className={`kb-btn-icon${showRepeatDrawer ? ' kb-btn-icon-active' : ''}`}
+            onClick={async () => {
+              if (!showRepeatDrawer) {
+                setRepeatDrawerLoading(true);
+                setShowRepeatDrawer(true);
+                const series = await fetchRepeatSeries(boardId);
+                setRepeatSeries(series);
+                setRepeatDrawerLoading(false);
+              } else {
+                setShowRepeatDrawer(false);
+              }
+            }}
+            title="Manage repeating cards"
+          >
+            <Repeat size={16} />
           </button>
 
           {/* Star board */}
@@ -1820,6 +1856,10 @@ function BoardPage() {
                               await updateCard(boardId, card.id, { is_complete: !wasComplete });
                               if (!wasComplete) {
                                 await runBoardAutomation(card, 'card_completed');
+                                const moveAction = col.automations?.find(a => a.type === 'move_completed');
+                                if (moveAction && moveAction.type === 'move_completed') {
+                                  await moveCard(boardId, card.id, moveAction.value, 0);
+                                }
                               }
                             }}
                             onMoveToNext={(() => {
@@ -2030,6 +2070,11 @@ function BoardPage() {
             // Fire board automations for relevant field changes
             if (updates.is_complete === true && !wasComplete) {
               await runBoardAutomation(activeCard, 'card_completed');
+              const cardCol = board.columns.find(c => c.id === activeCard.column_id);
+              const moveAction = cardCol?.automations?.find(a => a.type === 'move_completed');
+              if (moveAction && moveAction.type === 'move_completed') {
+                await moveCard(boardId, activeCard.id, moveAction.value, 0);
+              }
             }
             const assigneeAdded = newAssignees.some(n => !oldAssignees.has(n.toLowerCase()));
             if (assigneeAdded) {
@@ -2223,17 +2268,26 @@ function BoardPage() {
             checklistTemplates={checklistTemplates}
             onApplyTemplate={async (cardId, templateId) => { await applyChecklistTemplate(boardId, cardId, templateId); }}
             onSortCards={async (columnId, direction) => {
-              const colCards = board.cards
-                .filter(c => c.column_id === columnId && !c.is_archived)
-                .sort((a, b) => direction === 'asc'
-                  ? a.title.localeCompare(b.title)
-                  : b.title.localeCompare(a.title)
-                );
+              const colCards = [...board.cards.filter(c => c.column_id === columnId && !c.is_archived)];
+              colCards.sort((a, b) => {
+                if (direction === 'asc') return a.title.localeCompare(b.title);
+                if (direction === 'desc') return b.title.localeCompare(a.title);
+                if (direction === 'due_asc') return (a.due_date ?? '9999') < (b.due_date ?? '9999') ? -1 : 1;
+                if (direction === 'due_desc') return (a.due_date ?? '') > (b.due_date ?? '') ? -1 : 1;
+                return 0;
+              });
               for (let i = 0; i < colCards.length; i++) {
                 await updateCard(boardId, colCards[i].id, { position: i });
               }
             }}
             onUpdateColumn={async (updates) => { await updateColumn(boardId, col.id, updates as any); }}
+            onMoveToBoardCards={async (targetBoardId, targetColumnId) => {
+              for (const card of colCards) {
+                await moveCardToBoard(card.id, targetBoardId, targetColumnId);
+              }
+            }}
+            availableBoards={(boards || []).filter(b => b.id !== boardId && !b.is_archived).map(b => ({ id: b.id, title: b.title }))}
+            onFetchBoardColumns={fetchBoardColumns}
             onClose={() => setListActionsColId(null)}
             userProfiles={boardMembers}
           />
@@ -2247,6 +2301,7 @@ function BoardPage() {
         return (
           <ColumnAutomationsModal
             column={col}
+            columns={board.columns.filter(c => c.id !== col.id)}
             labels={board.labels}
             userProfiles={boardMembers.length > 0 ? boardMembers : userProfiles}
             checklistTemplates={checklistTemplates}
@@ -2280,6 +2335,29 @@ function BoardPage() {
           onRestore={async (cardId, columnId) => {
             await restoreCard(boardId, cardId, columnId);
             setArchivedCards(prev => prev.filter(c => c.id !== cardId));
+          }}
+        />
+      )}
+
+      {/* ── Repeat Series Drawer ── */}
+      {showRepeatDrawer && board && (
+        <RepeatSeriesDrawer
+          series={repeatSeries}
+          loading={repeatDrawerLoading}
+          onClose={() => setShowRepeatDrawer(false)}
+          onUpdate={async (seriesId, rule) => {
+            const ok = await updateRepeatSeries(seriesId, rule);
+            if (ok) {
+              setRepeatSeries(prev => prev.map(s => s.id === seriesId ? { ...s, repeat_rule: rule } : s));
+            }
+            return ok;
+          }}
+          onStop={async (seriesId) => {
+            const ok = await stopRepeatSeries(seriesId);
+            if (ok) {
+              setRepeatSeries(prev => prev.map(s => s.id === seriesId ? { ...s, is_active: false } : s));
+            }
+            return ok;
           }}
         />
       )}

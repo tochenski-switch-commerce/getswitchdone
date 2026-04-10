@@ -3320,5 +3320,14 @@ export const kanbanStyles = `
     flex-shrink: 0;
     width: 160px;
   }
+  .kb-repeat-series-edit-form {
+    background: #0f1117;
+    border: 1px solid #1e2130;
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
 `;
 

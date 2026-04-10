@@ -23,8 +23,11 @@ export default function ListActionsModal({
   onSortCards,
   onUpdateColumn,
   onArchiveCards,
+  onMoveToBoardCards,
   onClose,
   userProfiles,
+  availableBoards,
+  onFetchBoardColumns,
 }: {
   column: BoardColumn;
   cards: BoardCard[];
@@ -35,11 +38,14 @@ export default function ListActionsModal({
   onAddChecklistItem: (cardId: string, title: string) => Promise<void>;
   checklistTemplates: ChecklistTemplate[];
   onApplyTemplate: (cardId: string, templateId: string) => Promise<void>;
-  onSortCards: (columnId: string, direction: 'asc' | 'desc') => Promise<void>;
+  onSortCards: (columnId: string, direction: 'asc' | 'desc' | 'due_asc' | 'due_desc') => Promise<void>;
   onUpdateColumn: (updates: { card_limit?: number | null; color?: string }) => Promise<void>;
   onArchiveCards: (cardIds: string[]) => Promise<void>;
+  onMoveToBoardCards: (targetBoardId: string, targetColumnId: string) => Promise<void>;
   onClose: () => void;
   userProfiles: UserProfile[];
+  availableBoards: { id: string; title: string }[];
+  onFetchBoardColumns: (boardId: string) => Promise<{ id: string; title: string; color: string }[]>;
 }) {
   const [bulkDueDate, setBulkDueDate] = useState('');
   const [bulkAssignee, setBulkAssignee] = useState('');
@@ -54,15 +60,23 @@ export default function ListActionsModal({
   const [savingLimit, setSavingLimit] = useState(false);
   const [columnColor, setColumnColor] = useState(column.color || '#6366f1');
   const [savingColor, setSavingColor] = useState(false);
+  const [bulkMoveCompletedCol, setBulkMoveCompletedCol] = useState('');
+  const [moveToBoardId, setMoveToBoardId] = useState('');
+  const [moveToBoardColId, setMoveToBoardColId] = useState('');
+  const [moveToBoardColumns, setMoveToBoardColumns] = useState<{ id: string; title: string; color: string }[]>([]);
+  const [loadingBoardCols, setLoadingBoardCols] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const otherColumns = board.columns.filter(c => c.id !== column.id);
+  const completedCards = cards.filter(c => c.is_complete);
 
-  const apply = async (label: string, fn: () => Promise<void>) => {
+  const apply = async (label: string, fn: () => Promise<void>, count?: number) => {
     setApplying(true);
     setResult('');
     try {
       await fn();
-      setResult(`${label} applied to ${cards.length} card${cards.length !== 1 ? 's' : ''}`);
+      const n = count ?? cards.length;
+      setResult(`${label} applied to ${n} card${n !== 1 ? 's' : ''}`);
     } catch {
       setResult('Something went wrong');
     } finally {
@@ -181,6 +195,23 @@ export default function ListActionsModal({
                     })}
                   >
                     Apply
+                  </button>
+                </div>
+              </div>
+
+              {/* Strip Due Date */}
+              <div className="kb-list-action-row">
+                <div className="kb-list-action-label"><CalendarDays size={13} /> Strip Due Date</div>
+                <div className="kb-list-action-controls">
+                  <button
+                    className="kb-btn kb-btn-sm"
+                    style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151' }}
+                    disabled={applying}
+                    onClick={() => apply('Strip due date', async () => {
+                      for (const card of cards) await onUpdateCard(card.id, { due_date: null });
+                    })}
+                  >
+                    Remove from All
                   </button>
                 </div>
               </div>
@@ -304,10 +335,10 @@ export default function ListActionsModal({
                 </div>
               )}
 
-              {/* Sort A-Z / Z-A */}
+              {/* Sort Cards */}
               <div className="kb-list-action-row">
                 <div className="kb-list-action-label"><ArrowDownAZ size={13} /> Sort Cards</div>
-                <div className="kb-list-action-controls">
+                <div className="kb-list-action-controls" style={{ flexWrap: 'wrap' }}>
                   <button
                     className="kb-btn kb-btn-primary kb-btn-sm"
                     disabled={applying}
@@ -321,6 +352,20 @@ export default function ListActionsModal({
                     onClick={() => apply('Sort Z→A', async () => { await onSortCards(column.id, 'desc'); })}
                   >
                     Z → A
+                  </button>
+                  <button
+                    className="kb-btn kb-btn-primary kb-btn-sm"
+                    disabled={applying}
+                    onClick={() => apply('Sort Due ↑', async () => { await onSortCards(column.id, 'due_asc'); })}
+                  >
+                    Due ↑
+                  </button>
+                  <button
+                    className="kb-btn kb-btn-primary kb-btn-sm"
+                    disabled={applying}
+                    onClick={() => apply('Sort Due ↓', async () => { await onSortCards(column.id, 'due_desc'); })}
+                  >
+                    Due ↓
                   </button>
                 </div>
               </div>
@@ -438,6 +483,111 @@ export default function ListActionsModal({
                 </div>
               )}
 
+              {/* Move All Completed */}
+              {otherColumns.length > 0 && (
+                <div className="kb-list-action-row">
+                  <div className="kb-list-action-label"><Check size={13} /> Move All Completed</div>
+                  <div className="kb-list-action-controls" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {otherColumns.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => setBulkMoveCompletedCol(bulkMoveCompletedCol === c.id ? '' : c.id)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            fontSize: 11, padding: '4px 9px', borderRadius: 5, cursor: 'pointer',
+                            background: bulkMoveCompletedCol === c.id ? '#1f2937' : 'transparent',
+                            color: bulkMoveCompletedCol === c.id ? '#e5e7eb' : '#6b7280',
+                            border: `1px solid ${bulkMoveCompletedCol === c.id ? '#374151' : '#374151'}`,
+                            transition: 'all 0.1s',
+                          }}
+                        >
+                          <span style={{
+                            width: 7, height: 7, borderRadius: '50%',
+                            background: c.color, flexShrink: 0,
+                          }} />
+                          {c.title}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="kb-btn kb-btn-primary kb-btn-sm"
+                      disabled={!bulkMoveCompletedCol || completedCards.length === 0 || applying}
+                      onClick={() => apply('Move completed', async () => {
+                        for (const card of completedCards) await onMoveCard(card.id, bulkMoveCompletedCol);
+                      }, completedCards.length)}
+                    >
+                      Move ({completedCards.length})
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Move All to Board */}
+              {availableBoards.length > 0 && (
+                <div className="kb-list-action-row">
+                  <div className="kb-list-action-label"><FolderKanban size={13} /> Move All to Board</div>
+                  <div className="kb-list-action-controls" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+                    <select
+                      className="kb-input kb-import-select"
+                      value={moveToBoardId}
+                      onChange={async e => {
+                        const bid = e.target.value;
+                        setMoveToBoardId(bid);
+                        setMoveToBoardColId('');
+                        setMoveToBoardColumns([]);
+                        if (bid) {
+                          setLoadingBoardCols(true);
+                          const cols = await onFetchBoardColumns(bid);
+                          setMoveToBoardColumns(cols);
+                          setLoadingBoardCols(false);
+                        }
+                      }}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">Choose a board…</option>
+                      {availableBoards.map(b => (
+                        <option key={b.id} value={b.id}>{b.title}</option>
+                      ))}
+                    </select>
+                    {moveToBoardId && (
+                      loadingBoardCols ? (
+                        <span style={{ fontSize: 11, color: '#4b5563' }}>Loading columns…</span>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                          {moveToBoardColumns.map(c => (
+                            <button
+                              key={c.id}
+                              onClick={() => setMoveToBoardColId(moveToBoardColId === c.id ? '' : c.id)}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                fontSize: 11, padding: '4px 9px', borderRadius: 5, cursor: 'pointer',
+                                background: moveToBoardColId === c.id ? '#1f2937' : 'transparent',
+                                color: moveToBoardColId === c.id ? '#e5e7eb' : '#6b7280',
+                                border: `1px solid ${moveToBoardColId === c.id ? '#374151' : '#374151'}`,
+                                transition: 'all 0.1s',
+                              }}
+                            >
+                              <span style={{ width: 7, height: 7, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
+                              {c.title}
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    )}
+                    <button
+                      className="kb-btn kb-btn-primary kb-btn-sm"
+                      disabled={!moveToBoardId || !moveToBoardColId || applying}
+                      onClick={() => apply('Move to board', async () => {
+                        await onMoveToBoardCards(moveToBoardId, moveToBoardColId);
+                      })}
+                    >
+                      Move
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Archive All */}
               <div className="kb-list-action-row">
                 <div className="kb-list-action-label"><Archive size={13} /> Archive All Cards</div>
@@ -462,18 +612,38 @@ export default function ListActionsModal({
               <div className="kb-list-action-row kb-list-action-danger">
                 <div className="kb-list-action-label"><Trash2 size={13} /> Clear All Cards</div>
                 <div className="kb-list-action-controls">
-                  <button
-                    className="kb-btn kb-btn-sm kb-btn-danger"
-                    disabled={applying}
-                    onClick={() => {
-                      if (!confirm(`Delete all ${cards.length} cards from "${column.title}"? This cannot be undone.`)) return;
-                      apply('Clear', async () => {
-                        for (const card of cards) await onDeleteCard(card.id);
-                      });
-                    }}
-                  >
-                    Delete {cards.length} Card{cards.length !== 1 ? 's' : ''}
-                  </button>
+                  {confirmDelete ? (
+                    <>
+                      <span style={{ fontSize: 11, color: '#f87171' }}>
+                        Delete all {cards.length} cards from &ldquo;{column.title}&rdquo;? This cannot be undone.
+                      </span>
+                      <button
+                        className="kb-btn kb-btn-sm kb-btn-danger"
+                        disabled={applying}
+                        onClick={() => apply('Clear', async () => {
+                          for (const card of cards) await onDeleteCard(card.id);
+                          setConfirmDelete(false);
+                        })}
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        className="kb-btn kb-btn-sm"
+                        style={{ background: '#1f2937', color: '#9ca3af', border: '1px solid #374151' }}
+                        onClick={() => setConfirmDelete(false)}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className="kb-btn kb-btn-sm kb-btn-danger"
+                      disabled={applying}
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      Delete {cards.length} Card{cards.length !== 1 ? 's' : ''}
+                    </button>
+                  )}
                 </div>
               </div>
             </>
