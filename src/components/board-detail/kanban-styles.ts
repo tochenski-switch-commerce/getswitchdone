@@ -896,17 +896,13 @@ export const kanbanStyles = `
     gap: 8px;
   }
   .kb-hashtag-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
     background: #1a1d2e;
     border: 1px solid #2a2d3a;
     border-radius: 10px;
     overflow: hidden;
     max-height: 200px;
     overflow-y: auto;
-    z-index: 50;
+    z-index: 9999;
     box-shadow: 0 6px 20px rgba(0,0,0,0.4);
   }
   .kb-hashtag-option {

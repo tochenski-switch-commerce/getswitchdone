@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
 import { useRealtimeBoard } from '@/hooks/useRealtimeBoard';
@@ -1919,8 +1920,7 @@ function BoardPage() {
                             </div>
                           ) : (
                             <>
-                              <div style={{ position: 'relative' }}>
-                                <input
+                              <input
                                   ref={newCardRef}
                                   className="kb-input"
                                   value={newCardTitle}
@@ -1939,7 +1939,7 @@ function BoardPage() {
                                     if (hashtagQuery !== null) {
                                       const opts = [...(board.labels || [])].sort((a, b) => a.name.localeCompare(b.name))
                                         .filter(l => l.name.toLowerCase().startsWith(hashtagQuery.toLowerCase()));
-                                      const hasCreate = hashtagQuery.length > 0 && !opts.some(l => l.name.toLowerCase() === hashtagQuery.toLowerCase());
+                                      const hasCreate = hashtagQuery.length > 0 && opts.length === 0;
                                       const total = opts.length + (hasCreate ? 1 : 0);
                                       if (e.key === 'ArrowDown') { e.preventDefault(); setHashtagFocusIdx(i => Math.min(i + 1, total - 1)); return; }
                                       if (e.key === 'ArrowUp') { e.preventDefault(); setHashtagFocusIdx(i => Math.max(i - 1, 0)); return; }
@@ -1963,13 +1963,18 @@ function BoardPage() {
                                     if (e.key === 'Escape') { setAddingCardCol(null); setNewCardTitle(''); }
                                   }}
                                 />
-                                {/* Hashtag label dropdown */}
-                                {hashtagQuery !== null && (() => {
+                                {/* Hashtag label dropdown — rendered as a portal to escape overflow clipping */}
+                                {hashtagQuery !== null && typeof document !== 'undefined' && (() => {
+                                  const rect = newCardRef.current?.getBoundingClientRect();
+                                  if (!rect) return null;
                                   const opts = [...(board.labels || [])].sort((a, b) => a.name.localeCompare(b.name))
                                     .filter(l => l.name.toLowerCase().startsWith(hashtagQuery.toLowerCase()));
-                                  const hasCreate = hashtagQuery.length > 0 && !opts.some(l => l.name.toLowerCase() === hashtagQuery.toLowerCase());
-                                  return (
-                                    <div className="kb-hashtag-dropdown">
+                                  const hasCreate = hashtagQuery.length > 0 && opts.length === 0;
+                                  return ReactDOM.createPortal(
+                                    <div
+                                      className="kb-hashtag-dropdown"
+                                      style={{ position: 'fixed', top: rect.bottom + 4, left: rect.left, width: rect.width }}
+                                    >
                                       {opts.length === 0 && !hasCreate && (
                                         <div className="kb-hashtag-empty">
                                           {hashtagQuery.length === 0 ? 'Type a label name…' : 'No matching labels'}
@@ -1999,10 +2004,10 @@ function BoardPage() {
                                           Create "{hashtagQuery}"
                                         </button>
                                       )}
-                                    </div>
+                                    </div>,
+                                    document.body
                                   );
                                 })()}
-                              </div>
                               {/* Pending label pills */}
                               {pendingLabelIds.length > 0 && (
                                 <div className="kb-pending-labels">

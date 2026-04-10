@@ -660,7 +660,6 @@ export default function TodayPage() {
   const today = new Date();
   const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  const autoFocusCard = focused.length === 0 ? (overdue[0] ?? dueToday[0] ?? null) : null;
   const progressTotal = stats.overdueCount + stats.dueTodayCount + stats.completedTodayCount;
 
   const isEmpty =
@@ -718,11 +717,6 @@ export default function TodayPage() {
               <FocusCard key={card.id} card={card} onComplete={markComplete} onUnfocus={unfocusCard} />
             ))}
           </div>
-        )}
-
-        {/* ── Auto-focus card (when no user-focused cards) ── */}
-        {!loading && autoFocusCard && (
-          <FocusCard card={autoFocusCard} onComplete={markComplete} />
         )}
 
         {/* ── Stats ── */}
