@@ -59,6 +59,11 @@ export default function LabelManagerModal({
     if (editingId === labelId) setEditingId(null);
   };
 
+  const sortedLabels = [...board.labels].sort((a, b) => a.name.localeCompare(b.name));
+  const shortcutMap = new Map<string, string | null>(
+    sortedLabels.map((l, i) => [l.id, i < 9 ? String(i + 1) : i === 9 ? '0' : null])
+  );
+
   return (
     <div className="kb-modal-overlay" onMouseDown={onClose}>
       <div className="kb-lm-modal" onMouseDown={e => e.stopPropagation()}>
@@ -122,7 +127,7 @@ export default function LabelManagerModal({
           {board.labels.length === 0 && (
             <div className="kb-lm-empty">No labels yet. Create one above!</div>
           )}
-          {board.labels.map(label => (
+          {sortedLabels.map(label => (
             <div key={label.id} className="kb-lm-item">
               {editingId === label.id ? (
                 /* Editing mode */
@@ -158,6 +163,16 @@ export default function LabelManagerModal({
                     <span className="kb-label-dot" style={{ background: label.color }} />
                     {label.name}
                   </span>
+                  {shortcutMap.get(label.id) && (
+                    <kbd style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 22, height: 22, borderRadius: 4,
+                      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                      color: '#94a3b8', fontSize: 11, fontFamily: 'monospace', flexShrink: 0
+                    }}>
+                      {shortcutMap.get(label.id)}
+                    </kbd>
+                  )}
                   <div className="kb-lm-item-actions">
                     <button className="kb-btn-icon-sm" onClick={() => startEdit(label)} title="Edit label">
                       <Pencil size={13} />

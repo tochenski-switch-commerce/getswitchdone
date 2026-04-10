@@ -892,6 +892,20 @@ function BoardPage() {
       } else if (e.key === 'a') {
         e.preventDefault();
         archiveCard(boardId, card.id, card.column_id);
+      } else if (/^[0-9]$/.test(e.key)) {
+        if (window.matchMedia('(max-width: 768px)').matches) return;
+        e.preventDefault();
+        const sortedLabels = [...(board.labels || [])].sort((a, b) => a.name.localeCompare(b.name));
+        const idx = e.key === '0' ? 9 : parseInt(e.key, 10) - 1;
+        if (idx < sortedLabels.length) {
+          const targetLabel = sortedLabels[idx];
+          const currentIds = (card.labels || []).map(l => l.id);
+          const newIds = currentIds.includes(targetLabel.id)
+            ? currentIds.filter(id => id !== targetLabel.id)
+            : [...currentIds, targetLabel.id];
+          markCardUpdated(card.id);
+          updateCard(boardId, card.id, { label_ids: newIds });
+        }
       } else if (e.key === 'Enter') {
         e.preventDefault();
         openCardDetail(card);
@@ -2044,6 +2058,12 @@ function BoardPage() {
           <span className="kb-shortcut-bar-item"><kbd>A</kbd> Archive</span>
           <span className="kb-shortcut-bar-sep">·</span>
           <span className="kb-shortcut-bar-item"><kbd>⌫</kbd> Delete</span>
+          {(board.labels?.length ?? 0) > 0 && (
+            <>
+              <span className="kb-shortcut-bar-sep">·</span>
+              <span className="kb-shortcut-bar-item"><kbd>1–9</kbd> Toggle label</span>
+            </>
+          )}
         </div>
       )}
 
