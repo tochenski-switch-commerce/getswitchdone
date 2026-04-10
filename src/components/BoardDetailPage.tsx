@@ -895,7 +895,7 @@ function BoardPage() {
       } else if (/^[0-9]$/.test(e.key)) {
         if (window.matchMedia('(max-width: 768px)').matches) return;
         e.preventDefault();
-        const sortedLabels = [...(board.labels || [])].sort((a, b) => a.name.localeCompare(b.name));
+        const sortedLabels = [...(board?.labels || [])].sort((a, b) => a.name.localeCompare(b.name));
         const idx = e.key === '0' ? 9 : parseInt(e.key, 10) - 1;
         if (idx < sortedLabels.length) {
           const targetLabel = sortedLabels[idx];
