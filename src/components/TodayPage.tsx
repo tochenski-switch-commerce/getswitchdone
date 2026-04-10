@@ -635,6 +635,17 @@ export default function TodayPage() {
     if (user) refresh();
   }, [user, refresh]);
 
+  // Refresh when the page becomes visible again (handles back-navigation from board cards
+  // where Next.js router cache restores the page without remounting)
+  useEffect(() => {
+    if (!user) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [user, refresh]);
+
   if (authLoading || !user) {
     return (
       <div className="td-root">

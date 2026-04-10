@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   // Find non-archived, incomplete cards with a due date
   const { data: cards, error: cardsErr } = await db
     .from('board_cards')
-    .select('id, title, due_date, due_time, board_id, created_by, assignee, assignees')
+    .select('id, title, due_date, due_time, board_id, assignee, assignees')
     .eq('is_archived', false)
     .eq('is_complete', false)
     .not('due_date', 'is', null);
@@ -79,22 +79,10 @@ export async function GET(req: NextRequest) {
 
   // Check which cards already have an overdue notification (avoid duplicates)
   const cardIds = overdueCards.map(c => c.id);
-  const { data: existingNotifs } = await db
-    .from('notifications')
-    .select('card_id')
-    .eq('type', 'overdue')
-    .in('card_id', cardIds);
 
-  const alreadyNotified = new Set((existingNotifs || []).map(n => n.card_id));
-  const newOverdue = overdueCards.filter(c => !alreadyNotified.has(c.id));
-
-  if (newOverdue.length === 0) {
-    return NextResponse.json({ checked: cards.length, notified: 0, alreadyNotified: alreadyNotified.size });
-  }
-
-  // Batch-fetch all assignee user IDs needed across all overdue cards in one query
+  // Batch-fetch all assignee user IDs for all overdue cards
   const allCardAssigneeNames = new Set<string>();
-  for (const card of newOverdue) {
+  for (const card of overdueCards) {
     const names: string[] = card.assignees?.length ? card.assignees : card.assignee ? [card.assignee] : [];
     for (const n of names) allCardAssigneeNames.add(n);
   }
@@ -110,39 +98,52 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // For each overdue card, determine who to notify:
-  // - The card creator (created_by)
-  // - All assignees
-  // Deduplicate user IDs per card
-  const notifications: { user_id: string; board_id: string; card_id: string; type: string; title: string; body: string }[] = [];
-  const pushTargets: { user_id: string; title: string; body: string; type: string; board_id: string; card_id: string }[] = [];
-
-  for (const card of newOverdue) {
-    const userIds = new Set<string>();
-    if (card.created_by) userIds.add(card.created_by);
-
+  // Build candidate (userId, card) pairs
+  const candidatePairs: { userId: string; card: (typeof overdueCards)[0] }[] = [];
+  for (const card of overdueCards) {
     const assigneeNames: string[] = card.assignees?.length ? card.assignees : card.assignee ? [card.assignee] : [];
     for (const name of assigneeNames) {
       const uid = nameToUserIdMap.get(name);
-      if (uid) userIds.add(uid);
+      if (uid) candidatePairs.push({ userId: uid, card });
     }
+  }
+
+  if (candidatePairs.length === 0) {
+    return NextResponse.json({ checked: cards.length, notified: 0 });
+  }
+
+  // Dedup per (user_id, card_id) so each user is tracked independently
+  const allAssigneeUserIds = [...new Set(candidatePairs.map(p => p.userId))];
+  const { data: existingNotifs } = await db
+    .from('notifications')
+    .select('user_id, card_id')
+    .eq('type', 'overdue')
+    .in('card_id', cardIds)
+    .in('user_id', allAssigneeUserIds);
+
+  const alreadyNotified = new Set((existingNotifs || []).map(n => `${n.user_id}:${n.card_id}`));
+
+  // For each overdue card, notify only assignees
+  const notifications: { user_id: string; board_id: string; card_id: string; type: string; title: string; body: string }[] = [];
+  const pushTargets: { user_id: string; title: string; body: string; type: string; board_id: string; card_id: string }[] = [];
+
+  for (const { userId, card } of candidatePairs) {
+    if (alreadyNotified.has(`${userId}:${card.id}`)) continue;
 
     const dueDisplay = new Date(card.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const timeStr = card.due_time ? ` at ${formatTime12(card.due_time)}` : '';
     const title = `"${card.title}" is overdue`;
     const body = `Due ${dueDisplay}${timeStr}`;
 
-    for (const userId of userIds) {
-      notifications.push({
-        user_id: userId,
-        board_id: card.board_id,
-        card_id: card.id,
-        type: 'overdue',
-        title,
-        body,
-      });
-      pushTargets.push({ user_id: userId, title, body, type: 'overdue', board_id: card.board_id, card_id: card.id });
-    }
+    notifications.push({
+      user_id: userId,
+      board_id: card.board_id,
+      card_id: card.id,
+      type: 'overdue',
+      title,
+      body,
+    });
+    pushTargets.push({ user_id: userId, title, body, type: 'overdue', board_id: card.board_id, card_id: card.id });
   }
 
   // Batch insert card overdue notifications
@@ -156,7 +157,7 @@ export async function GET(req: NextRequest) {
   // ── Checklist item overdue notifications ────────────────────
   const { data: checklistItems, error: checklistErr } = await db
     .from('card_checklists')
-    .select('id, title, due_date, assignees, card_id, board_cards!inner(title, board_id, created_by, assignee, assignees, is_archived, is_complete)')
+    .select('id, title, due_date, assignees, card_id, board_cards!inner(title, board_id, assignee, assignees, is_archived, is_complete)')
     .eq('is_completed', false)
     .not('due_date', 'is', null)
     .eq('board_cards.is_archived', false)
@@ -177,20 +178,9 @@ export async function GET(req: NextRequest) {
   const checklistPushTargets: { user_id: string; title: string; body: string; type: string; board_id: string; card_id: string }[] = [];
 
   if (overdueChecklistItems.length > 0) {
-    // Dedup: skip items already notified
-    const checklistItemIds = overdueChecklistItems.map((i: any) => i.id);
-    const { data: existingChecklistNotifs } = await db
-      .from('notifications')
-      .select('checklist_item_id')
-      .eq('type', 'checklist_overdue')
-      .in('checklist_item_id', checklistItemIds);
-
-    const alreadyNotifiedChecklist = new Set((existingChecklistNotifs || []).map((n: any) => n.checklist_item_id));
-
-    // Batch-fetch all assignee user IDs needed across all overdue checklist items in one query
+    // Resolve any new assignee names not already in the map
     const allChecklistAssigneeNames = new Set<string>();
     for (const item of overdueChecklistItems) {
-      if (alreadyNotifiedChecklist.has(item.id)) continue;
       const bc = item.board_cards as any;
       const itemAssignees: string[] = Array.isArray(item.assignees) && item.assignees.length ? item.assignees : [];
       const names: string[] = itemAssignees.length
@@ -199,7 +189,6 @@ export async function GET(req: NextRequest) {
       for (const n of names) allChecklistAssigneeNames.add(n);
     }
 
-    // Merge with the card-level map already fetched; only query new names
     const newNames = [...allChecklistAssigneeNames].filter(n => !nameToUserIdMap.has(n));
     if (newNames.length > 0) {
       const { data: extraProfiles } = await db
@@ -211,39 +200,52 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Build candidate (userId, item) pairs
+    const checklistCandidatePairs: { userId: string; item: (typeof overdueChecklistItems)[0] }[] = [];
     for (const item of overdueChecklistItems) {
-      if (alreadyNotifiedChecklist.has(item.id)) continue;
-
       const bc = item.board_cards as any;
-      const userIds = new Set<string>();
-      if (bc.created_by) userIds.add(bc.created_by);
-
-      // Prefer checklist item's own assignees; fall back to parent card's assignees
       const itemAssignees: string[] = Array.isArray(item.assignees) && item.assignees.length ? item.assignees : [];
       const assigneeNames: string[] = itemAssignees.length
         ? itemAssignees
         : bc.assignees?.length ? bc.assignees : bc.assignee ? [bc.assignee] : [];
       for (const name of assigneeNames) {
         const uid = nameToUserIdMap.get(name);
-        if (uid) userIds.add(uid);
+        if (uid) checklistCandidatePairs.push({ userId: uid, item });
       }
+    }
 
+    // Dedup per (user_id, checklist_item_id)
+    const checklistItemIds = overdueChecklistItems.map((i: any) => i.id);
+    const allChecklistUserIds = [...new Set(checklistCandidatePairs.map(p => p.userId))];
+    let alreadyNotifiedChecklist = new Set<string>();
+    if (allChecklistUserIds.length > 0) {
+      const { data: existingChecklistNotifs } = await db
+        .from('notifications')
+        .select('user_id, checklist_item_id')
+        .eq('type', 'checklist_overdue')
+        .in('checklist_item_id', checklistItemIds)
+        .in('user_id', allChecklistUserIds);
+      alreadyNotifiedChecklist = new Set((existingChecklistNotifs || []).map((n: any) => `${n.user_id}:${n.checklist_item_id}`));
+    }
+
+    for (const { userId, item } of checklistCandidatePairs) {
+      if (alreadyNotifiedChecklist.has(`${userId}:${item.id}`)) continue;
+
+      const bc = item.board_cards as any;
       const dueDisplay = new Date(item.due_date.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const title = `"${item.title}" checklist item is overdue`;
       const body = `On "${bc.title}" · Due ${dueDisplay}`;
 
-      for (const userId of userIds) {
-        checklistNotifications.push({
-          user_id: userId,
-          board_id: bc.board_id,
-          card_id: item.card_id,
-          checklist_item_id: item.id,
-          type: 'checklist_overdue',
-          title,
-          body,
-        });
-        checklistPushTargets.push({ user_id: userId, title, body, type: 'checklist_overdue', board_id: bc.board_id, card_id: item.card_id });
-      }
+      checklistNotifications.push({
+        user_id: userId,
+        board_id: bc.board_id,
+        card_id: item.card_id,
+        checklist_item_id: item.id,
+        type: 'checklist_overdue',
+        title,
+        body,
+      });
+      checklistPushTargets.push({ user_id: userId, title, body, type: 'checklist_overdue', board_id: bc.board_id, card_id: item.card_id });
     }
 
     if (checklistNotifications.length > 0) {
@@ -279,7 +281,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     checked: cards.length,
-    notified: newOverdue.length,
+    notified: notifications.length,
     checklistNotified: checklistNotifications.length,
     pushSent: allPushTargets.length,
   });

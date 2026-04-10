@@ -256,7 +256,8 @@ function areEqual(prev: React.ComponentProps<typeof KanbanCard>, next: React.Com
     prev.card.snoozed_until === next.card.snoozed_until &&
     prev.isDragging === next.isDragging &&
     prev.hasAlert === next.hasAlert &&
-    prev.isSnoozed === next.isSnoozed
+    prev.isSnoozed === next.isSnoozed &&
+    (prev.card.labels || []).map(l => l.id).sort().join(',') === (next.card.labels || []).map(l => l.id).sort().join(',')
   );
 }
 

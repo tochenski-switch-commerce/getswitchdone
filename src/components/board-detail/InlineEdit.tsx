@@ -19,7 +19,7 @@ export default function InlineEdit({ value, onSave, className }: { value: string
     return (
       <span
         className={className}
-        onDoubleClick={() => { setDraft(value); setEditing(true); }}
+        onDoubleClick={e => { e.stopPropagation(); setDraft(value); setEditing(true); }}
         title="Double-click to edit"
         style={{ cursor: 'text' }}
       >

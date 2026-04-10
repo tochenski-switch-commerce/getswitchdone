@@ -1573,21 +1573,23 @@ function BoardPage() {
                 onDrop={e => { if (dragColIdRef.current) handleColDrop(e, col.id); else handleDrop(e, col.id); }}
               >
                 {/* Column header */}
-                <div className="kb-column-header" onTouchEnd={e => {
-                  const now = Date.now();
-                  const last = lastTapRef.current;
-                  if (last && last.colId === col.id && now - last.time < 300) {
-                    e.preventDefault();
-                    setZoomedColId(prev => prev === col.id ? null : col.id);
+                <div className="kb-column-header"
+                  onDoubleClick={() => {
+                    setCollapsedCols(prev => { const next = new Set(prev); next.add(col.id); return next; });
                     hapticLight();
-                    lastTapRef.current = null;
-                    // scroll the column into view
-                    const colEl = (e.currentTarget as HTMLElement).parentElement;
-                    if (colEl) setTimeout(() => colEl.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' }), 50);
-                  } else {
-                    lastTapRef.current = { colId: col.id, time: now };
-                  }
-                }}>
+                  }}
+                  onTouchEnd={e => {
+                    const now = Date.now();
+                    const last = lastTapRef.current;
+                    if (last && last.colId === col.id && now - last.time < 300) {
+                      e.preventDefault();
+                      setCollapsedCols(prev => { const next = new Set(prev); next.add(col.id); return next; });
+                      hapticLight();
+                      lastTapRef.current = null;
+                    } else {
+                      lastTapRef.current = { colId: col.id, time: now };
+                    }
+                  }}>
                   <div className="kb-column-title-row">
                     <span
                       className="kb-col-drag-handle"
@@ -1603,6 +1605,7 @@ function BoardPage() {
                         className="kb-column-dot"
                         style={{ background: col.color, cursor: 'pointer' }}
                         onClick={e => { e.stopPropagation(); setColorPickerColId(colorPickerColId === col.id ? null : col.id); }}
+                        onDoubleClick={e => e.stopPropagation()}
                         title="Change color"
                       />
                       {colorPickerColId === col.id && (
@@ -1640,7 +1643,7 @@ function BoardPage() {
                       {isLinkCol ? colLinks.length : colCards.length}{!isLinkCol && col.card_limit != null ? `/${col.card_limit}` : ''}
                     </span>
                   </div>
-                  <div className="kb-column-actions">
+                  <div className="kb-column-actions" onDoubleClick={e => e.stopPropagation()}>
                     {columns.indexOf(col) > 0 && (
                       <button
                         className="kb-btn-icon-sm"
@@ -1696,15 +1699,6 @@ function BoardPage() {
                         </button>
                       </>
                     )}
-                    <button
-                      className="kb-btn-icon-sm"
-                      onClick={() => {
-                        setCollapsedCols(prev => { const next = new Set(prev); next.add(col.id); return next; });
-                      }}
-                      title="Collapse column"
-                    >
-                      <ChevronLeft size={14} /><ChevronRight size={14} style={{ marginLeft: -8 }} />
-                    </button>
                     <button
                       className="kb-btn-icon-sm"
                       onClick={() => {
