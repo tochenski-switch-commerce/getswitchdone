@@ -26,6 +26,7 @@ import {
   Clock,
   Star,
   Printer,
+  Bell,
   getBoardIcon,
   DEFAULT_ICON_COLOR,
 } from '@/components/BoardIcons';
@@ -97,6 +98,26 @@ function BoardsListPage() {
 
   // ── Stats flag (set to true when ready to ship) ───────────────────────────
   const STATS_ENABLED = true;
+
+  // ── Notification counts by board ──────────────────────────────────────────
+  const [notifCountByBoard, setNotifCountByBoard] = useState<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    if (!user || !supabase) return;
+    supabase
+      .from('notifications')
+      .select('board_id')
+      .eq('user_id', user.id)
+      .eq('is_read', false)
+      .not('board_id', 'is', null)
+      .then(({ data }) => {
+        const counts = new Map<string, number>();
+        for (const row of (data || [])) {
+          if (row.board_id) counts.set(row.board_id, (counts.get(row.board_id) ?? 0) + 1);
+        }
+        setNotifCountByBoard(counts);
+      });
+  }, [user]);
 
   // ── Stats state ────────────────────────────────────────────────────────────
   const [rawCards, setRawCards] = useState<CardRow[]>([]);
@@ -296,6 +317,7 @@ function BoardsListPage() {
   // ── Board card renderer ────────────────────────────────────────────────────
   const renderBoardCard = (board: typeof boards[0], teamName?: string) => {
     const stats = boardStatsMap.get(board.id);
+    const unreadCount = notifCountByBoard.get(board.id) ?? 0;
     const totalOverdue = stats ? stats.overdue + stats.checklistOverdue : 0;
     const totalDueToday = stats ? stats.dueToday + stats.checklistDueToday : 0;
     const progressPct = stats && stats.totalCards > 0
@@ -314,6 +336,12 @@ function BoardsListPage() {
         <div className="kb-board-card-header">
           {React.createElement(getBoardIcon(board.icon), { size: 20, style: { color: board.icon_color || DEFAULT_ICON_COLOR } })}
           <h3 className="kb-board-card-title">{board.title}</h3>
+          {unreadCount > 0 && (
+            <span className="kb-notif-badge">
+              <Bell size={10} />
+              {unreadCount}
+            </span>
+          )}
           {board.is_public && (
             <span className="kb-visibility-badge public"><Globe size={10} /> Public</span>
           )}
@@ -785,6 +813,21 @@ const boardsListStyles = `
   }
   .kb-star-btn:hover {
     background: rgba(245,158,11,0.1);
+  }
+  .kb-notif-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(239,68,68,0.15);
+    color: #f87171;
+    border: 1px solid rgba(239,68,68,0.3);
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1.2;
   }
   .kb-visibility-badge {
     display: inline-flex;

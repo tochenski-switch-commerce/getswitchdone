@@ -59,6 +59,12 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
     setTimeout(() => recentlyUpdatedByMeRef.current.delete(cardId), 3000);
   }, []);
 
+  const recentlyUpdatedBoardRef = useRef(false);
+  const markBoardUpdated = useCallback(() => {
+    recentlyUpdatedBoardRef.current = true;
+    setTimeout(() => { recentlyUpdatedBoardRef.current = false; }, 3000);
+  }, []);
+
   useEffect(() => {
     if (!boardId || !supabase) return;
 
@@ -86,10 +92,23 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
       const record = payload.new || payload.old;
       const recordBoardId = record?.board_id || record?.id;
       if (recordBoardId && recordBoardId !== boardId) return;
-      if (isOwnChange(payload)) return;
 
       const table = payload.table as string;
       const eventType = payload.eventType as string;
+
+      // project_boards: handle before isOwnChange — user_id is the board owner, not the editor,
+      // so isOwnChange would always fire for the owner and silently skip team members' changes.
+      if (table === 'project_boards') {
+        if (eventType === 'UPDATE') {
+          if (recentlyUpdatedBoardRef.current) return; // suppress echo of my own save
+          onGranularUpdateRef.current?.(table, eventType, payload);
+        } else {
+          scheduleRefetch();
+        }
+        return;
+      }
+
+      if (isOwnChange(payload)) return;
 
       // board_cards: apply granularly for all event types.
       // For our own recently-updated cards, skip entirely — we already applied locally.
@@ -127,10 +146,9 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
         return;
       }
 
-      // Everything else (project_boards, board_custom_fields): full refetch.
+      // Everything else (board_custom_fields, etc.): full refetch.
       scheduleRefetch();
-      if (table === 'project_boards') addToast('Board details were updated');
-      else if (table === 'board_custom_fields') addToast('Custom fields were updated');
+      if (table === 'board_custom_fields') addToast('Custom fields were updated');
     };
 
     // Handler for card-scoped tables (no board_id, filtered by card membership)
@@ -201,5 +219,5 @@ export function useRealtimeBoard({ boardId, currentUserId, cardIds, onRemoteChan
     return () => clearTimeout(timer);
   }, [toasts]);
 
-  return { toasts, dismissToast, markCardUpdated };
+  return { toasts, dismissToast, markCardUpdated, markBoardUpdated };
 }

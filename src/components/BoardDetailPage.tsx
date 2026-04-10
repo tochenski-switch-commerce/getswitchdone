@@ -206,11 +206,31 @@ function BoardPage() {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  const { toasts, dismissToast, markCardUpdated } = useRealtimeBoard({
+  // Realtime: apply granular updates without a full refetch
+  const handleGranularUpdate = useCallback((
+    table: string,
+    eventType: string,
+    payload: { new?: Record<string, unknown>; old?: Record<string, unknown> },
+  ) => {
+    if (table === 'project_boards' && eventType === 'UPDATE' && payload.new) {
+      const incoming = payload.new as { notes?: string };
+      // Update the notes panel directly if it exists and the user isn't actively editing it
+      if (noteRef.current && document.activeElement !== noteRef.current && incoming.notes !== undefined) {
+        noteRef.current.innerHTML = incoming.notes || '';
+      }
+      // Always keep the board state in sync so save-on-blur uses the latest value
+      setBoard((prev: any) => prev ? { ...prev, notes: incoming.notes ?? prev.notes } : prev);
+      return;
+    }
+    // All other granular updates (cards, columns, labels) are handled by the existing logic in useProjectBoard
+  }, []);
+
+  const { toasts, dismissToast, markCardUpdated, markBoardUpdated } = useRealtimeBoard({
     boardId,
     currentUserId: user?.id ?? null,
     cardIds: board?.cards?.map(c => c.id) ?? [],
     onRemoteChange: handleRemoteChange,
+    onGranularUpdate: handleGranularUpdate,
     onNotification: handleRemoteNotification,
   });
 
@@ -305,9 +325,10 @@ function BoardPage() {
     if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
     const html = noteRef.current.innerHTML;
     if (html !== (board.notes || '')) {
+      markBoardUpdated();
       updateBoard(boardId, { notes: html });
     }
-  }, [board, boardId, updateBoard]);
+  }, [board, boardId, updateBoard, markBoardUpdated]);
 
   const handleNoteInput = useCallback(() => {
     if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);

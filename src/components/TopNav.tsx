@@ -28,6 +28,11 @@ const tabs = [
   { label: 'Forms', href: '/forms' },
 ] as const;
 
+const TAB_NOTIFICATION_TYPES: Partial<Record<typeof tabs[number]['href'], string[]>> = {
+  '/focus': ['due_soon', 'overdue', 'checklist_overdue'],
+  '/boards': ['comment', 'assignment', 'mention', 'comment_reaction', 'email_unrouted'],
+};
+
 const PRIMARY_TAB_COUNT = 3; // Focus, Calendar, Boards visible on mobile
 
 export default function TopNav() {
@@ -159,6 +164,13 @@ export default function TopNav() {
   const activeHref = tabs.find(t => pathname === t.href || pathname.startsWith(t.href + '/'))?.href;
 
   const initial = (profile?.name?.[0] || user.email?.[0] || '?').toUpperCase();
+
+  const unreadByTab = Object.fromEntries(
+    Object.entries(TAB_NOTIFICATION_TYPES).map(([href, types]) => [
+      href,
+      notifications.filter(n => !n.is_read && types.includes(n.type)).length,
+    ])
+  ) as Partial<Record<typeof tabs[number]['href'], number>>;
 
   return (
     <>
@@ -401,6 +413,29 @@ export default function TopNav() {
         }
         .kb-more-dropdown-item:hover { background: rgba(255,255,255,0.06); }
         .kb-more-dropdown-item.active { color: #fa420f; }
+        .kb-tab-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 16px;
+          height: 16px;
+          padding: 0 4px;
+          border-radius: 8px;
+          background: #ef4444;
+          color: #fff;
+          font-size: 10px;
+          font-weight: 700;
+          line-height: 1;
+          margin-left: 5px;
+          vertical-align: middle;
+          letter-spacing: 0;
+        }
+        .kb-nav-tab.active .kb-tab-badge {
+          background: rgba(255,255,255,0.3);
+        }
+        .kb-more-dropdown-item .kb-tab-badge {
+          margin-left: auto;
+        }
         @media (max-width: 600px) {
           .kb-tabs-all { display: none; }
           .kb-tabs-mobile { display: flex; gap: 0; }
@@ -469,51 +504,72 @@ export default function TopNav() {
 
         {/* Desktop: all tabs */}
         <div className="kb-tabs-all">
-          {tabs.map(t => (
-            <button
-              key={t.href}
-              className={`kb-nav-tab${activeHref === t.href ? ' active' : ''}`}
-              onClick={() => router.push(t.href)}
-            >
-              {t.label}
-            </button>
-          ))}
+          {tabs.map(t => {
+            const badge = unreadByTab[t.href] ?? 0;
+            return (
+              <button
+                key={t.href}
+                className={`kb-nav-tab${activeHref === t.href ? ' active' : ''}`}
+                onClick={() => router.push(t.href)}
+              >
+                {t.label}
+                {badge > 0 && <span className="kb-tab-badge">{badge > 99 ? '99+' : badge}</span>}
+              </button>
+            );
+          })}
         </div>
 
         {/* Mobile: first 3 tabs + More */}
         <div className="kb-tabs-mobile">
-          {tabs.slice(0, PRIMARY_TAB_COUNT).map(t => (
-            <button
-              key={t.href}
-              className={`kb-nav-tab${activeHref === t.href ? ' active' : ''}`}
-              onClick={() => router.push(t.href)}
-            >
-              {t.label}
-            </button>
-          ))}
+          {tabs.slice(0, PRIMARY_TAB_COUNT).map(t => {
+            const badge = unreadByTab[t.href] ?? 0;
+            return (
+              <button
+                key={t.href}
+                className={`kb-nav-tab${activeHref === t.href ? ' active' : ''}`}
+                onClick={() => router.push(t.href)}
+              >
+                {t.label}
+                {badge > 0 && <span className="kb-tab-badge">{badge > 99 ? '99+' : badge}</span>}
+              </button>
+            );
+          })}
           <div className="kb-more-wrap">
-            <button
-              className={`kb-nav-tab${tabs.slice(PRIMARY_TAB_COUNT).some(t => activeHref === t.href) || showMore ? ' active' : ''}`}
-              onClick={() => setShowMore(m => !m)}
-            >
-              More
-            </button>
-            {showMore && (
-              <>
-                <div className="kb-profile-backdrop" onClick={() => setShowMore(false)} />
-                <div className="kb-more-dropdown">
-                  {tabs.slice(PRIMARY_TAB_COUNT).map(t => (
-                    <button
-                      key={t.href}
-                      className={`kb-more-dropdown-item${activeHref === t.href ? ' active' : ''}`}
-                      onClick={() => { router.push(t.href); setShowMore(false); }}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            {(() => {
+              const moreTabs = tabs.slice(PRIMARY_TAB_COUNT);
+              const moreBadgeTotal = moreTabs.reduce((sum, t) => sum + (unreadByTab[t.href] ?? 0), 0);
+              return (
+                <>
+                  <button
+                    className={`kb-nav-tab${moreTabs.some(t => activeHref === t.href) || showMore ? ' active' : ''}`}
+                    onClick={() => setShowMore(m => !m)}
+                  >
+                    More
+                    {moreBadgeTotal > 0 && <span className="kb-tab-badge">{moreBadgeTotal > 99 ? '99+' : moreBadgeTotal}</span>}
+                  </button>
+                  {showMore && (
+                    <>
+                      <div className="kb-profile-backdrop" onClick={() => setShowMore(false)} />
+                      <div className="kb-more-dropdown">
+                        {moreTabs.map(t => {
+                          const badge = unreadByTab[t.href] ?? 0;
+                          return (
+                            <button
+                              key={t.href}
+                              className={`kb-more-dropdown-item${activeHref === t.href ? ' active' : ''}`}
+                              onClick={() => { router.push(t.href); setShowMore(false); }}
+                            >
+                              {t.label}
+                              {badge > 0 && <span className="kb-tab-badge">{badge > 99 ? '99+' : badge}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 
