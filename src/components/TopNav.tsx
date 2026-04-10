@@ -133,6 +133,12 @@ export default function TopNav() {
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
+  const totalUnread = notifications.filter(n => !n.is_read).length;
+
+  useEffect(() => {
+    document.title = totalUnread > 0 ? `(${totalUnread}) Lumio` : 'Lumio';
+  }, [totalUnread]);
+
   const markNotificationRead = useCallback(async (id: string) => {
     await supabase.from('notifications').update({ is_read: true }).eq('id', id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
@@ -164,12 +170,6 @@ export default function TopNav() {
   const activeHref = tabs.find(t => pathname === t.href || pathname.startsWith(t.href + '/'))?.href;
 
   const initial = (profile?.name?.[0] || user.email?.[0] || '?').toUpperCase();
-
-  const totalUnread = notifications.filter(n => !n.is_read).length;
-
-  useEffect(() => {
-    document.title = totalUnread > 0 ? `(${totalUnread}) Lumio` : 'Lumio';
-  }, [totalUnread]);
 
   const unreadByTab = Object.fromEntries(
     Object.entries(TAB_NOTIFICATION_TYPES).map(([href, types]) => [
