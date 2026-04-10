@@ -21,6 +21,8 @@ export default function FormsListPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newBoardId, setNewBoardId] = useState('');
+  const [newBoardMembers, setNewBoardMembers] = useState<{ id: string; name: string }[]>([]);
+  const [newAssigneeOptions, setNewAssigneeOptions] = useState<{ id: string; name: string }[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
@@ -79,6 +81,43 @@ export default function FormsListPage() {
       fetchBoards();
     }
   }, [user, fetchForms, fetchBoards]);
+
+  // Fetch board members when a board is selected in the create modal
+  useEffect(() => {
+    if (!newBoardId || !user) {
+      setNewBoardMembers([]);
+      setNewAssigneeOptions([]);
+      return;
+    }
+    (async () => {
+      const { data: board } = await supabase
+        .from('project_boards')
+        .select('user_id, team_id')
+        .eq('id', newBoardId)
+        .single();
+      if (!board) return;
+      let memberIds: string[] = [];
+      if (board.team_id) {
+        const { data: members } = await supabase
+          .from('team_members')
+          .select('user_id')
+          .eq('team_id', board.team_id);
+        memberIds = (members || []).map((m: { user_id: string }) => m.user_id);
+      } else {
+        memberIds = [board.user_id];
+      }
+      if (memberIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('user_profiles')
+          .select('id, name')
+          .in('id', memberIds);
+        const members = (profs || []) as { id: string; name: string }[];
+        setNewBoardMembers(members);
+        // Pre-select all members by default
+        setNewAssigneeOptions(members.map(m => ({ id: m.id, name: m.name })));
+      }
+    })();
+  }, [newBoardId, user]);
 
   const generateSlug = (title: string) => {
     return title
@@ -151,7 +190,7 @@ export default function FormsListPage() {
             { id: 'field_2', type: 'textarea', label: 'Description', required: false, placeholder: 'Describe in detail...', maps_to: 'description' },
             { id: 'field_3', type: 'select', label: 'Priority', required: false, placeholder: 'Select priority...', options: ['Low', 'Medium', 'High', 'Urgent'], maps_to: 'priority' },
             { id: 'field_4', type: 'date', label: 'Due Date', required: false, maps_to: 'due_date' },
-            { id: 'field_5', type: 'text', label: 'Assignee', required: false, placeholder: 'Who is responsible?', maps_to: 'assignee' },
+            { id: 'field_5', type: 'select', label: 'Assignee', required: false, placeholder: 'Select assignee...', maps_to: 'assignee', assignee_options: newAssigneeOptions },
             ...customFormFields,
           ],
           is_active: true,
@@ -219,7 +258,7 @@ export default function FormsListPage() {
             <FileText size={28} style={{ color: '#818cf8' }} />
             <h1 className="kb-page-title">Forms</h1>
           </div>
-          <button className="kb-btn kb-btn-primary" onClick={() => { setShowCreate(true); setNewTitle(''); setNewBoardId(filterBoardId || ''); }}>
+          <button className="kb-btn kb-btn-primary" onClick={() => { setShowCreate(true); setNewTitle(''); setNewBoardId(filterBoardId || ''); setNewBoardMembers([]); setNewAssigneeOptions([]); }}>
             <Plus size={16} />
             New Form
           </button>
@@ -257,6 +296,45 @@ export default function FormsListPage() {
                   ))}
                 </select>
               </div>
+              {newBoardId && newBoardMembers.length > 0 && (
+                <div className="kb-form-group">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label className="kb-label" style={{ margin: 0 }}>Assignees on public form</label>
+                    <button
+                      className="kb-btn kb-btn-ghost"
+                      style={{ padding: '3px 10px', fontSize: 11 }}
+                      onClick={() => {
+                        const allChecked = newBoardMembers.every(m => newAssigneeOptions.some(o => o.id === m.id));
+                        setNewAssigneeOptions(allChecked ? [] : newBoardMembers.map(m => ({ id: m.id, name: m.name })));
+                      }}
+                    >
+                      {newBoardMembers.every(m => newAssigneeOptions.some(o => o.id === m.id)) ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {newBoardMembers.map(member => {
+                      const isChecked = newAssigneeOptions.some(o => o.id === member.id);
+                      return (
+                        <label key={member.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => setNewAssigneeOptions(prev =>
+                              isChecked ? prev.filter(o => o.id !== member.id) : [...prev, { id: member.id, name: member.name }]
+                            )}
+                          />
+                          <span style={{ fontSize: 13, color: '#e5e7eb' }}>{member.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p style={{ fontSize: 11, color: newAssigneeOptions.length > 0 ? '#6b7280' : '#f59e0b', margin: '8px 0 0' }}>
+                    {newAssigneeOptions.length === 0
+                      ? 'No members selected — assignee field will be hidden from the form.'
+                      : `${newAssigneeOptions.length} member${newAssigneeOptions.length !== 1 ? 's' : ''} will appear as assignee options.`}
+                  </p>
+                </div>
+              )}
               {error && (
                 <p style={{ fontSize: '13px', color: '#ef4444', margin: '0 0 8px', padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>{error}</p>
               )}
@@ -605,6 +683,8 @@ const formsListStyles = `
     padding: 28px;
     width: 90%;
     max-width: min(90vw, 460px);
+    max-height: 90vh;
+    overflow-y: auto;
     box-sizing: border-box;
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   }

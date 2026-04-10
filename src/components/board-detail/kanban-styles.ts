@@ -895,6 +895,64 @@ export const kanbanStyles = `
     align-items: center;
     gap: 8px;
   }
+  .kb-hashtag-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #1a1d2e;
+    border: 1px solid #2a2d3a;
+    border-radius: 10px;
+    overflow: hidden;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 50;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  }
+  .kb-hashtag-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    color: #d1d5db;
+    text-align: left;
+    transition: background 0.1s;
+  }
+  .kb-hashtag-option:hover,
+  .kb-hashtag-option.focused {
+    background: rgba(255,255,255,0.06);
+  }
+  .kb-hashtag-option-create {
+    color: #60a5fa;
+    border-top: 1px solid #2a2d3a;
+    gap: 6px;
+  }
+  .kb-hashtag-empty {
+    padding: 10px 12px;
+    font-size: 12px;
+    color: #6b7280;
+  }
+  .kb-pending-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .kb-pending-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px 2px 5px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    font-size: 11px;
+    font-weight: 500;
+    user-select: none;
+  }
 
   /* ── Add column ── */
   .kb-add-column {

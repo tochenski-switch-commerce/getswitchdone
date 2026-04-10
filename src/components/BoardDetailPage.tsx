@@ -104,6 +104,9 @@ function BoardPage() {
   const addingCardRef = useRef(false);
   const [addingCardCol, setAddingCardCol] = useState<string | null>(null);
   const [newCardTitle, setNewCardTitle] = useState('');
+  const [hashtagQuery, setHashtagQuery] = useState<string | null>(null);
+  const [hashtagFocusIdx, setHashtagFocusIdx] = useState(0);
+  const [pendingLabelIds, setPendingLabelIds] = useState<string[]>([]);
   const [bulkCardPreview, setBulkCardPreview] = useState<{ colId: string; items: string[] } | null>(null);
   const [addingColumn, setAddingColumn] = useState(false);
   const [addingColumnType, setAddingColumnType] = useState<'normal' | 'board_links'>('normal');
@@ -400,6 +403,10 @@ function BoardPage() {
   }, [addingCardCol]);
 
   useEffect(() => {
+    if (!addingCardCol) { setHashtagQuery(null); setPendingLabelIds([]); }
+  }, [addingCardCol]);
+
+  useEffect(() => {
     if (addingColumn && newColRef.current) newColRef.current.focus();
   }, [addingColumn]);
 
@@ -687,11 +694,16 @@ function BoardPage() {
         if (newLabel && !labelIds.includes(newLabel.id)) labelIds.push(newLabel.id);
       }
     }
+    for (const id of pendingLabelIds) {
+      if (!labelIds.includes(id)) labelIds.push(id);
+    }
 
     try {
       await addCard(boardId, { column_id: colId, title: cleanTitle, ...(labelIds.length ? { label_ids: labelIds } : {}) });
       hapticMedium();
       setNewCardTitle('');
+      setPendingLabelIds([]);
+      setHashtagQuery(null);
     } finally {
       addingCardRef.current = false;
     }
@@ -1907,18 +1919,111 @@ function BoardPage() {
                             </div>
                           ) : (
                             <>
-                              <input
-                                ref={newCardRef}
-                                className="kb-input"
-                                value={newCardTitle}
-                                onChange={e => setNewCardTitle(e.target.value)}
-                                placeholder="Card title..."
-                                onPaste={e => handleCardPaste(e, col.id)}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') handleQuickAddCard(col.id);
-                                  if (e.key === 'Escape') { setAddingCardCol(null); setNewCardTitle(''); }
-                                }}
-                              />
+                              <div style={{ position: 'relative' }}>
+                                <input
+                                  ref={newCardRef}
+                                  className="kb-input"
+                                  value={newCardTitle}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setNewCardTitle(val);
+                                    const pos = e.target.selectionStart ?? val.length;
+                                    const before = val.slice(0, pos);
+                                    const m = before.match(/#([a-zA-Z0-9_]*)$/);
+                                    if (m) { setHashtagQuery(m[1]); setHashtagFocusIdx(0); }
+                                    else setHashtagQuery(null);
+                                  }}
+                                  placeholder="Card title... (use # to add labels)"
+                                  onPaste={e => handleCardPaste(e, col.id)}
+                                  onKeyDown={e => {
+                                    if (hashtagQuery !== null) {
+                                      const opts = [...(board.labels || [])].sort((a, b) => a.name.localeCompare(b.name))
+                                        .filter(l => l.name.toLowerCase().startsWith(hashtagQuery.toLowerCase()));
+                                      const hasCreate = hashtagQuery.length > 0 && !opts.some(l => l.name.toLowerCase() === hashtagQuery.toLowerCase());
+                                      const total = opts.length + (hasCreate ? 1 : 0);
+                                      if (e.key === 'ArrowDown') { e.preventDefault(); setHashtagFocusIdx(i => Math.min(i + 1, total - 1)); return; }
+                                      if (e.key === 'ArrowUp') { e.preventDefault(); setHashtagFocusIdx(i => Math.max(i - 1, 0)); return; }
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (total > 0) {
+                                          if (hashtagFocusIdx < opts.length) {
+                                            const label = opts[hashtagFocusIdx];
+                                            setNewCardTitle(prev => prev.replace(new RegExp('#' + hashtagQuery + '[a-zA-Z0-9_]*', 'i'), '').trimEnd());
+                                            if (!pendingLabelIds.includes(label.id)) setPendingLabelIds(prev => [...prev, label.id]);
+                                          } else {
+                                            // leave #query in title; submit logic creates it
+                                          }
+                                        }
+                                        setHashtagQuery(null);
+                                        return;
+                                      }
+                                      if (e.key === 'Escape') { e.preventDefault(); setHashtagQuery(null); return; }
+                                    }
+                                    if (e.key === 'Enter') handleQuickAddCard(col.id);
+                                    if (e.key === 'Escape') { setAddingCardCol(null); setNewCardTitle(''); }
+                                  }}
+                                />
+                                {/* Hashtag label dropdown */}
+                                {hashtagQuery !== null && (() => {
+                                  const opts = [...(board.labels || [])].sort((a, b) => a.name.localeCompare(b.name))
+                                    .filter(l => l.name.toLowerCase().startsWith(hashtagQuery.toLowerCase()));
+                                  const hasCreate = hashtagQuery.length > 0 && !opts.some(l => l.name.toLowerCase() === hashtagQuery.toLowerCase());
+                                  return (
+                                    <div className="kb-hashtag-dropdown">
+                                      {opts.length === 0 && !hasCreate && (
+                                        <div className="kb-hashtag-empty">
+                                          {hashtagQuery.length === 0 ? 'Type a label name…' : 'No matching labels'}
+                                        </div>
+                                      )}
+                                      {opts.map((label, i) => (
+                                        <button
+                                          key={label.id}
+                                          className={`kb-hashtag-option${i === hashtagFocusIdx ? ' focused' : ''}`}
+                                          onMouseDown={e => {
+                                            e.preventDefault();
+                                            setNewCardTitle(prev => prev.replace(new RegExp('#' + hashtagQuery + '[a-zA-Z0-9_]*', 'i'), '').trimEnd());
+                                            if (!pendingLabelIds.includes(label.id)) setPendingLabelIds(prev => [...prev, label.id]);
+                                            setHashtagQuery(null);
+                                          }}
+                                        >
+                                          <span style={{ width: 10, height: 10, borderRadius: '50%', background: label.color, flexShrink: 0, display: 'inline-block' }} />
+                                          {label.name}
+                                        </button>
+                                      ))}
+                                      {hasCreate && (
+                                        <button
+                                          className={`kb-hashtag-option kb-hashtag-option-create${opts.length === hashtagFocusIdx ? ' focused' : ''}`}
+                                          onMouseDown={e => { e.preventDefault(); setHashtagQuery(null); }}
+                                        >
+                                          <Plus size={12} />
+                                          Create "{hashtagQuery}"
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                              {/* Pending label pills */}
+                              {pendingLabelIds.length > 0 && (
+                                <div className="kb-pending-labels">
+                                  {pendingLabelIds.map(id => {
+                                    const label = board.labels.find(l => l.id === id);
+                                    if (!label) return null;
+                                    return (
+                                      <span key={id} className="kb-pending-label" style={{ background: label.color + '22', borderColor: label.color + '55', color: label.color }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: label.color, flexShrink: 0, display: 'inline-block' }} />
+                                        {label.name}
+                                        <button
+                                          onMouseDown={e => { e.preventDefault(); setPendingLabelIds(prev => prev.filter(i => i !== id)); }}
+                                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', display: 'flex', alignItems: 'center', marginLeft: 1 }}
+                                        >
+                                          <X size={10} />
+                                        </button>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
                               <div className="kb-quick-add-actions">
                                 <button className="kb-btn kb-btn-primary kb-btn-sm" onClick={() => handleQuickAddCard(col.id)}>
                                   Add Card
@@ -2055,7 +2160,7 @@ function BoardPage() {
           {(board.labels?.length ?? 0) > 0 && (
             <>
               <span className="kb-shortcut-bar-sep">·</span>
-              <span className="kb-shortcut-bar-item"><kbd>1–9</kbd> Toggle label</span>
+              <span className="kb-shortcut-bar-item"><kbd>1–0</kbd> Toggle label</span>
             </>
           )}
         </div>

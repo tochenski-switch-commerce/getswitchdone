@@ -49,6 +49,13 @@ export async function POST(request: NextRequest) {
 
     for (const field of fields) {
       const value = data[field.id]?.trim() || '';
+
+      // Hidden assignee: apply the form-configured default before the empty-value guard
+      if (field.maps_to === 'assignee' && field.assignee_visible === false) {
+        if (field.assignee_default_id) cardAssignee = field.assignee_default_id;
+        continue;
+      }
+
       if (!value) continue;
 
       if (field.maps_to === 'title') {

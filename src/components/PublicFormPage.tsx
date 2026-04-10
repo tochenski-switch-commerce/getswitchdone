@@ -277,7 +277,13 @@ export default function PublicFormPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="pf-form">
-            {form!.fields.map(field => (
+            {form!.fields.map(field => {
+              // Skip hidden assignee fields, or visible assignee with no members configured
+              if (field.maps_to === 'assignee') {
+                if (field.assignee_visible === false) return null;
+                if (!field.assignee_options?.length) return null;
+              }
+              return (
               <div key={field.id} className="pf-field">
                 <label className="pf-label">
                   {field.label}
@@ -288,7 +294,8 @@ export default function PublicFormPage() {
                   <p className="pf-field-error">{fieldErrors[field.id]}</p>
                 )}
               </div>
-            ))}
+              );
+            })}
 
             {error && (
               <div className="pf-form-error">

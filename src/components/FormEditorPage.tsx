@@ -602,35 +602,101 @@ export default function FormEditorPage() {
                           <p className="kb-hint" style={{ marginTop: 0 }}>Options locked to board priorities: {PRIORITY_OPTIONS.join(', ')}</p>
                         )}
                         {field.maps_to === 'assignee' && (
-                          <div className="kb-form-group">
-                            <label className="kb-label">Available Assignees</label>
-                            {boardMembers.length === 0 ? (
-                              <p className="kb-hint">No board members found.</p>
+                          <>
+                            <div className="kb-form-group">
+                              <label className="kb-label">Visibility on public form</label>
+                              <div className="kb-toggle-row">
+                                <button
+                                  className={`kb-toggle-btn ${field.assignee_visible !== false ? 'active' : ''}`}
+                                  onClick={() => updateField(field.id, { assignee_visible: true, assignee_default_id: undefined })}
+                                  style={{ flex: 1 }}
+                                >
+                                  Visible
+                                </button>
+                                <button
+                                  className={`kb-toggle-btn ${field.assignee_visible === false ? 'active' : ''}`}
+                                  onClick={() => updateField(field.id, { assignee_visible: false, assignee_options: [] })}
+                                  style={{ flex: 1 }}
+                                >
+                                  Hidden
+                                </button>
+                              </div>
+                              <p className="kb-hint" style={{ marginTop: 6 }}>
+                                {field.assignee_visible === false
+                                  ? 'Field is hidden from submitters. A default assignee is applied to every submission.'
+                                  : 'Submitters can select from the checked members below.'}
+                              </p>
+                            </div>
+                            {field.assignee_visible === false ? (
+                              <div className="kb-form-group">
+                                <label className="kb-label">Default Assignee</label>
+                                {boardMembers.length === 0 ? (
+                                  <p className="kb-hint">No board members found.</p>
+                                ) : (
+                                  <select
+                                    className="kb-input"
+                                    value={field.assignee_default_id || ''}
+                                    onChange={e => updateField(field.id, { assignee_default_id: e.target.value || undefined })}
+                                  >
+                                    <option value="">None (unassigned)</option>
+                                    {boardMembers.map(m => (
+                                      <option key={m.id} value={m.id}>{m.name}</option>
+                                    ))}
+                                  </select>
+                                )}
+                              </div>
                             ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 6 }}>
-                                {boardMembers.map(member => {
-                                  const isChecked = (field.assignee_options || []).some(o => o.id === member.id);
-                                  return (
-                                    <label key={member.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                                      <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={() => {
-                                          const current = field.assignee_options || [];
-                                          const updated = isChecked
-                                            ? current.filter(o => o.id !== member.id)
-                                            : [...current, { id: member.id, name: member.name }];
-                                          updateField(field.id, { assignee_options: updated });
-                                        }}
-                                      />
-                                      <span style={{ fontSize: 13, color: '#e5e7eb' }}>{member.name}</span>
-                                    </label>
-                                  );
-                                })}
+                              <div className="kb-form-group">
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                  <label className="kb-label" style={{ margin: 0 }}>Available Assignees</label>
+                                  {boardMembers.length > 0 && (
+                                    <button
+                                      className="kb-btn kb-btn-ghost"
+                                      style={{ padding: '3px 10px', fontSize: 11 }}
+                                      onClick={() => {
+                                        const allChecked = boardMembers.every(m => (field.assignee_options || []).some(o => o.id === m.id));
+                                        updateField(field.id, {
+                                          assignee_options: allChecked ? [] : boardMembers.map(m => ({ id: m.id, name: m.name })),
+                                        });
+                                      }}
+                                    >
+                                      {boardMembers.every(m => (field.assignee_options || []).some(o => o.id === m.id)) ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                  )}
+                                </div>
+                                {boardMembers.length === 0 ? (
+                                  <p className="kb-hint">No board members found.</p>
+                                ) : (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 6 }}>
+                                    {boardMembers.map(member => {
+                                      const isChecked = (field.assignee_options || []).some(o => o.id === member.id);
+                                      return (
+                                        <label key={member.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={() => {
+                                              const current = field.assignee_options || [];
+                                              const updated = isChecked
+                                                ? current.filter(o => o.id !== member.id)
+                                                : [...current, { id: member.id, name: member.name }];
+                                              updateField(field.id, { assignee_options: updated });
+                                            }}
+                                          />
+                                          <span style={{ fontSize: 13, color: '#e5e7eb' }}>{member.name}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                <p className="kb-hint" style={{ marginTop: 0 }}>
+                                  {(field.assignee_options || []).length === 0
+                                    ? 'No members checked — assignee field will be hidden from public form.'
+                                    : 'Checked members appear as dropdown options on the public form.'}
+                                </p>
                               </div>
                             )}
-                            <p className="kb-hint" style={{ marginTop: 0 }}>{(field.assignee_options || []).length === 0 ? 'No members checked — public form will use a free-text input.' : 'Checked members appear as options on the public form.'}</p>
-                          </div>
+                          </>
                         )}
 
                         <div className="kb-field-row">
