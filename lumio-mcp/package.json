@@ -1,0 +1,38 @@
+{
+  "name": "lumio-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Lumio Kanban boards — manage boards, columns, cards, and labels via AI agents",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "lumio-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "kanban",
+    "lumio",
+    "task-management",
+    "model-context-protocol"
+  ]
+}

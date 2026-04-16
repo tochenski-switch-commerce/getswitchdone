@@ -3,6 +3,10 @@
 /.pnp
 .pnp.js
 
+# lumio-mcp package
+/lumio-mcp/node_modules
+/lumio-mcp/dist
+
 # testing
 /coverage
 

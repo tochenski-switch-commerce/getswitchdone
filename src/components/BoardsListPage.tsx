@@ -11,6 +11,7 @@ import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
 import FlameLoader from '@/components/FlameLoader';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { hapticLight } from '@/lib/haptics';
+import { scheduleNonCriticalWork } from '@/lib/scheduleNonCritical';
 import {
   Plus,
   LayoutDashboard,
@@ -104,19 +105,23 @@ function BoardsListPage() {
 
   useEffect(() => {
     if (!user || !supabase) return;
-    supabase
-      .from('notifications')
-      .select('board_id')
-      .eq('user_id', user.id)
-      .eq('is_read', false)
-      .not('board_id', 'is', null)
-      .then(({ data }) => {
-        const counts = new Map<string, number>();
-        for (const row of (data || [])) {
-          if (row.board_id) counts.set(row.board_id, (counts.get(row.board_id) ?? 0) + 1);
-        }
-        setNotifCountByBoard(counts);
-      });
+    const cancelScheduledFetch = scheduleNonCriticalWork(() => {
+      supabase
+        .from('notifications')
+        .select('board_id')
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+        .not('board_id', 'is', null)
+        .then(({ data }) => {
+          const counts = new Map<string, number>();
+          for (const row of (data || [])) {
+            if (row.board_id) counts.set(row.board_id, (counts.get(row.board_id) ?? 0) + 1);
+          }
+          setNotifCountByBoard(counts);
+        });
+    });
+
+    return cancelScheduledFetch;
   }, [user]);
 
   // ── Stats state ────────────────────────────────────────────────────────────
@@ -162,10 +167,10 @@ function BoardsListPage() {
   }, [searchParams, router, boards]);
 
   useEffect(() => {
-    if (teams.length > 0 || user) {
+    if (showWizard && (teams.length > 0 || user)) {
       fetchTeamTemplates(teams.map(t => t.id));
     }
-  }, [teams, user, fetchTeamTemplates]);
+  }, [showWizard, teams, user, fetchTeamTemplates]);
 
   // ── Fetch stats (once, after boards load) ─────────────────────────────────
   useEffect(() => {
@@ -173,20 +178,28 @@ function BoardsListPage() {
     setStatsLoaded(true);
 
     const boardIds = boards.map(b => b.id);
+    let cancelled = false;
+    const cancelScheduledFetch = scheduleNonCriticalWork(() => {
+      Promise.all([
+        supabase
+          .from('board_cards')
+          .select('id, board_id, due_date, is_complete, priority, updated_at, assignees')
+          .in('board_id', boardIds)
+          .eq('is_archived', false),
+        supabase
+          .from('card_checklists')
+          .select('card_id, due_date, is_completed'),
+      ]).then(([cardsRes, checklistsRes]) => {
+        if (cancelled) return;
+        if (cardsRes.data) setRawCards(cardsRes.data as CardRow[]);
+        if (checklistsRes.data) setRawChecklists(checklistsRes.data as ChecklistRow[]);
+      });
+    }, 400);
 
-    Promise.all([
-      supabase
-        .from('board_cards')
-        .select('id, board_id, due_date, is_complete, priority, updated_at, assignees')
-        .in('board_id', boardIds)
-        .eq('is_archived', false),
-      supabase
-        .from('card_checklists')
-        .select('card_id, due_date, is_completed'),
-    ]).then(([cardsRes, checklistsRes]) => {
-      if (cardsRes.data) setRawCards(cardsRes.data as CardRow[]);
-      if (checklistsRes.data) setRawChecklists(checklistsRes.data as ChecklistRow[]);
-    });
+    return () => {
+      cancelled = true;
+      cancelScheduledFetch();
+    };
   }, [boards, statsLoaded]);
 
   // Reset stats guard when boards list itself changes (e.g. after delete/create)

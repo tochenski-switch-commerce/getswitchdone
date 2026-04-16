@@ -38,6 +38,7 @@ const LabelManagerModal = dynamic(() => import('./board-detail/LabelManagerModal
 const ListActionsModal = dynamic(() => import('./board-detail/ListActionsModal'), { ssr: false });
 const CustomFieldManagerModal = dynamic(() => import('./board-detail/CustomFieldManagerModal'), { ssr: false });
 const ColumnAutomationsModal = dynamic(() => import('./board-detail/ColumnAutomationsModal'), { ssr: false });
+const NotificationPreferencesModal = dynamic(() => import('./NotificationPreferencesModal'), { ssr: false });
 const BoardAutomationsModal = dynamic(() => import('./board-detail/BoardAutomationsModal'), { ssr: false });
 const ArchiveDrawer = dynamic(() => import('./board-detail/ArchiveDrawer'), { ssr: false });
 const RepeatSeriesDrawer = dynamic(() => import('./board-detail/RepeatSeriesDrawer'), { ssr: false });
@@ -117,6 +118,7 @@ function BoardPage() {
   const [showLabelManager, setShowLabelManager] = useState(false);
   const [showCustomFieldManager, setShowCustomFieldManager] = useState(false);
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
+  const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
   const { saveTemplate } = useTemplates();
   const [showNotePanel, setShowNotePanel] = useState(false);
   const [showBoardIconPicker, setShowBoardIconPicker] = useState(false);
@@ -1232,6 +1234,17 @@ function BoardPage() {
             {showNotePanel ? 'Close Notes' : 'Notes'}
           </button>
 
+          {/* Notification preferences */}
+          <button
+            className="kb-btn-icon"
+            onClick={() => setShowNotificationPrefs(true)}
+            title="Notification Settings"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+          </button>
 
           {/* Archive drawer */}
           <button
@@ -1497,6 +1510,15 @@ function BoardPage() {
           onUpdateField={updateCustomField}
           onDeleteField={deleteCustomField}
           onClose={() => setShowCustomFieldManager(false)}
+        />
+      )}
+
+      {/* ── Notification Preferences Modal ── */}
+      {showNotificationPrefs && board && (
+        <NotificationPreferencesModal
+          boardId={boardId}
+          boardTitle={board.title}
+          onClose={() => setShowNotificationPrefs(false)}
         />
       )}
 

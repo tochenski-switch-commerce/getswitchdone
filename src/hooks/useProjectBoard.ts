@@ -3,6 +3,8 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { setBadgeCount, clearBadge } from '@/lib/badge';
+import { extractMentions } from '@/lib/mention-parser';
+import { triggerNotification, triggerNotifications } from '@/lib/notification-helpers';
 
 // Fast cached user lookup — reads from local session instead of making
 // a network request like supabase.auth.getUser() does every time.
@@ -732,6 +734,13 @@ export function useProjectBoard() {
     try {
       const { label_ids, ...cardUpdates } = updates;
 
+      // Get current card state to detect assignee changes
+      const currentCard = board?.cards.find(c => c.id === cardId);
+      const oldAssignees = currentCard?.assignees || [];
+      const oldSingleAssignee = currentCard?.assignee;
+      const newAssignees = cardUpdates.assignees as string[] | undefined;
+      const newSingleAssignee = cardUpdates.assignee as string | undefined;
+
       // Update card fields if any
       let cardData: Record<string, unknown> = {};
       if (Object.keys(cardUpdates).length > 0) {
@@ -789,13 +798,50 @@ export function useProjectBoard() {
           }),
         };
       });
+
+      // ── Trigger notifications for assignee changes ──
+      const cardTitle = currentCard?.title || 'a card';
+      const user = await getCachedUser();
+      const actorName = userProfiles.find(p => p.id === user?.id)?.name || user?.email || 'Someone';
+
+      // Detect newly assigned users (fire-and-forget)
+      if (newAssignees !== undefined) {
+        const newlyAssigned = newAssignees.filter(id => !oldAssignees.includes(id) && id !== user?.id);
+        if (newlyAssigned.length > 0) {
+          triggerNotifications(
+            newlyAssigned.map(uid => ({
+              type: 'assignment' as const,
+              user_id: uid,
+              board_id: boardId,
+              card_id: cardId,
+              card_title: cardTitle,
+              actor_name: actorName,
+            }))
+          ).catch(() => {});
+        }
+      } else if (newSingleAssignee !== undefined) {
+        // Single assignee change (backwards compat)
+        const wasAssigned = !!oldSingleAssignee;
+        const isNowAssigned = !!newSingleAssignee;
+        if (!wasAssigned && isNowAssigned && newSingleAssignee !== user?.id) {
+          triggerNotification({
+            type: 'assignment',
+            user_id: newSingleAssignee,
+            board_id: boardId,
+            card_id: cardId,
+            card_title: cardTitle,
+            actor_name: actorName,
+          }).catch(() => {});
+        }
+      }
+
       return cardData;
     } catch (err: any) {
       console.error('[updateCard] failed:', err.message, { boardId, cardId, updates });
       setError(err.message);
       return null;
     }
-  }, []);
+  }, [board?.cards, userProfiles]);
 
   const deleteCard = useCallback(async (boardId: string, cardId: string) => {
     setError(null);
@@ -916,12 +962,36 @@ export function useProjectBoard() {
           ),
         };
       });
+
+      // ── Trigger notifications ──
+      // Find card to get title
+      const card = board?.cards.find(c => c.id === cardId);
+      const cardTitle = card?.title || 'a card';
+      const actorName = profile?.name || user.email || 'Someone';
+
+      // Extract @mentions from comment and notify mentioned users (fire-and-forget)
+      const mentionedUserIds = extractMentions(content, userProfiles);
+      if (mentionedUserIds.length > 0) {
+        triggerNotifications(
+          mentionedUserIds
+            .filter(uid => uid !== user.id) // Don't notify self
+            .map(uid => ({
+              type: 'mention' as const,
+              user_id: uid,
+              board_id: boardId,
+              card_id: cardId,
+              card_title: cardTitle,
+              actor_name: actorName,
+            }))
+        ).catch(() => {}); // Silently ignore notification errors
+      }
+
       return commentWithProfile as CardComment;
     } catch (err: any) {
       setError(err.message);
       return null;
     }
-  }, [userProfiles]);
+  }, [userProfiles, board?.cards]);
 
   const editComment = useCallback(async (boardId: string, cardId: string, commentId: string, content: string) => {
     setError(null);

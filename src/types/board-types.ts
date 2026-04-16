@@ -220,6 +220,16 @@ export interface Notification {
   created_at: string;
 }
 
+export interface NotificationPreference {
+  id: string;
+  user_id: string;
+  board_id: string;
+  notification_type: 'assignment' | 'mention' | 'comment' | 'due_soon' | 'due_now';
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Forms ──
 
 export type FormFieldType = 'text' | 'textarea' | 'email' | 'url' | 'number' | 'date' | 'select';

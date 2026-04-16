@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { prefetchBoard } from '@/hooks/useProjectBoard';
 import { setBadgeCount } from '@/lib/badge';
+import { scheduleNonCriticalWork } from '@/lib/scheduleNonCritical';
 import { Bell, LogOut, Settings, Search, X } from '@/components/BoardIcons';
 import type { Notification } from '@/types/board-types';
 
@@ -128,9 +129,12 @@ export default function TopNav() {
   }, [user]);
 
   useEffect(() => {
-    fetchNotifications();
+    const cancelScheduledFetch = scheduleNonCriticalWork(fetchNotifications);
     const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelScheduledFetch();
+      clearInterval(interval);
+    };
   }, [fetchNotifications]);
 
   const totalUnread = notifications.filter(n => !n.is_read).length;
