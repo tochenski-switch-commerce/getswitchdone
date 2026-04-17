@@ -40,6 +40,8 @@ export default function ProfilePage() {
   const [dueSoonNotifs, setDueSoonNotifs] = useState(true);
   const [commentNotifs, setCommentNotifs] = useState(true);
   const [assignNotifs, setAssignNotifs] = useState(true);
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifMsg, setNotifMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   // ── Teams ──
   const [joinLink, setJoinLink] = useState('');
@@ -59,7 +61,13 @@ export default function ProfilePage() {
   }, [authLoading, user, router]);
 
   useEffect(() => {
-    if (profile) setName(profile.name);
+    if (profile) {
+      setName(profile.name);
+      setEmailNotifs(profile.email_notifications_enabled ?? true);
+      setDueSoonNotifs(profile.due_soon_notifications_enabled ?? true);
+      setCommentNotifs(profile.comment_notifications_enabled ?? true);
+      setAssignNotifs(profile.assignment_notifications_enabled ?? true);
+    }
     if (user?.email) setEmail(user.email);
   }, [profile, user]);
 
@@ -143,6 +151,38 @@ export default function ProfilePage() {
       setTeamMsg({ type: 'err', text: 'Invalid or expired invite link.' });
     }
   };
+
+  const handleToggleNotification = useCallback(async (
+    key: 'email_notifications_enabled' | 'due_soon_notifications_enabled' | 'comment_notifications_enabled' | 'assignment_notifications_enabled',
+    value: boolean,
+  ) => {
+    if (!user) return;
+
+    setNotifMsg(null);
+    setNotifSaving(true);
+
+    if (key === 'email_notifications_enabled') setEmailNotifs(value);
+    if (key === 'due_soon_notifications_enabled') setDueSoonNotifs(value);
+    if (key === 'comment_notifications_enabled') setCommentNotifs(value);
+    if (key === 'assignment_notifications_enabled') setAssignNotifs(value);
+
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({ [key]: value })
+      .eq('id', user.id);
+
+    setNotifSaving(false);
+    if (error) {
+      setNotifMsg({ type: 'err', text: 'Failed to save notification preference.' });
+      if (key === 'email_notifications_enabled') setEmailNotifs(!value);
+      if (key === 'due_soon_notifications_enabled') setDueSoonNotifs(!value);
+      if (key === 'comment_notifications_enabled') setCommentNotifs(!value);
+      if (key === 'assignment_notifications_enabled') setAssignNotifs(!value);
+      return;
+    }
+
+    setNotifMsg({ type: 'ok', text: 'Notification preference saved.' });
+  }, [user]);
 
   const handleLeaveTeam = async (teamId: string, teamName: string) => {
     if (!confirm(`Leave "${teamName}"? You'll need a new invite to rejoin.`)) return;
@@ -345,10 +385,31 @@ export default function ProfilePage() {
                 <span className="pf-toggle-thumb" />
               </button>
             </div>
-            <ToggleRow label="Email Notifications" checked={emailNotifs} onChange={setEmailNotifs} />
-            <ToggleRow label="Due Soon Reminders" checked={dueSoonNotifs} onChange={setDueSoonNotifs} />
-            <ToggleRow label="Comment Notifications" checked={commentNotifs} onChange={setCommentNotifs} />
-            <ToggleRow label="Assignment Notifications" checked={assignNotifs} onChange={setAssignNotifs} />
+            <ToggleRow
+              label="Email Notifications"
+              checked={emailNotifs}
+              disabled={notifSaving}
+              onChange={(v) => handleToggleNotification('email_notifications_enabled', v)}
+            />
+            <ToggleRow
+              label="Due Soon Reminders"
+              checked={dueSoonNotifs}
+              disabled={notifSaving}
+              onChange={(v) => handleToggleNotification('due_soon_notifications_enabled', v)}
+            />
+            <ToggleRow
+              label="Comment Notifications"
+              checked={commentNotifs}
+              disabled={notifSaving}
+              onChange={(v) => handleToggleNotification('comment_notifications_enabled', v)}
+            />
+            <ToggleRow
+              label="Assignment Notifications"
+              checked={assignNotifs}
+              disabled={notifSaving}
+              onChange={(v) => handleToggleNotification('assignment_notifications_enabled', v)}
+            />
+            {notifMsg && <p className={`pf-msg ${notifMsg.type}`}>{notifMsg.text}</p>}
           </div>
         </section>
 
@@ -449,13 +510,24 @@ export default function ProfilePage() {
 }
 
 /* ── Toggle row sub-component ── */
-function ToggleRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
   return (
     <div className="pf-toggle-row">
       <span className="pf-toggle-label">{label}</span>
       <button
         className={`pf-toggle ${checked ? 'on' : ''}`}
         onClick={() => onChange(!checked)}
+        disabled={disabled}
         type="button"
         role="switch"
         aria-checked={checked}

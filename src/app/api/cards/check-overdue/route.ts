@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { maybeSendNotificationEmail } from '@/lib/notification-email';
 
 function getSupabaseAdmin() {
   return createClient(
@@ -261,9 +262,10 @@ export async function GET(req: NextRequest) {
   const pushSecret = process.env.PUSH_WEBHOOK_SECRET;
 
   const allPushTargets = [...pushTargets, ...checklistPushTargets];
+  let emailSent = 0;
 
-  if (pushSecret) {
-    for (const target of allPushTargets) {
+  for (const target of allPushTargets) {
+    if (pushSecret) {
       try {
         await fetch(pushUrl, {
           method: 'POST',
@@ -277,6 +279,17 @@ export async function GET(req: NextRequest) {
         console.error('[check-overdue] Push failed for', target.user_id, err);
       }
     }
+
+    const sent = await maybeSendNotificationEmail({
+      supabaseAdmin: db,
+      userId: target.user_id,
+      type: target.type as 'overdue' | 'checklist_overdue',
+      title: target.title,
+      body: target.body,
+      boardId: target.board_id,
+      cardId: target.card_id,
+    });
+    if (sent) emailSent += 1;
   }
 
   return NextResponse.json({
@@ -284,5 +297,6 @@ export async function GET(req: NextRequest) {
     notified: notifications.length,
     checklistNotified: checklistNotifications.length,
     pushSent: allPushTargets.length,
+    emailSent,
   });
 }

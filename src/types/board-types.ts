@@ -44,6 +44,10 @@ export interface UserProfile {
   id: string;
   name: string;
   avatar_url?: string;
+  email_notifications_enabled?: boolean;
+  due_soon_notifications_enabled?: boolean;
+  comment_notifications_enabled?: boolean;
+  assignment_notifications_enabled?: boolean;
   updated_at: string;
 }
 

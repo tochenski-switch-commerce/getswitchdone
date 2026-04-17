@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
+import { maybeSendNotificationEmail } from '@/lib/notification-email';
 
 if (process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
   webpush.setVapidDetails(
@@ -17,7 +18,16 @@ function getSupabaseAdmin() {
   );
 }
 
-export type NotificationTriggerType = 'assignment' | 'mention' | 'due_soon' | 'due_now' | 'comment';
+export type NotificationTriggerType =
+  | 'assignment'
+  | 'mention'
+  | 'due_soon'
+  | 'due_now'
+  | 'comment'
+  | 'overdue'
+  | 'checklist_overdue'
+  | 'email_unrouted'
+  | 'comment_reaction';
 
 interface TriggerPayload {
   type: NotificationTriggerType;
@@ -28,6 +38,15 @@ interface TriggerPayload {
   actor_id?: string; // Who performed the action (for assignment/comment)
   actor_name?: string; // Display name of actor
   message?: string; // Custom message for due notifications
+}
+
+function mapBoardPreferenceType(type: NotificationTriggerType): 'assignment' | 'mention' | 'comment' | 'due_soon' | 'due_now' | null {
+  if (type === 'assignment') return 'assignment';
+  if (type === 'mention') return 'mention';
+  if (type === 'comment' || type === 'comment_reaction') return 'comment';
+  if (type === 'due_soon' || type === 'overdue' || type === 'checklist_overdue') return 'due_soon';
+  if (type === 'due_now') return 'due_now';
+  return null;
 }
 
 // Helper to verify webhook calls (from external services or cron jobs)
@@ -65,14 +84,18 @@ export async function POST(req: NextRequest) {
   const supabaseAdmin = getSupabaseAdmin();
 
   try {
+    const preferenceType = mapBoardPreferenceType(type);
+
     // Check notification preferences for this user/board/type
-    const { data: prefs } = await supabaseAdmin
-      .from('notification_preferences')
-      .select('*')
-      .eq('user_id', user_id)
-      .eq('board_id', board_id)
-      .eq('notification_type', type)
-      .single();
+    const { data: prefs } = preferenceType
+      ? await supabaseAdmin
+          .from('notification_preferences')
+          .select('*')
+          .eq('user_id', user_id)
+          .eq('board_id', board_id)
+          .eq('notification_type', preferenceType)
+          .single()
+      : { data: null };
 
     // Skip if user has disabled this notification type for this board
     if (prefs && !prefs.enabled) {
@@ -104,6 +127,22 @@ export async function POST(req: NextRequest) {
         title = '🔴 Due Now';
         body = message || `${card_title || 'A card'} is due now`;
         break;
+      case 'overdue':
+        title = '⚠️ Overdue';
+        body = message || `${card_title || 'A card'} is overdue`;
+        break;
+      case 'checklist_overdue':
+        title = '⚠️ Checklist Overdue';
+        body = message || `${card_title || 'A checklist item'} is overdue`;
+        break;
+      case 'email_unrouted':
+        title = '📩 Email Unrouted';
+        body = message || 'An inbound email could not be routed to a board.';
+        break;
+      case 'comment_reaction':
+        title = '👍 Comment Reaction';
+        body = message || `${actor_name || 'Someone'} reacted to your comment on ${card_title || 'a card'}`;
+        break;
     }
 
     // Create inbox notification
@@ -111,7 +150,7 @@ export async function POST(req: NextRequest) {
       user_id,
       board_id,
       card_id,
-      type: type === 'due_soon' ? 'due_soon' : type === 'due_now' ? 'due_soon' : type,
+      type: type === 'due_now' ? 'due_soon' : type,
       title,
       body,
       is_read: false,
@@ -154,7 +193,17 @@ export async function POST(req: NextRequest) {
       webSent = webResults.filter((r) => r.status === 'fulfilled' && r.value).length;
     }
 
-    return NextResponse.json({ sent: webSent, type });
+    const emailSent = await maybeSendNotificationEmail({
+      supabaseAdmin,
+      userId: user_id,
+      type,
+      title,
+      body,
+      boardId: board_id,
+      cardId: card_id,
+    });
+
+    return NextResponse.json({ sent: webSent, emailSent, type });
   } catch (error) {
     console.error('Push trigger error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
