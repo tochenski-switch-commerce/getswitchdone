@@ -30,7 +30,7 @@ export function sanitizeCommentHtmlForEmail(html: string): string {
     safe = safe.replace(new RegExp(`<${tag}\\b[^>]*/?>`, 'gi'), '');
   }
 
-  const TEXT_STYLE = 'color:#d6deef;font-size:15px;line-height:1.65;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;';
+  const TEXT_STYLE = 'color:#ffffff !important;font-size:15px;line-height:1.65;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;';
 
   // Map structural/formatting tags to email-safe inline-styled versions
   safe = safe

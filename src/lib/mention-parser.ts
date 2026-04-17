@@ -7,25 +7,48 @@
 export function extractMentions(text: string, users: Array<{ id: string; name: string }>): string[] {
   if (!text) return [];
 
-  // Match @word patterns
-  const mentions = text.match(/@[\w\s-]+/g) || [];
-  
   const mentionedIds = new Set<string>();
+  const userNameMap = new Map(users.map((u) => [u.name?.trim().toLowerCase(), u.id] as const));
 
-  mentions.forEach((mention) => {
-    const username = mention.substring(1).toLowerCase().trim(); // Remove @ and lowercase
-    
-    // Find matching user by name (case-insensitive)
-    const matchedUser = users.find(
-      (u) => u.name?.toLowerCase() === username || u.name?.toLowerCase().includes(username)
-    );
-    
-    if (matchedUser) {
-      mentionedIds.add(matchedUser.id);
+  // 1) Prefer explicit mention spans emitted by the rich-text editor.
+  //    Handles names with spaces/special characters reliably.
+  const mentionSpanRegex = /<span\b[^>]*class=["'][^"']*\bkb-mention\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi;
+  let spanMatch: RegExpExecArray | null;
+  while ((spanMatch = mentionSpanRegex.exec(text)) !== null) {
+    const raw = spanMatch[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').trim();
+    const name = raw.startsWith('@') ? raw.slice(1).trim() : raw;
+    const id = userNameMap.get(name.toLowerCase());
+    if (id) mentionedIds.add(id);
+  }
+
+  // 2) Support quoted full-name mentions: @"Jane Doe"
+  const quotedMentionRegex = /@"([^"]+)"/g;
+  let quotedMatch: RegExpExecArray | null;
+  while ((quotedMatch = quotedMentionRegex.exec(text)) !== null) {
+    const name = quotedMatch[1].trim().toLowerCase();
+    const id = userNameMap.get(name);
+    if (id) mentionedIds.add(id);
+  }
+
+  // 3) Support simple mentions: @username (single token)
+  const simpleMentionRegex = /@([\p{L}\p{N}._-]+)/gu;
+  let simpleMatch: RegExpExecArray | null;
+  while ((simpleMatch = simpleMentionRegex.exec(text)) !== null) {
+    const token = simpleMatch[1].trim().toLowerCase();
+    const exact = userNameMap.get(token);
+    if (exact) {
+      mentionedIds.add(exact);
+      continue;
     }
-  });
 
-  return Array.from(mentionedIds);
+    // Fallback: allow unique prefix matches for convenience.
+    const candidates = users.filter((u) => u.name?.toLowerCase().startsWith(token));
+    if (candidates.length === 1) {
+      mentionedIds.add(candidates[0].id);
+    }
+  }
+
+  return [...mentionedIds];
 }
 
 /**

@@ -503,7 +503,7 @@ function buildEmailHtml(args: {
   const notificationTypeLabel = args.type.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 
   const bodyContent = args.richBodyHtml
-    ? `<div style="margin:8px 0 0;">${sanitizeCommentHtmlForEmail(args.richBodyHtml)}</div>`
+    ? `<div style="margin:8px 0 0;color:#ffffff !important;">${sanitizeCommentHtmlForEmail(args.richBodyHtml)}</div>`
     : `<p style="margin:8px 0 0;color:#d6deef;font-size:15px;line-height:1.62;">${escapeHtml(args.body || 'Open Lumio to view details.')}</p>`;
 
   const leadHtml = `<p style="margin:0;color:#9aa4ba;font-size:13px;line-height:1.6;">Hi ${safeDisplayName},</p>
