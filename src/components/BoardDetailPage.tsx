@@ -2257,22 +2257,6 @@ function BoardPage() {
             if (updates.start_date !== undefined && updates.start_date === todayStr) {
               await runBoardAutomation(activeCard, 'start_date_arrived');
             }
-            // Notify newly added assignees
-            for (const name of newAssignees) {
-              if (!oldAssignees.has(name.toLowerCase())) {
-                const target = userProfiles.find(p => p.name.toLowerCase() === name.toLowerCase());
-                if (target && target.id !== user?.id) {
-                  await createNotification({
-                    user_id: target.id,
-                    board_id: boardId,
-                    card_id: activeCard.id,
-                    type: 'assignment',
-                    title: `You were assigned to "${activeCard.title}"`,
-                    body: `Assigned by ${userProfiles.find(p => p.id === user?.id)?.name || 'someone'}`,
-                  });
-                }
-              }
-            }
           }}
           onDelete={async () => { await deleteCard(boardId, activeCard.id); setSelectedCard(null); }}
           onArchive={async () => { await archiveCard(boardId, activeCard.id, activeCard.column_id); setSelectedCard(null); }}
@@ -2280,7 +2264,6 @@ function BoardPage() {
             const result = await addComment(boardId, activeCard.id, content);
             if (!result) return;
 
-            const senderName = userProfiles.find(p => p.id === user?.id)?.name || 'someone';
             const plainContent = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
             const snippet = plainContent.length > 80 ? plainContent.slice(0, 80) + '…' : plainContent;
             const notifiedUserIds = new Set<string>();
@@ -2291,14 +2274,6 @@ function BoardPage() {
               const target = userProfiles.find(p => p.name.toLowerCase() === mentionName.toLowerCase());
               if (target && target.id !== user?.id && !notifiedUserIds.has(target.id)) {
                 notifiedUserIds.add(target.id);
-                await createNotification({
-                  user_id: target.id,
-                  board_id: boardId,
-                  card_id: activeCard.id,
-                  type: 'mention',
-                  title: `${senderName} mentioned you on "${activeCard.title}"`,
-                  body: snippet,
-                });
               }
             }
 

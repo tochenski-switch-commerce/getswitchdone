@@ -57,6 +57,7 @@ interface NotificationEmailContext {
     due_time?: string | null;
     assignee?: string | null;
     assignees?: string[] | null;
+    assigneeNames?: string[];
     is_complete?: boolean | null;
     column_id?: string | null;
   } | null;
@@ -72,6 +73,7 @@ interface NotificationEmailContext {
     title: string;
     due_date?: string | null;
     assignees?: string[] | null;
+    assigneeNames?: string[];
   } | null;
   recentComments: Array<{
     authorName: string;
@@ -125,19 +127,36 @@ function formatTimeValue(time?: string | null): string | null {
   return `${hour12}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
-async function resolveCommentAuthors(
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function resolveProfileNames(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabaseAdmin: any,
-  rows: Array<{ id: string; content: string; created_at: string; user_id: string }>,
-): Promise<Array<{ authorName: string; content: string; createdAt: string }>> {
-  if (!rows.length) return [];
-  const userIds = [...new Set(rows.map((r) => r.user_id))];
+  userIds: string[],
+): Promise<Record<string, string>> {
+  const uniqueIds = [...new Set(userIds.filter((value) => !!value && isUuid(value)))];
+  if (!uniqueIds.length) return {};
+
   const { data: profiles } = await supabaseAdmin
     .from('user_profiles')
     .select('id, name')
-    .in('id', userIds);
+    .in('id', uniqueIds);
+
   const nameMap: Record<string, string> = {};
   for (const p of profiles || []) nameMap[p.id] = p.name || 'Someone';
+  return nameMap;
+}
+
+function resolveAssigneeNames(values: Array<string | null | undefined>, nameMap: Record<string, string>): string[] {
+  return [...new Set(values.filter((value): value is string => !!value && value.trim().length > 0))].map((value) => nameMap[value] || value);
+}
+
+function resolveCommentAuthors(
+  rows: Array<{ id: string; content: string; created_at: string; user_id: string }>,
+  nameMap: Record<string, string>,
+): Array<{ authorName: string; content: string; createdAt: string }> {
   return rows.map((r) => ({
     authorName: nameMap[r.user_id] || 'Someone',
     content: r.content,
@@ -239,14 +258,38 @@ async function fetchNotificationContext(args: {
       .filter((row: { name?: string } | undefined | null): row is { name: string; color?: string | null } => !!row?.name)
       .map((row: { name: string; color?: string | null }) => ({ name: row.name, color: row.color || null }));
 
+    const profileNameMap = await resolveProfileNames(supabaseAdmin, [
+      cardRes?.data?.assignee,
+      ...((cardRes?.data?.assignees as string[] | null | undefined) || []),
+      ...((checklistItemRes?.data?.assignees as string[] | null | undefined) || []),
+      ...((commentsRes?.data || []).map((row: { user_id: string }) => row.user_id)),
+    ].filter((value): value is string => !!value));
+
+    const cardData = cardRes?.data
+      ? {
+          ...cardRes.data,
+          assigneeNames: resolveAssigneeNames(
+            [cardRes.data.assignee, ...((cardRes.data.assignees as string[] | null | undefined) || [])],
+            profileNameMap,
+          ),
+        }
+      : null;
+
+    const checklistItemData = checklistItemRes?.data
+      ? {
+          ...checklistItemRes.data,
+          assigneeNames: resolveAssigneeNames(checklistItemRes.data.assignees || [], profileNameMap),
+        }
+      : null;
+
     return {
       board: boardRes?.data || null,
-      card: cardRes?.data || null,
+      card: cardData,
       columnTitle: (columnRes?.data?.title as string | undefined) || null,
       labels,
       checklistSummary,
-      checklistItem: checklistItemRes?.data || null,
-      recentComments: await resolveCommentAuthors(supabaseAdmin, commentsRes?.data || []),
+      checklistItem: checklistItemData,
+      recentComments: resolveCommentAuthors(commentsRes?.data || [], profileNameMap),
     };
   } catch {
     return fallbackContext;
@@ -262,6 +305,19 @@ function renderMetaRow(label: string, value: string): string {
       <span style="display:inline-block;color:#d9dfed;font-size:13px;line-height:1.5;">${escapeHtml(value)}</span>
     </td>
   </tr>`;
+}
+
+function renderDescriptionPreview(description?: string | null): string {
+  const trimmed = description?.trim();
+  if (!trimmed) return '';
+
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(trimmed);
+  if (looksLikeHtml) {
+    return `<div style="margin:0 0 12px;color:#b9c2d8;font-size:13px;line-height:1.6;">${sanitizeCommentHtmlForEmail(trimmed)}</div>`;
+  }
+
+  const preview = trimmed.length > 260 ? `${trimmed.slice(0, 257)}...` : trimmed;
+  return `<p style="margin:0 0 12px;color:#b9c2d8;font-size:13px;line-height:1.6;">${escapeHtml(preview)}</p>`;
 }
 
 function buildRecentCommentsBlock(context: NotificationEmailContext): string {
@@ -306,20 +362,13 @@ function buildRecentCommentsBlock(context: NotificationEmailContext): string {
 function buildCardDetailsBlock(context: NotificationEmailContext): string {
   if (!context.card) return '';
 
-  const assignees = [context.card.assignee, ...(context.card.assignees || [])]
-    .filter((value): value is string => !!value && value.trim().length > 0);
-  const uniqueAssignees = [...new Set(assignees)];
+  const uniqueAssignees = context.card.assigneeNames || [];
 
   const startDate = formatDateValue(context.card.start_date);
   const dueDate = formatDateValue(context.card.due_date);
   const dueTime = formatTimeValue(context.card.due_time);
   const dueDisplay = dueDate ? `${dueDate}${dueTime ? ` at ${dueTime}` : ''}` : null;
-  const description = context.card.description?.trim();
-  const descriptionPreview = description
-    ? description.length > 260
-      ? `${description.slice(0, 257)}...`
-      : description
-    : null;
+  const descriptionPreviewHtml = renderDescriptionPreview(context.card.description);
 
   const rows: string[] = [
     renderMetaRow('Card', context.card.title),
@@ -345,11 +394,12 @@ function buildCardDetailsBlock(context: NotificationEmailContext): string {
     const checklistDue = formatDateValue(context.checklistItem.due_date);
     rows.push(renderMetaRow('Checklist Item', context.checklistItem.title));
     if (checklistDue) rows.push(renderMetaRow('Item Due', checklistDue));
+    if (context.checklistItem.assigneeNames?.length) {
+      rows.push(renderMetaRow('Item Assignees', context.checklistItem.assigneeNames.join(', ')));
+    }
   }
 
-  const contentHtml = `${descriptionPreview
-    ? `<p style="margin:0 0 12px;color:#b9c2d8;font-size:13px;line-height:1.6;">${escapeHtml(descriptionPreview)}</p>`
-    : ''}
+  const contentHtml = `${descriptionPreviewHtml}
             <table width="100%" cellpadding="0" cellspacing="0" border="0">
               ${rows.join('')}
             </table>`;
