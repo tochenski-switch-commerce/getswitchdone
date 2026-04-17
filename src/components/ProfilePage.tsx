@@ -227,41 +227,6 @@ export default function ProfilePage() {
           <h1 className="pf-title">Profile & Settings</h1>
         </div>
 
-        {/* ── Subscription ── */}
-        <section className="pf-section">
-          <div className="pf-section-header">
-            <Sparkles size={18} style={{ color: '#818cf8' }} />
-            <h2 className="pf-section-title">Subscription</h2>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <span style={{
-              display: 'inline-block', padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-              background: isPro ? 'rgba(99,102,241,0.2)' : 'rgba(107,114,128,0.2)',
-              color: isPro ? '#a5b4fc' : '#9ca3af',
-            }}>
-              {isPro ? 'Pro' : 'Free'}
-            </span>
-            {isStaffGrant && (
-              <span style={{ fontSize: 11, color: '#6b7280' }}>Staff grant</span>
-            )}
-            {subStatus === 'canceled' && (
-              <span style={{ fontSize: 12, color: '#f59e0b' }}>Cancels at period end</span>
-            )}
-          </div>
-          {isPro && currentPeriodEnd && !isStaffGrant && (
-            <p className="pf-hint" style={{ marginBottom: 8 }}>
-              {subStatus === 'canceled' ? 'Access until' : 'Renews'}: {new Date(currentPeriodEnd).toLocaleDateString()}
-            </p>
-          )}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {!isPro && (
-              <button className="pf-btn pf-btn-primary" onClick={showPaywall}>
-                Upgrade to Pro
-              </button>
-            )}
-          </div>
-        </section>
-
         {/* ── Display Name ── */}
         <section className="pf-section">
           <div className="pf-section-header">
@@ -338,14 +303,16 @@ export default function ProfilePage() {
           </div>
           <div className="pf-field">
             <label className="pf-label">Confirm Password</label>
-            <input
-              className="pf-input"
-              type={pwShow ? 'text' : 'password'}
-              value={pwConfirm}
-              onChange={e => setPwConfirm(e.target.value)}
-              placeholder="Confirm new password"
-              onKeyDown={e => e.key === 'Enter' && handleSavePassword()}
-            />
+            <div className="pf-input-wrap">
+              <input
+                className="pf-input"
+                type={pwShow ? 'text' : 'password'}
+                value={pwConfirm}
+                onChange={e => setPwConfirm(e.target.value)}
+                placeholder="Confirm new password"
+                onKeyDown={e => e.key === 'Enter' && handleSavePassword()}
+              />
+            </div>
           </div>
           <button
             className="pf-btn pf-btn-primary"
@@ -364,6 +331,7 @@ export default function ProfilePage() {
             <Bell size={18} style={{ color: '#818cf8' }} />
             <h2 className="pf-section-title">Notification Preferences</h2>
           </div>
+          <p className="pf-hint">These settings control all notification channels globally. You can also fine-tune per board.</p>
           <div className="pf-toggles">
             <div className="pf-toggle-row">
               <div>
@@ -392,19 +360,22 @@ export default function ProfilePage() {
               onChange={(v) => handleToggleNotification('email_notifications_enabled', v)}
             />
             <ToggleRow
-              label="Due Soon Reminders"
+              label="Card + Checklist Due Reminders"
+              hint="Sent 1 day before the due date; at due time if a time is set; and once when overdue."
               checked={dueSoonNotifs}
               disabled={notifSaving}
               onChange={(v) => handleToggleNotification('due_soon_notifications_enabled', v)}
             />
             <ToggleRow
               label="Comment Notifications"
+              hint="New comments and @mentions on cards you're assigned to."
               checked={commentNotifs}
               disabled={notifSaving}
               onChange={(v) => handleToggleNotification('comment_notifications_enabled', v)}
             />
             <ToggleRow
               label="Assignment Notifications"
+              hint="When you're assigned to a card or checklist item."
               checked={assignNotifs}
               disabled={notifSaving}
               onChange={(v) => handleToggleNotification('assignment_notifications_enabled', v)}
@@ -512,18 +483,23 @@ export default function ProfilePage() {
 /* ── Toggle row sub-component ── */
 function ToggleRow({
   label,
+  hint,
   checked,
   onChange,
   disabled,
 }: {
   label: string;
+  hint?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
 }) {
   return (
     <div className="pf-toggle-row">
-      <span className="pf-toggle-label">{label}</span>
+      <div>
+        <span className="pf-toggle-label">{label}</span>
+        {hint && <p className="pf-hint" style={{ margin: '2px 0 0', fontSize: 11 }}>{hint}</p>}
+      </div>
       <button
         className={`pf-toggle ${checked ? 'on' : ''}`}
         onClick={() => onChange(!checked)}

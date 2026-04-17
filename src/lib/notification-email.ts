@@ -75,6 +75,13 @@ interface NotificationEmailContext {
     assignees?: string[] | null;
     assigneeNames?: string[];
   } | null;
+  checklistItems: Array<{
+    id: string;
+    title: string;
+    isCompleted: boolean;
+    dueDate: string | null;
+    assigneeNames: string[];
+  }>;
   recentComments: Array<{
     authorName: string;
     content: string;
@@ -179,6 +186,7 @@ async function fetchNotificationContext(args: {
     labels: [],
     checklistSummary: null,
     checklistItem: null,
+    checklistItems: [],
     recentComments: [],
   };
 
@@ -226,8 +234,9 @@ async function fetchNotificationContext(args: {
       cardId
         ? supabaseAdmin
             .from('card_checklists')
-            .select('is_completed, due_date')
+            .select('id, title, is_completed, due_date, assignees, position')
             .eq('card_id', cardId)
+            .order('position', { ascending: true })
         : Promise.resolve({ data: [] }),
       cardId
       ? supabaseAdmin
@@ -240,7 +249,7 @@ async function fetchNotificationContext(args: {
     ]);
 
     const nowIsoDate = new Date().toISOString().slice(0, 10);
-    const checklistRows: Array<{ is_completed?: boolean; due_date?: string | null }> = checklistRes?.data || [];
+    const checklistRows: Array<{ id: string; title: string; is_completed?: boolean; due_date?: string | null; assignees?: string[] | null; position?: number }> = checklistRes?.data || [];
     const checklistSummary = checklistRows.length
       ? {
           total: checklistRows.length,
@@ -263,6 +272,7 @@ async function fetchNotificationContext(args: {
       ...((cardRes?.data?.assignees as string[] | null | undefined) || []),
       ...((checklistItemRes?.data?.assignees as string[] | null | undefined) || []),
       ...((commentsRes?.data || []).map((row: { user_id: string }) => row.user_id)),
+      ...checklistRows.flatMap((row) => row.assignees || []),
     ].filter((value): value is string => !!value));
 
     const cardData = cardRes?.data
@@ -289,6 +299,13 @@ async function fetchNotificationContext(args: {
       labels,
       checklistSummary,
       checklistItem: checklistItemData,
+      checklistItems: checklistRows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        isCompleted: !!row.is_completed,
+        dueDate: row.due_date || null,
+        assigneeNames: resolveAssigneeNames(row.assignees || [], profileNameMap),
+      })),
       recentComments: resolveCommentAuthors(commentsRes?.data || [], profileNameMap),
     };
   } catch {
@@ -318,6 +335,57 @@ function renderDescriptionPreview(description?: string | null): string {
 
   const preview = trimmed.length > 260 ? `${trimmed.slice(0, 257)}...` : trimmed;
   return `<p style="margin:0 0 12px;color:#b9c2d8;font-size:13px;line-height:1.6;">${escapeHtml(preview)}</p>`;
+}
+
+function buildChecklistBlock(context: NotificationEmailContext): string {
+  if (!context.checklistItems.length) return '';
+
+  const nowIso = new Date().toISOString().slice(0, 10);
+
+  const itemRows = context.checklistItems.map((item) => {
+    const dueDateLabel = formatDateValue(item.dueDate);
+    const isOverdue = !item.isCompleted && !!item.dueDate && item.dueDate.slice(0, 10) < nowIso;
+    const checkMark = item.isCompleted
+      ? `<span style="display:inline-block;width:16px;height:16px;border-radius:4px;background-color:#22c55e;text-align:center;line-height:16px;font-size:11px;color:#fff;font-weight:700;vertical-align:middle;">&#10003;</span>`
+      : `<span style="display:inline-block;width:16px;height:16px;border-radius:4px;border:2px solid #3a435a;background-color:#1a2035;vertical-align:middle;"></span>`;
+    const titleColor = item.isCompleted ? '#6f7891' : '#d9dfed';
+    const titleDecoration = item.isCompleted ? 'text-decoration:line-through;' : '';
+    const meta: string[] = [];
+    if (dueDateLabel) {
+      const dateColor = isOverdue ? '#f87171' : '#8d96ab';
+      meta.push(`<span style="color:${dateColor};font-size:11px;">${escapeHtml(dueDateLabel)}${isOverdue ? ' · overdue' : ''}</span>`);
+    }
+    if (item.assigneeNames.length) {
+      meta.push(`<span style="color:#8d96ab;font-size:11px;">${escapeHtml(item.assigneeNames.join(', '))}</span>`);
+    }
+    return `<tr>
+      <td style="padding:0 0 10px;vertical-align:top;">
+        <table cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr>
+            <td style="width:22px;vertical-align:top;padding-top:1px;">${checkMark}</td>
+            <td style="vertical-align:top;">
+              <span style="color:${titleColor};font-size:13px;line-height:1.5;${titleDecoration}">${escapeHtml(item.title)}</span>
+              ${meta.length ? `<br/><span style="display:inline-block;margin-top:2px;">${meta.join('<span style="color:#3a435a;margin:0 5px;">·</span>')}</span>` : ''}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`;
+  });
+
+  const completed = context.checklistItems.filter((i) => i.isCompleted).length;
+  const total = context.checklistItems.length;
+
+  const contentHtml = `<p style="margin:0 0 12px;color:#8d96ab;font-size:12px;">${escapeHtml(`${completed}/${total} completed`)}</p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      ${itemRows.join('')}
+    </table>`;
+
+  return `<tr>
+    <td style="padding-top:18px;">
+      ${renderEmailInfoPanel({ title: 'Checklist', contentHtml })}
+    </td>
+  </tr>`;
 }
 
 function buildRecentCommentsBlock(context: NotificationEmailContext): string {
@@ -452,6 +520,7 @@ function buildEmailHtml(args: {
       );
 
     const sectionsHtml = `${buildCardDetailsBlock(args.context)}
+      ${buildChecklistBlock(args.context)}
       ${buildRecentCommentsBlock(args.context)}
           <tr>
             <td style="padding-top:14px;">

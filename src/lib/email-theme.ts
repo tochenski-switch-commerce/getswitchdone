@@ -126,7 +126,7 @@ interface LumioEmailInfoPanelArgs {
 }
 
 export function renderEmailInfoPanel(args: LumioEmailInfoPanelArgs): string {
-  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:linear-gradient(160deg,#151926,#131a28);border:1px solid #2a3142;border-radius:14px;padding:16px 16px 10px;">
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#151926;background:linear-gradient(160deg,#151926,#131a28);border:1px solid #2a3142;border-radius:14px;padding:16px 16px 10px;">
                 <tr>
                   <td style="padding-bottom:12px;">
                     <p style="margin:0;color:#f8fbff;font-size:13px;font-weight:700;letter-spacing:0.35px;text-transform:uppercase;">${args.title}</p>
@@ -163,7 +163,7 @@ export function renderLumioEmailShell(args: LumioEmailShellArgs): string {
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f1117;background-image:radial-gradient(circle at 10% -20%, #253051 0%, rgba(15,17,23,0) 45%),radial-gradient(circle at 90% -30%, #492823 0%, rgba(15,17,23,0) 40%);min-height:100vh;">
     <tr>
       <td align="center" style="padding:30px 14px;">
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;width:100%;background:#141925;border:1px solid #2a3142;border-radius:18px;padding:28px 24px 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;width:100%;background-color:#141925;background:#141925;border:1px solid #2a3142;border-radius:18px;padding:28px 24px 24px;">
           <tr>
             <td align="center" style="padding-bottom:20px;">
               <table cellpadding="0" cellspacing="0" border="0" align="center">
@@ -180,7 +180,7 @@ export function renderLumioEmailShell(args: LumioEmailShellArgs): string {
           </tr>
           <tr>
             <td style="padding-bottom:12px;">
-              <span style="display:inline-block;background:linear-gradient(135deg,#fa420f,#e03508);color:#fff;font-size:12px;font-weight:700;letter-spacing:0.4px;padding:7px 12px;border-radius:999px;text-transform:uppercase;">${args.badgeText}</span>
+              <span style="display:inline-block;background-color:#fa420f;background:linear-gradient(135deg,#fa420f,#e03508);color:#fff;font-size:12px;font-weight:700;letter-spacing:0.4px;padding:7px 12px;border-radius:999px;text-transform:uppercase;">${args.badgeText}</span>
             </td>
           </tr>
           <tr>

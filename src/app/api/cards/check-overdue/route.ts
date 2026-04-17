@@ -16,6 +16,27 @@ function formatTime12(time: string): string {
   return `${hour}:${String(m).padStart(2, '0')} ${period}`;
 }
 
+function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.URL) return process.env.URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return 'http://localhost:3000';
+}
+
+function getRecipientIds(primary?: string | null, assignees?: string[] | null): string[] {
+  const ids = new Set<string>();
+
+  if (primary?.trim()) ids.add(primary.trim());
+  for (const value of assignees || []) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed) ids.add(trimmed);
+  }
+
+  return [...ids];
+}
+
 export async function GET(req: NextRequest) {
   // Verify auth — accept either CRON_SECRET or PUSH_WEBHOOK_SECRET
   const authHeader = req.headers.get('authorization');
@@ -78,34 +99,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ checked: cards.length, notified: 0 });
   }
 
-  // Check which cards already have an overdue notification (avoid duplicates)
   const cardIds = overdueCards.map(c => c.id);
-
-  // Batch-fetch all assignee user IDs for all overdue cards
-  const allCardAssigneeNames = new Set<string>();
-  for (const card of overdueCards) {
-    const names: string[] = card.assignees?.length ? card.assignees : card.assignee ? [card.assignee] : [];
-    for (const n of names) allCardAssigneeNames.add(n);
-  }
-
-  const nameToUserIdMap = new Map<string, string>();
-  if (allCardAssigneeNames.size > 0) {
-    const { data: allProfiles } = await db
-      .from('user_profiles')
-      .select('id, name')
-      .in('name', [...allCardAssigneeNames]);
-    for (const p of allProfiles || []) {
-      if (p.name) nameToUserIdMap.set(p.name, p.id);
-    }
-  }
 
   // Build candidate (userId, card) pairs
   const candidatePairs: { userId: string; card: (typeof overdueCards)[0] }[] = [];
   for (const card of overdueCards) {
-    const assigneeNames: string[] = card.assignees?.length ? card.assignees : card.assignee ? [card.assignee] : [];
-    for (const name of assigneeNames) {
-      const uid = nameToUserIdMap.get(name);
-      if (uid) candidatePairs.push({ userId: uid, card });
+    const assigneeIds = getRecipientIds(card.assignee, card.assignees);
+    for (const userId of assigneeIds) {
+      candidatePairs.push({ userId, card });
     }
   }
 
@@ -176,42 +177,19 @@ export async function GET(req: NextRequest) {
   });
 
   const checklistNotifications: { user_id: string; board_id: string; card_id: string; checklist_item_id: string; type: string; title: string; body: string }[] = [];
-  const checklistPushTargets: { user_id: string; title: string; body: string; type: string; board_id: string; card_id: string }[] = [];
+  const checklistPushTargets: { user_id: string; title: string; body: string; type: string; board_id: string; card_id: string; checklist_item_id: string }[] = [];
 
   if (overdueChecklistItems.length > 0) {
-    // Resolve any new assignee names not already in the map
-    const allChecklistAssigneeNames = new Set<string>();
-    for (const item of overdueChecklistItems) {
-      const bc = item.board_cards as any;
-      const itemAssignees: string[] = Array.isArray(item.assignees) && item.assignees.length ? item.assignees : [];
-      const names: string[] = itemAssignees.length
-        ? itemAssignees
-        : bc.assignees?.length ? bc.assignees : bc.assignee ? [bc.assignee] : [];
-      for (const n of names) allChecklistAssigneeNames.add(n);
-    }
-
-    const newNames = [...allChecklistAssigneeNames].filter(n => !nameToUserIdMap.has(n));
-    if (newNames.length > 0) {
-      const { data: extraProfiles } = await db
-        .from('user_profiles')
-        .select('id, name')
-        .in('name', newNames);
-      for (const p of extraProfiles || []) {
-        if (p.name) nameToUserIdMap.set(p.name, p.id);
-      }
-    }
-
     // Build candidate (userId, item) pairs
     const checklistCandidatePairs: { userId: string; item: (typeof overdueChecklistItems)[0] }[] = [];
     for (const item of overdueChecklistItems) {
       const bc = item.board_cards as any;
       const itemAssignees: string[] = Array.isArray(item.assignees) && item.assignees.length ? item.assignees : [];
-      const assigneeNames: string[] = itemAssignees.length
-        ? itemAssignees
-        : bc.assignees?.length ? bc.assignees : bc.assignee ? [bc.assignee] : [];
-      for (const name of assigneeNames) {
-        const uid = nameToUserIdMap.get(name);
-        if (uid) checklistCandidatePairs.push({ userId: uid, item });
+      const assigneeIds = itemAssignees.length
+        ? getRecipientIds(null, itemAssignees)
+        : getRecipientIds(bc.assignee, bc.assignees);
+      for (const userId of assigneeIds) {
+        checklistCandidatePairs.push({ userId, item });
       }
     }
 
@@ -246,7 +224,7 @@ export async function GET(req: NextRequest) {
         title,
         body,
       });
-      checklistPushTargets.push({ user_id: userId, title, body, type: 'checklist_overdue', board_id: bc.board_id, card_id: item.card_id });
+      checklistPushTargets.push({ user_id: userId, title, body, type: 'checklist_overdue', board_id: bc.board_id, card_id: item.card_id, checklist_item_id: item.id });
     }
 
     if (checklistNotifications.length > 0) {
@@ -258,7 +236,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Send push notifications (fire-and-forget, don't block response)
-  const pushUrl = `${process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/push/send`;
+  const pushUrl = `${getBaseUrl()}/api/push/send`;
   const pushSecret = process.env.PUSH_WEBHOOK_SECRET;
 
   const allPushTargets = [...pushTargets, ...checklistPushTargets];
@@ -288,6 +266,7 @@ export async function GET(req: NextRequest) {
       body: target.body,
       boardId: target.board_id,
       cardId: target.card_id,
+      checklistItemId: 'checklist_item_id' in target ? (target as { checklist_item_id?: string }).checklist_item_id : undefined,
     });
     if (sent) emailSent += 1;
   }

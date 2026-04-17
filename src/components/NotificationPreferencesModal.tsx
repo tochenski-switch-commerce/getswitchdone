@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { NotificationPreference } from '@/types/board-types';
+import { Target, AtSign, MessageSquare, Clock, AlertCircle } from '@/components/BoardIcons';
 
 interface NotificationPreferencesModalProps {
   boardId: string;
@@ -118,6 +118,10 @@ export default function NotificationPreferencesModal({
           for <strong>{boardTitle}</strong>
         </p>
 
+        <p style={styles.helpText}>
+          Due soon fires 1 day before. Due now fires at the due time (requires a time to be set). Overdue fires once when the due date or time passes.
+        </p>
+
         <div style={styles.preferences}>
           {Object.entries(preferences).map(([type, enabled]) => (
             <label key={type} style={styles.prefRow}>
@@ -128,11 +132,11 @@ export default function NotificationPreferencesModal({
                 style={styles.checkbox}
               />
               <span style={styles.label}>
-                {type === 'assignment' && '🎯 Assigned to me'}
-                {type === 'mention' && '💬 Mentioned in comments'}
-                {type === 'comment' && '💬 New comments on my cards'}
-                {type === 'due_soon' && '⏰ Due soon (1 day & 1 hour)'}
-                {type === 'due_now' && '🔴 Due now'}
+                {type === 'assignment' && <><Target size={13} style={{ verticalAlign: 'middle', marginRight: 6, color: '#818cf8' }} />Assigned to me</>}
+                {type === 'mention' && <><AtSign size={13} style={{ verticalAlign: 'middle', marginRight: 6, color: '#818cf8' }} />Mentioned in comments</>}
+                {type === 'comment' && <><MessageSquare size={13} style={{ verticalAlign: 'middle', marginRight: 6, color: '#818cf8' }} />New comments on my cards</>}
+                {type === 'due_soon' && <><Clock size={13} style={{ verticalAlign: 'middle', marginRight: 6, color: '#f59e0b' }} />Due soon — 1 day before</>}
+                {type === 'due_now' && <><AlertCircle size={13} style={{ verticalAlign: 'middle', marginRight: 6, color: '#f59e0b' }} />Due now — at due time</>}
               </span>
             </label>
           ))}
@@ -203,6 +207,12 @@ const styles = {
     margin: '0 0 16px 0',
     fontSize: '14px',
     color: '#94a3b8',
+  },
+  helpText: {
+    margin: '0 0 16px 0',
+    fontSize: '13px',
+    lineHeight: 1.5,
+    color: '#cbd5e1',
   },
   preferences: {
     display: 'flex',
