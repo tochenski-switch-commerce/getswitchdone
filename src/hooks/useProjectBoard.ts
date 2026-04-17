@@ -1725,10 +1725,23 @@ export function useProjectBoard() {
     body?: string;
   }) => {
     try {
-      const { error: err } = await supabase
-        .from('notifications')
-        .insert([params]);
-      if (err) throw err;
+      if (!params.board_id || !params.card_id) {
+        const { error: err } = await supabase
+          .from('notifications')
+          .insert([params]);
+        if (err) throw err;
+        return;
+      }
+
+      await triggerNotification({
+        type: params.type,
+        user_id: params.user_id,
+        board_id: params.board_id,
+        card_id: params.card_id,
+        checklist_item_id: params.checklist_item_id,
+        title: params.title,
+        body: params.body,
+      });
     } catch (err: any) {
       console.error('Failed to create notification:', err.message);
     }

@@ -34,10 +34,13 @@ interface TriggerPayload {
   user_id: string; // Who this notification is for
   board_id: string;
   card_id: string;
+  checklist_item_id?: string;
   card_title?: string;
   actor_id?: string; // Who performed the action (for assignment/comment)
   actor_name?: string; // Display name of actor
   message?: string; // Custom message for due notifications
+  title?: string;
+  body?: string;
 }
 
 function mapBoardPreferenceType(type: NotificationTriggerType): 'assignment' | 'mention' | 'comment' | 'due_soon' | 'due_now' | null {
@@ -57,7 +60,7 @@ function verifyWebhookSecret(headerSecret?: string): boolean {
 
 export async function POST(req: NextRequest) {
   const payload: TriggerPayload = await req.json();
-  const { type, user_id, board_id, card_id, card_title, actor_id, actor_name, message } = payload;
+  const { type, user_id, board_id, card_id, checklist_item_id, card_title, actor_id, actor_name, message, title: providedTitle, body: providedBody } = payload;
 
   // Verify auth — accept either webhook secret OR valid Bearer token
   const headerSecret = req.headers.get('x-push-secret');
@@ -103,10 +106,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Build notification title/body
-    let title = 'Lumio';
-    let body = '';
+    let title = providedTitle || 'Lumio';
+    let body = providedBody || '';
 
-    switch (type) {
+    if (!providedTitle) {
+      switch (type) {
       case 'assignment':
         title = '🎯 Assigned';
         body = actor_name ? `${actor_name} assigned you to: ${card_title || 'a card'}` : `You were assigned to: ${card_title || 'a card'}`;
@@ -143,6 +147,7 @@ export async function POST(req: NextRequest) {
         title = '👍 Comment Reaction';
         body = message || `${actor_name || 'Someone'} reacted to your comment on ${card_title || 'a card'}`;
         break;
+      }
     }
 
     // Create inbox notification
@@ -150,6 +155,7 @@ export async function POST(req: NextRequest) {
       user_id,
       board_id,
       card_id,
+      checklist_item_id,
       type: type === 'due_now' ? 'due_soon' : type,
       title,
       body,

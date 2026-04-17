@@ -8,6 +8,7 @@ const supabaseAdmin = createClient(
 );
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const fromEmail = process.env.NOTIFICATION_FROM_EMAIL || 'Lumio <notifications@mail.switchcommerce.team>';
 
 export async function POST(req: NextRequest) {
   const { email, redirectTo } = await req.json();
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
   const resetLink = data.properties.action_link;
 
   await resend.emails.send({
-    from: 'Lumio <noreply@getlumio.app>',
+    from: fromEmail,
     to: email,
     subject: 'Reset your Lumio password',
     html: buildEmailHtml(resetLink),

@@ -4,20 +4,28 @@
  */
 
 import type { NotificationTriggerType } from '@/app/api/push/trigger/route';
+import { supabase } from '@/lib/supabase';
 
 export async function triggerNotification(payload: {
   type: NotificationTriggerType;
   user_id: string;
   board_id: string;
   card_id: string;
+  checklist_item_id?: string;
   card_title?: string;
   actor_name?: string;
   message?: string;
+  title?: string;
+  body?: string;
 }) {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
     const response = await fetch('/api/push/trigger', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
 
@@ -41,9 +49,12 @@ export async function triggerNotifications(
     user_id: string;
     board_id: string;
     card_id: string;
+    checklist_item_id?: string;
     card_title?: string;
     actor_name?: string;
     message?: string;
+    title?: string;
+    body?: string;
   }>
 ) {
   await Promise.all(payloads.map(p => triggerNotification(p)));
