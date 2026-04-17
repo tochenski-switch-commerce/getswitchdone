@@ -28,6 +28,7 @@ export default function TeamDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
   const [teamBoards, setTeamBoards] = useState<ProjectBoard[]>([]);
 
   // ── Notes panel ──
@@ -127,17 +128,31 @@ export default function TeamDetailPage() {
     setEditingName(false);
   };
 
-  const handleCopyInviteLink = async () => {
+  const getOrCreateActiveInvite = useCallback(async () => {
     let activeInvite = invites.find(i => i.is_active);
     if (!activeInvite) {
       const created = await createInvite(teamId);
-      if (!created) return;
+      if (!created) return null;
       activeInvite = created;
     }
+    return activeInvite;
+  }, [invites, createInvite, teamId]);
+
+  const handleCopyInviteLink = async () => {
+    const activeInvite = await getOrCreateActiveInvite();
+    if (!activeInvite) return;
     const url = `${window.location.origin}/join/${activeInvite.invite_code}`;
     await navigator.clipboard.writeText(url);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
+  };
+
+  const handleCopyInviteCode = async () => {
+    const activeInvite = await getOrCreateActiveInvite();
+    if (!activeInvite) return;
+    await navigator.clipboard.writeText(activeInvite.invite_code);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
   };
 
   const handleRoleChange = async (userId: string, role: 'editor' | 'viewer') => {
@@ -231,16 +246,25 @@ export default function TeamDetailPage() {
 
         {error && <p className="kb-error">{error}</p>}
 
-        {/* Invite Link */}
+        {/* Invite */}
         {isOwner && (
           <section className="kb-section">
-            <button
-              className={`kb-copy-link-btn${linkCopied ? ' copied' : ''}`}
-              onClick={handleCopyInviteLink}
-            >
-              <Copy size={16} />
-              <span>{linkCopied ? 'Link Copied!' : 'Copy Invite Link'}</span>
-            </button>
+            <div className="kb-invite-actions">
+              <button
+                className={`kb-copy-link-btn${linkCopied ? ' copied' : ''}`}
+                onClick={handleCopyInviteLink}
+              >
+                <Copy size={16} />
+                <span>{linkCopied ? 'Link Copied!' : 'Copy Invite Link'}</span>
+              </button>
+              <button
+                className={`kb-copy-code-btn${codeCopied ? ' copied' : ''}`}
+                onClick={handleCopyInviteCode}
+              >
+                <Copy size={16} />
+                <span>{codeCopied ? 'Code Copied!' : 'Copy Invite Code'}</span>
+              </button>
+            </div>
           </section>
         )}
 
@@ -546,6 +570,11 @@ const detailStyles = `
   }
   .kb-role-select:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
   .kb-role-select option { background: #1a1d27; color: #e5e7eb; }
+  .kb-invite-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
   .kb-copy-link-btn {
     display: flex;
     align-items: center;
@@ -565,6 +594,25 @@ const detailStyles = `
   .kb-copy-link-btn:hover { background: rgba(99, 102, 241, 0.15); border-color: #6366f1; }
   .kb-copy-link-btn:active { transform: scale(0.98); }
   .kb-copy-link-btn.copied { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.35); color: #22c55e; }
+  .kb-copy-code-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px 20px;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px dashed rgba(59, 130, 246, 0.35);
+    border-radius: 10px;
+    color: #60a5fa;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .kb-copy-code-btn:hover { background: rgba(59, 130, 246, 0.15); border-color: #3b82f6; }
+  .kb-copy-code-btn:active { transform: scale(0.98); }
+  .kb-copy-code-btn.copied { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.35); color: #22c55e; }
 
   .kb-board-grid {
     display: grid;
@@ -830,7 +878,9 @@ const detailStyles = `
     .kb-member-row { padding: 10px 12px; gap: 10px; }
     .kb-member-avatar { width: 32px; height: 32px; font-size: 13px; }
     .kb-member-name { font-size: 13px; }
+    .kb-invite-actions { grid-template-columns: minmax(0, 1fr); }
     .kb-copy-link-btn { padding: 12px 16px; font-size: 13px; }
+    .kb-copy-code-btn { padding: 12px 16px; font-size: 13px; }
     .kb-btn { padding: 8px 12px; font-size: 12px; }
     .kb-note-panel { width: 100%; top: auto; height: 65vh; transform: translateY(100%); }
     .kb-note-panel.open { transform: translateY(0); }
