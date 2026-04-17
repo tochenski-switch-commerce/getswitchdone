@@ -96,5 +96,6 @@ function buildEmailHtml(resetLink: string): string {
     actionsHtml,
     sectionsHtml,
     footerHtml,
+    baseUrl: rootUrl,
   });
 }

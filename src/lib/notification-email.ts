@@ -73,6 +73,11 @@ interface NotificationEmailContext {
     due_date?: string | null;
     assignees?: string[] | null;
   } | null;
+  recentComments: Array<{
+    authorName: string;
+    content: string;
+    createdAt: string;
+  }>;
 }
 
 function normalizeSettings(raw: Partial<NotificationSettings> | null | undefined): NotificationSettings {
@@ -120,6 +125,26 @@ function formatTimeValue(time?: string | null): string | null {
   return `${hour12}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
+async function resolveCommentAuthors(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabaseAdmin: any,
+  rows: Array<{ id: string; content: string; created_at: string; user_id: string }>,
+): Promise<Array<{ authorName: string; content: string; createdAt: string }>> {
+  if (!rows.length) return [];
+  const userIds = [...new Set(rows.map((r) => r.user_id))];
+  const { data: profiles } = await supabaseAdmin
+    .from('user_profiles')
+    .select('id, name')
+    .in('id', userIds);
+  const nameMap: Record<string, string> = {};
+  for (const p of profiles || []) nameMap[p.id] = p.name || 'Someone';
+  return rows.map((r) => ({
+    authorName: nameMap[r.user_id] || 'Someone',
+    content: r.content,
+    createdAt: r.created_at,
+  }));
+}
+
 async function fetchNotificationContext(args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabaseAdmin: any;
@@ -135,6 +160,7 @@ async function fetchNotificationContext(args: {
     labels: [],
     checklistSummary: null,
     checklistItem: null,
+    recentComments: [],
   };
 
   try {
@@ -164,7 +190,7 @@ async function fetchNotificationContext(args: {
 
     const columnId = cardRes?.data?.column_id as string | null | undefined;
 
-    const [columnRes, labelRes, checklistRes] = await Promise.all([
+    const [columnRes, labelRes, checklistRes, commentsRes] = await Promise.all([
       columnId
         ? supabaseAdmin
             .from('board_columns')
@@ -184,6 +210,14 @@ async function fetchNotificationContext(args: {
             .select('is_completed, due_date')
             .eq('card_id', cardId)
         : Promise.resolve({ data: [] }),
+      cardId
+      ? supabaseAdmin
+        .from('card_comments')
+        .select('id, content, created_at, user_id')
+        .eq('card_id', cardId)
+        .order('created_at', { ascending: false })
+        .limit(3)
+      : Promise.resolve({ data: [] }),
     ]);
 
     const nowIsoDate = new Date().toISOString().slice(0, 10);
@@ -212,6 +246,7 @@ async function fetchNotificationContext(args: {
       labels,
       checklistSummary,
       checklistItem: checklistItemRes?.data || null,
+      recentComments: await resolveCommentAuthors(supabaseAdmin, commentsRes?.data || []),
     };
   } catch {
     return fallbackContext;
@@ -225,6 +260,45 @@ function renderMetaRow(label: string, value: string): string {
     </td>
     <td style="padding:0 0 8px;vertical-align:top;">
       <span style="display:inline-block;color:#d9dfed;font-size:13px;line-height:1.5;">${escapeHtml(value)}</span>
+    </td>
+  </tr>`;
+}
+
+function buildRecentCommentsBlock(context: NotificationEmailContext): string {
+  if (!context.recentComments.length) return '';
+
+  const commentItems = context.recentComments.map((c) => {
+    const date = new Date(c.createdAt);
+    const dateLabel = Number.isNaN(date.getTime())
+      ? ''
+      : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const sanitized = sanitizeCommentHtmlForEmail(c.content);
+    return `<tr>
+      <td style="padding:0 0 12px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td style="padding-bottom:4px;">
+              <span style="color:#eaf1ff;font-size:13px;font-weight:700;">${escapeHtml(c.authorName)}</span>
+              ${dateLabel ? `<span style="color:#5d667f;font-size:12px;margin-left:8px;">${escapeHtml(dateLabel)}</span>` : ''}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding-left:0;">
+              <div style="color:#c9d3ea;font-size:13px;line-height:1.6;">${sanitized}</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`;
+  });
+
+  const contentHtml = `<table width="100%" cellpadding="0" cellspacing="0" border="0">
+    ${commentItems.join('')}
+  </table>`;
+
+  return `<tr>
+    <td style="padding-top:18px;">
+      ${renderEmailInfoPanel({ title: 'Recent Comments', contentHtml })}
     </td>
   </tr>`;
 }
@@ -299,6 +373,7 @@ function buildEmailHtml(args: {
   boardUrl: string;
   cardUrl?: string;
   context: NotificationEmailContext;
+  baseUrl: string;
 }): string {
   const safeTitle = escapeHtml(args.title);
   const safeDisplayName = escapeHtml(args.displayName);
@@ -326,7 +401,8 @@ function buildEmailHtml(args: {
         renderPrimaryEmailButton({ href: args.boardUrl, label: 'Open Board' }),
       );
 
-  const sectionsHtml = `${buildCardDetailsBlock(args.context)}
+    const sectionsHtml = `${buildCardDetailsBlock(args.context)}
+      ${buildRecentCommentsBlock(args.context)}
           <tr>
             <td style="padding-top:14px;">
               <p style="margin:0;color:#8f98ad;font-size:12px;line-height:1.6;">
@@ -355,6 +431,7 @@ function buildEmailHtml(args: {
     actionsHtml,
     sectionsHtml,
     footerHtml,
+    baseUrl: args.baseUrl,
   });
 }
 
@@ -402,6 +479,7 @@ export async function maybeSendNotificationEmail(args: MaybeSendNotificationEmai
         boardUrl,
         cardUrl,
         context,
+        baseUrl,
       }),
     });
     return true;

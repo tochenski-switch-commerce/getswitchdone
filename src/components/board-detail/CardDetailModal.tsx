@@ -365,9 +365,9 @@ export default function CardDetailModal({
     setSaving(true);
     const pendingComment = commentAddRef.current?.innerHTML || '';
     if (pendingComment && pendingComment !== '<br>') {
-      await onAddComment(pendingComment);
       setCommentText('');
       if (commentAddRef.current) commentAddRef.current.innerHTML = '';
+      await onAddComment(pendingComment);
     }
     const descHtml = descRef.current?.innerHTML || editDesc;
 
@@ -446,9 +446,9 @@ export default function CardDetailModal({
   const handleAddComment = async () => {
     const html = commentAddRef.current?.innerHTML || '';
     if (!html || html === '<br>') return;
-    await onAddComment(html);
     setCommentText('');
     if (commentAddRef.current) commentAddRef.current.innerHTML = '';
+    await onAddComment(html);
   };
 
   const handleAddChecklistItem = async (groupId?: string | null) => {
