@@ -84,6 +84,25 @@ export async function POST(req: NextRequest) {
   try {
     const preferenceType = mapBoardPreferenceType(type);
 
+    // Defensive dedupe for mentions: if two clients/paths fire the same mention
+    // event nearly simultaneously, keep only one inbox entry/email.
+    if (type === 'mention') {
+      const dedupeWindowStart = new Date(Date.now() - 60_000).toISOString();
+      const { data: recentMentions } = await supabaseAdmin
+        .from('notifications')
+        .select('id')
+        .eq('user_id', user_id)
+        .eq('board_id', board_id)
+        .eq('card_id', card_id)
+        .eq('type', 'mention')
+        .gte('created_at', dedupeWindowStart)
+        .limit(1);
+
+      if (recentMentions && recentMentions.length > 0) {
+        return NextResponse.json({ sent: 0, emailSent: false, type, deduped: true });
+      }
+    }
+
     // Check notification preferences for this user/board/type
     const { data: prefs } = preferenceType
       ? await supabaseAdmin
@@ -111,8 +130,10 @@ export async function POST(req: NextRequest) {
         body = actor_name ? `${actor_name} assigned you to: ${card_title || 'a card'}` : `You were assigned to: ${card_title || 'a card'}`;
         break;
       case 'mention':
-        title = '💬 Mentioned';
-        body = actor_name ? `${actor_name} mentioned you in: ${card_title || 'a card'}` : `You were mentioned in: ${card_title || 'a card'}`;
+        title = actor_name
+          ? `${actor_name} mentioned you on "${card_title || 'a card'}"`
+          : `You were mentioned on "${card_title || 'a card'}"`;
+        body = providedBody || `Open the card to view the comment.`;
         break;
       case 'comment':
         title = '💬 Comment';

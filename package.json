@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "cleanup:mention-dupes": "node scripts/cleanup-mention-duplicates.mjs",
     "cap:sync": "npx cap sync ios",
     "cap:open": "npx cap open ios",
     "cap:run": "npx cap run ios"
