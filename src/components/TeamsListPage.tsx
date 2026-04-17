@@ -4,8 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeams } from '@/hooks/useTeams';
-import { useSubscription } from '@/hooks/useSubscription';
-import UpgradeBanner from '@/components/UpgradeBanner';
 import { Plus, Users, X, ArrowLeft } from '@/components/BoardIcons';
 import FlameLoader from '@/components/FlameLoader';
 
@@ -13,7 +11,6 @@ export default function TeamsListPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { teams, loading, error, fetchTeams, createTeam, fetchTeamMemberCounts } = useTeams();
-  const { canUseTeams, showPaywall } = useSubscription();
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -65,18 +62,11 @@ export default function TeamsListPage() {
             <Users size={28} style={{ color: '#818cf8' }} />
             <h1 className="kb-page-title">Teams</h1>
           </div>
-          <button className="kb-btn kb-btn-primary" onClick={() => {
-            if (!canUseTeams) { showPaywall(); return; }
-            setShowCreate(true);
-          }}>
+          <button className="kb-btn kb-btn-primary" onClick={() => setShowCreate(true)}>
             <Plus size={16} />
             New Team
           </button>
         </div>
-
-        {!canUseTeams && (
-          <UpgradeBanner message="Teams are a Pro feature. Upgrade to collaborate with others." />
-        )}
 
         {showCreate && (
           <div className="kb-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCreate(false); }}>
@@ -113,10 +103,7 @@ export default function TeamsListPage() {
             <Users size={48} style={{ color: '#4b5563', marginBottom: 16 }} />
             <h3 style={{ color: '#e5e7eb', fontSize: 18, fontWeight: 600, marginBottom: 8 }}>No teams yet</h3>
             <p style={{ color: '#9ca3af', fontSize: 14, marginBottom: 20 }}>Create a team to collaborate with others.</p>
-            <button className="kb-btn kb-btn-primary" onClick={() => {
-              if (!canUseTeams) { showPaywall(); return; }
-              setShowCreate(true);
-            }}>
+            <button className="kb-btn kb-btn-primary" onClick={() => setShowCreate(true)}>
               <Plus size={16} /> Create Team
             </button>
           </div>

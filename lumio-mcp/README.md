@@ -1,6 +1,6 @@
 # lumio-mcp
 
-MCP server for [Lumio](https://getlumio.app) — control your Kanban boards, columns, cards, and labels from any AI agent that supports the Model Context Protocol (Claude Desktop, Cursor, Windsurf, etc.).
+MCP server for [Lumio](https://getswitchdone.netlify.app) — control your Kanban boards, columns, cards, and labels from any AI agent that supports the Model Context Protocol (Claude Desktop, Cursor, Windsurf, etc.).
 
 ## Setup
 
@@ -105,7 +105,7 @@ Set `LUMIO_BASE_URL` to point at your instance:
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `LUMIO_API_KEY` | ✅ | — | Your Lumio API key (`lum_...`) |
-| `LUMIO_BASE_URL` | ❌ | `https://getlumio.app` | Override for self-hosted or local dev |
+| `LUMIO_BASE_URL` | ❌ | `https://getswitchdone.netlify.app` | Override for self-hosted or local dev |
 
 ---
 

@@ -8,11 +8,11 @@ import { z } from 'zod';
 const API_KEY = process.env.LUMIO_API_KEY;
 if (!API_KEY) {
   console.error('Error: LUMIO_API_KEY environment variable is required.');
-  console.error('Generate a key at: https://getlumio.app/profile (API Keys section)');
+  console.error('Generate a key at: https://getswitchdone.netlify.app/profile (API Keys section)');
   process.exit(1);
 }
 
-const BASE_URL = (process.env.LUMIO_BASE_URL ?? 'https://getlumio.app').replace(/\/$/, '');
+const BASE_URL = (process.env.LUMIO_BASE_URL ?? 'https://getswitchdone.netlify.app').replace(/\/$/, '');
 
 // ── API Client ────────────────────────────────────────────────────────────────
 
