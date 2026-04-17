@@ -3,7 +3,7 @@
  * Call this after card operations that should notify users.
  */
 
-import type { NotificationTriggerType } from '@/app/api/push/trigger/route';
+import type { NotificationTriggerType } from '@/lib/notification-type-mapping';
 import { supabase } from '@/lib/supabase';
 
 export async function triggerNotification(payload: {
@@ -15,6 +15,7 @@ export async function triggerNotification(payload: {
   card_title?: string;
   actor_name?: string;
   message?: string;
+  rich_body_html?: string;
   title?: string;
   body?: string;
 }) {
@@ -53,6 +54,7 @@ export async function triggerNotifications(
     card_title?: string;
     actor_name?: string;
     message?: string;
+    rich_body_html?: string;
     title?: string;
     body?: string;
   }>

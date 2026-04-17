@@ -982,6 +982,7 @@ export function useProjectBoard() {
               card_id: cardId,
               card_title: cardTitle,
               actor_name: actorName,
+              rich_body_html: content,
             }))
         ).catch(() => {}); // Silently ignore notification errors
       }

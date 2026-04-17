@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 import { maybeSendNotificationEmail } from '@/lib/notification-email';
-import type { EmailNotificationType } from '@/lib/notification-email';
+import {
+  mapTriggerTypeToEmailType,
+  type NotificationTriggerType,
+} from '@/lib/notification-type-mapping';
 import { normalizeNotificationText } from '@/lib/notification-text';
 
 if (process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
@@ -20,18 +23,6 @@ function getSupabaseAdmin() {
   );
 }
 
-export type NotificationTriggerType =
-  | 'assignment'
-  | 'mention'
-  | 'due_soon'
-  | 'due_now'
-  | 'comment'
-  | 'overdue'
-  | 'checklist_overdue'
-  | 'email_unrouted'
-  | 'comment_reaction'
-  | 'list_automation';
-
 interface TriggerPayload {
   type: NotificationTriggerType;
   user_id: string; // Who this notification is for
@@ -42,6 +33,7 @@ interface TriggerPayload {
   actor_id?: string; // Who performed the action (for assignment/comment)
   actor_name?: string; // Display name of actor
   message?: string; // Custom message for due notifications
+  rich_body_html?: string; // Raw HTML comment body for rich email rendering
   title?: string;
   body?: string;
 }
@@ -63,7 +55,7 @@ function verifyWebhookSecret(headerSecret?: string): boolean {
 
 export async function POST(req: NextRequest) {
   const payload: TriggerPayload = await req.json();
-  const { type, user_id, board_id, card_id, checklist_item_id, card_title, actor_id, actor_name, message, title: providedTitle, body: providedBody } = payload;
+  const { type, user_id, board_id, card_id, checklist_item_id, card_title, actor_id, actor_name, message, rich_body_html, title: providedTitle, body: providedBody } = payload;
 
   // Verify auth — accept either webhook secret OR valid Bearer token
   const headerSecret = req.headers.get('x-push-secret');
@@ -209,7 +201,7 @@ export async function POST(req: NextRequest) {
       webSent = webResults.filter((r) => r.status === 'fulfilled' && r.value).length;
     }
 
-    const emailType: EmailNotificationType = type === 'list_automation' ? 'comment' : type;
+    const emailType = mapTriggerTypeToEmailType(type);
 
     const emailSent = await maybeSendNotificationEmail({
       supabaseAdmin,
@@ -217,6 +209,7 @@ export async function POST(req: NextRequest) {
       type: emailType,
       title,
       body,
+      richBodyHtml: rich_body_html,
       boardId: board_id,
       cardId: card_id,
       checklistItemId: checklist_item_id,

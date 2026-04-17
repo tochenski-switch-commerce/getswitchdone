@@ -7,6 +7,7 @@ import {
   renderLumioEmailShell,
   renderPrimaryEmailButton,
   renderSecondaryEmailButton,
+  sanitizeCommentHtmlForEmail,
 } from '@/lib/email-theme';
 
 export type EmailNotificationType =
@@ -34,6 +35,7 @@ interface MaybeSendNotificationEmailArgs {
   type: EmailNotificationType;
   title: string;
   body?: string;
+  richBodyHtml?: string;
   boardId?: string;
   cardId?: string;
   checklistItemId?: string;
@@ -293,13 +295,13 @@ function buildEmailHtml(args: {
   type: EmailNotificationType;
   title: string;
   body?: string;
+  richBodyHtml?: string;
   boardUrl: string;
   cardUrl?: string;
   context: NotificationEmailContext;
 }): string {
   const safeTitle = escapeHtml(args.title);
   const safeDisplayName = escapeHtml(args.displayName);
-  const safeBody = escapeHtml(args.body || 'Open Lumio to view details.');
   const boardName = args.context.board?.title ? escapeHtml(args.context.board.title) : 'your board';
   const contextLine = args.cardUrl
     ? `This update is linked to ${boardName} and a card in Lumio.`
@@ -307,14 +309,22 @@ function buildEmailHtml(args: {
   const safeContextLine = escapeHtml(contextLine);
   const notificationTypeLabel = args.type.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 
+  const bodyContent = args.richBodyHtml
+    ? `<div style="margin:8px 0 0;">${sanitizeCommentHtmlForEmail(args.richBodyHtml)}</div>`
+    : `<p style="margin:8px 0 0;color:#d6deef;font-size:15px;line-height:1.62;">${escapeHtml(args.body || 'Open Lumio to view details.')}</p>`;
+
   const leadHtml = `<p style="margin:0;color:#9aa4ba;font-size:13px;line-height:1.6;">Hi ${safeDisplayName},</p>
-              <p style="margin:8px 0 0;color:#d6deef;font-size:15px;line-height:1.62;">${safeBody}</p>
+              ${bodyContent}
               <p style="margin:8px 0 0;color:#a5afc4;font-size:13px;line-height:1.55;">${safeContextLine}</p>`;
 
-  const actionsHtml = renderEmailButtonRow(
-    renderPrimaryEmailButton({ href: args.boardUrl, label: 'Open Board' }),
-    args.cardUrl ? renderSecondaryEmailButton({ href: args.cardUrl, label: 'Open Card' }) : undefined,
-  );
+  const actionsHtml = args.cardUrl
+    ? renderEmailButtonRow(
+        renderPrimaryEmailButton({ href: args.cardUrl, label: 'Open Card' }),
+        renderSecondaryEmailButton({ href: args.boardUrl, label: 'Open Board' }),
+      )
+    : renderEmailButtonRow(
+        renderPrimaryEmailButton({ href: args.boardUrl, label: 'Open Board' }),
+      );
 
   const sectionsHtml = `${buildCardDetailsBlock(args.context)}
           <tr>
@@ -326,14 +336,14 @@ function buildEmailHtml(args: {
           </tr>`;
 
   const footerHtml = `<p style="margin:0;color:#6f7891;font-size:12px;line-height:1.55;">
-                You can update email notification settings in Profile & Settings.
+                You can update email notification settings in Profile &amp; Settings.
               </p>
               <p style="margin:8px 0 0;color:#5d667f;font-size:11px;line-height:1.5;word-break:break-all;">
-                Board link: <a href="${args.boardUrl}" style="color:#ff8a5f;text-decoration:none;">${args.boardUrl}</a>
+                Board link: <a href="${args.boardUrl}" style="color:#fa420f;text-decoration:none;">${args.boardUrl}</a>
               </p>
               ${args.cardUrl
                 ? `<p style="margin:4px 0 0;color:#5d667f;font-size:11px;line-height:1.5;word-break:break-all;">
-                    Card link: <a href="${args.cardUrl}" style="color:#ff8a5f;text-decoration:none;">${args.cardUrl}</a>
+                    Card link: <a href="${args.cardUrl}" style="color:#fa420f;text-decoration:none;">${args.cardUrl}</a>
                   </p>`
                 : ''}`;
 
@@ -351,7 +361,7 @@ function buildEmailHtml(args: {
 export async function maybeSendNotificationEmail(args: MaybeSendNotificationEmailArgs): Promise<boolean> {
   if (!process.env.RESEND_API_KEY) return false;
 
-  const { supabaseAdmin, userId, type, title, body, boardId, cardId, checklistItemId } = args;
+  const { supabaseAdmin, userId, type, title, body, richBodyHtml, boardId, cardId, checklistItemId } = args;
 
   const { data: profile } = await supabaseAdmin
     .from('user_profiles')
@@ -388,6 +398,7 @@ export async function maybeSendNotificationEmail(args: MaybeSendNotificationEmai
         type,
         title,
         body,
+        richBodyHtml: args.richBodyHtml,
         boardUrl,
         cardUrl,
         context,
