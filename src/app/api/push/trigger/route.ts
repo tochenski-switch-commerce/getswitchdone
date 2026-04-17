@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 import { maybeSendNotificationEmail } from '@/lib/notification-email';
+import { normalizeNotificationText } from '@/lib/notification-text';
 
 if (process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
   webpush.setVapidDetails(
@@ -27,7 +28,8 @@ export type NotificationTriggerType =
   | 'overdue'
   | 'checklist_overdue'
   | 'email_unrouted'
-  | 'comment_reaction';
+  | 'comment_reaction'
+  | 'list_automation';
 
 interface TriggerPayload {
   type: NotificationTriggerType;
@@ -46,7 +48,7 @@ interface TriggerPayload {
 function mapBoardPreferenceType(type: NotificationTriggerType): 'assignment' | 'mention' | 'comment' | 'due_soon' | 'due_now' | null {
   if (type === 'assignment') return 'assignment';
   if (type === 'mention') return 'mention';
-  if (type === 'comment' || type === 'comment_reaction') return 'comment';
+  if (type === 'comment' || type === 'comment_reaction' || type === 'list_automation') return 'comment';
   if (type === 'due_soon' || type === 'overdue' || type === 'checklist_overdue') return 'due_soon';
   if (type === 'due_now') return 'due_now';
   return null;
@@ -147,8 +149,15 @@ export async function POST(req: NextRequest) {
         title = '👍 Comment Reaction';
         body = message || `${actor_name || 'Someone'} reacted to your comment on ${card_title || 'a card'}`;
         break;
+      case 'list_automation':
+        title = '⚙️ List Automation';
+        body = message || `${card_title || 'A card'} triggered a list automation`;
+        break;
       }
     }
+
+    title = normalizeNotificationText(title) || 'Lumio';
+    body = normalizeNotificationText(body) || 'You have a new notification';
 
     // Create inbox notification
     const { error: notifError } = await supabaseAdmin.from('notifications').insert({
@@ -207,6 +216,7 @@ export async function POST(req: NextRequest) {
       body,
       boardId: board_id,
       cardId: card_id,
+      checklistItemId: checklist_item_id,
     });
 
     return NextResponse.json({ sent: webSent, emailSent, type });

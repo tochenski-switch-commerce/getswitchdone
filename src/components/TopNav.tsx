@@ -31,7 +31,7 @@ const tabs = [
 
 const TAB_NOTIFICATION_TYPES: Partial<Record<typeof tabs[number]['href'], string[]>> = {
   '/focus': ['due_soon', 'overdue', 'checklist_overdue'],
-  '/boards': ['comment', 'assignment', 'mention', 'comment_reaction', 'email_unrouted'],
+  '/boards': ['comment', 'assignment', 'mention', 'comment_reaction', 'email_unrouted', 'list_automation'],
 };
 
 const PRIMARY_TAB_COUNT = 3; // Focus, Calendar, Boards visible on mobile

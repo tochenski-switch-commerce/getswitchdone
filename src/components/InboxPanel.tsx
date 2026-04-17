@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { Notification } from '@/types/board-types';
-import { Bell, X, MessageSquare, User, Clock, AlertCircle, Check, Trash2, Mail, AtSign } from '@/components/BoardIcons';
+import { Bell, X, MessageSquare, User, Clock, AlertCircle, Check, Trash2, Mail, AtSign, Zap } from '@/components/BoardIcons';
 import { hapticLight, hapticHeavy, hapticSuccess } from '@/lib/haptics';
 
 const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
@@ -12,6 +12,7 @@ const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: st
   overdue:        { icon: <AlertCircle size={14} />,   color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
   email_unrouted: { icon: <Mail size={14} />,          color: '#14b8a6', bg: 'rgba(20,184,166,0.12)' },
   mention:        { icon: <AtSign size={14} />,        color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
+  list_automation:{ icon: <Zap size={14} />,           color: '#f97316', bg: 'rgba(249,115,22,0.14)' },
 };
 
 function stripHtml(html: string): string {

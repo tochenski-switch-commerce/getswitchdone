@@ -94,6 +94,7 @@ export type ColumnAutomationAction =
   | { type: 'set_complete'; value: boolean }
   | { type: 'set_priority'; value: CardPriority | null }
   | { type: 'set_assignee'; value: string }
+  | { type: 'email_users'; value: string[] }
   | { type: 'set_labels'; value: string[] }
   | { type: 'clear_labels'; value: true }
   | { type: 'add_checklist'; value: string[] }   // array of ChecklistTemplate IDs
@@ -209,7 +210,7 @@ export interface ChecklistTemplate {
 
 // ── Notifications ──
 
-export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention' | 'checklist_overdue' | 'comment_reaction';
+export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention' | 'checklist_overdue' | 'comment_reaction' | 'list_automation';
 
 export interface Notification {
   id: string;

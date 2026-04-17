@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as http2 from 'http2';
 import * as crypto from 'crypto';
 import webpush from 'web-push';
+import { normalizeNotificationText } from '@/lib/notification-text';
 
 if (process.env.VAPID_PRIVATE_KEY && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
   webpush.setVapidDetails(
@@ -27,8 +28,10 @@ export async function POST(req: NextRequest) {
   }
 
   const { user_id, title, body, type, board_id, card_id } = await req.json();
+  const cleanTitle = normalizeNotificationText(title) || 'Lumio';
+  const cleanBody = normalizeNotificationText(body) || 'You have a new notification';
 
-  if (!user_id || !title) {
+  if (!user_id || !cleanTitle) {
     return NextResponse.json({ error: 'Missing user_id or title' }, { status: 400 });
   }
 
@@ -52,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   const payload = {
     aps: {
-      alert: { title, body: body || '' },
+      alert: { title: cleanTitle, body: cleanBody },
       sound: 'default',
       badge: (unreadCount ?? 0) + 1, // +1 for the notification being created
       'content-available': 1, // trigger background fetch so widget refreshes
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
   const apnsSent = apnsResults.filter(r => r.status === 'fulfilled' && r.value).length;
 
   // ── Web Push ──────────────────────────────────────────────────────────────
-  const webPayload = JSON.stringify({ title, body: body || '', type, board_id, card_id });
+  const webPayload = JSON.stringify({ title: cleanTitle, body: cleanBody, type, board_id, card_id });
   const { data: webSubs } = await supabaseAdmin
     .from('web_push_subscriptions')
     .select('endpoint, p256dh, auth, id')

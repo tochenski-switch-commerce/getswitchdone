@@ -702,7 +702,10 @@ function BoardPage() {
     }
 
     try {
-      await addCard(boardId, { column_id: colId, title: cleanTitle, ...(labelIds.length ? { label_ids: labelIds } : {}) });
+      const newCard = await addCard(boardId, { column_id: colId, title: cleanTitle, ...(labelIds.length ? { label_ids: labelIds } : {}) });
+      if (newCard) {
+        await runColumnAutomations(newCard.id, colId, { cardTitle: newCard.title });
+      }
       hapticMedium();
       setNewCardTitle('');
       setPendingLabelIds([]);
@@ -730,7 +733,10 @@ function BoardPage() {
     setAddingCardCol(null);
     for (const title of items) {
       if (!canCreateCard(activeCardCount)) { showPaywall(); break; }
-      await addCard(boardId, { column_id: colId, title });
+      const newCard = await addCard(boardId, { column_id: colId, title });
+      if (newCard) {
+        await runColumnAutomations(newCard.id, colId, { cardTitle: newCard.title });
+      }
     }
     hapticMedium();
   };
@@ -748,7 +754,10 @@ function BoardPage() {
   const handleMobileAddCard = async () => {
     if (!mobileAddTitle.trim() || !mobileAddColId) return;
     if (!canCreateCard(activeCardCount)) { showPaywall(); return; }
-    await addCard(boardId, { column_id: mobileAddColId, title: mobileAddTitle });
+    const newCard = await addCard(boardId, { column_id: mobileAddColId, title: mobileAddTitle });
+    if (newCard) {
+      await runColumnAutomations(newCard.id, mobileAddColId, { cardTitle: newCard.title });
+    }
     hapticMedium();
     setMobileAddTitle('');
     setTimeout(() => mobileAddRef.current?.focus(), 50);
@@ -872,6 +881,7 @@ function BoardPage() {
           label_ids: (card.labels || []).map(l => l.id),
         }).then(newCard => {
           if (!newCard) return;
+          runColumnAutomations(newCard.id, newCard.column_id, { cardTitle: newCard.title });
           if (card.checklists?.length) {
             card.checklists.forEach(item => addChecklistItem(boardId, newCard.id, item.title));
           }
@@ -943,15 +953,30 @@ function BoardPage() {
 
   const columns = [...board.columns].sort((a, b) => a.position - b.position);
 
-  const runColumnAutomations = async (cardId: string, destColId: string) => {
+  const runColumnAutomations = async (cardId: string, destColId: string, options?: { cardTitle?: string }) => {
     const destCol = columns.find(c => c.id === destColId);
     const automations = destCol?.automations ?? [];
     if (automations.length === 0) return;
+    const card = board.cards.find(c => c.id === cardId);
+    const cardTitle = options?.cardTitle || card?.title || 'a card';
     const cardUpdates: Record<string, unknown> = {};
     for (const action of automations) {
       if (action.type === 'set_complete') cardUpdates.is_complete = action.value;
       else if (action.type === 'set_priority') cardUpdates.priority = action.value;
       else if (action.type === 'set_assignee') cardUpdates.assignee = action.value;
+      else if (action.type === 'email_users') {
+        const recipientIds = Array.from(new Set(action.value.filter(Boolean)));
+        if (recipientIds.length > 0) {
+          await Promise.all(recipientIds.map((recipientId) => createNotification({
+            user_id: recipientId,
+            board_id: boardId,
+            card_id: cardId,
+            type: 'list_automation',
+            title: `New card in "${destCol?.title || 'this list'}"`,
+            body: `"${cardTitle}" was added to ${destCol?.title || 'this list'}.`,
+          })));
+        }
+      }
       else if (action.type === 'set_labels') cardUpdates.label_ids = action.value;
       else if (action.type === 'clear_labels') cardUpdates.label_ids = [];
       else if (action.type === 'set_due_date') cardUpdates.due_date = action.value;
@@ -969,7 +994,6 @@ function BoardPage() {
     // move_completed: if the card is now complete (or was just set complete), move it
     const moveCompletedAction = automations.find(a => a.type === 'move_completed');
     if (moveCompletedAction && moveCompletedAction.type === 'move_completed') {
-      const card = board.cards.find(c => c.id === cardId);
       const isComplete = 'is_complete' in cardUpdates ? cardUpdates.is_complete : card?.is_complete;
       if (isComplete) {
         await moveCard(boardId, cardId, moveCompletedAction.value, 0);
@@ -2372,6 +2396,7 @@ function BoardPage() {
               }
             }
             if (newCard) {
+              await runColumnAutomations(newCard.id, newCard.column_id, { cardTitle: newCard.title });
               const todayStr = new Date().toISOString().split('T')[0];
               if (newCard.due_date && newCard.due_date <= todayStr) await runBoardAutomation(newCard, 'due_date_overdue');
               else if (newCard.start_date === todayStr) await runBoardAutomation(newCard, 'start_date_arrived');

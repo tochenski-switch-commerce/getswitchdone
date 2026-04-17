@@ -1,6 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import {
+  appBaseUrl,
+  escapeHtml,
+  renderEmailButtonRow,
+  renderEmailInfoPanel,
+  renderLumioEmailShell,
+  renderPrimaryEmailButton,
+  renderSecondaryEmailButton,
+} from '@/lib/email-theme';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,111 +51,50 @@ export async function POST(req: NextRequest) {
 }
 
 function buildEmailHtml(resetLink: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Reset your Lumio password</title>
-</head>
-<body style="margin:0;padding:0;background:#0f1117;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f1117;min-height:100vh;">
-    <tr>
-      <td align="center" style="padding:48px 16px;">
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;width:100%;">
+  const safeResetLink = escapeHtml(resetLink);
+  const rootUrl = appBaseUrl();
+  const safeRootUrl = escapeHtml(rootUrl);
 
-          <!-- Logo -->
-          <tr>
-            <td align="center" style="padding-bottom:32px;">
-              <table cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td style="background:#fa420f;border-radius:12px;padding:10px 20px;">
-                    <span style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">Lumio</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Card -->
-          <tr>
-            <td style="background:#1a1d27;border:1px solid #2a2d3a;border-radius:16px;padding:40px 36px;">
-
-              <!-- Lock icon -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="padding-bottom:24px;">
-                    <table cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="background:rgba(250,66,15,0.1);border-radius:18px;width:64px;height:64px;text-align:center;vertical-align:middle;">
-                          <img src="https://api.iconify.design/lucide/lock.svg?color=%23fa420f&width=30&height=30" width="30" height="30" alt="" style="display:block;margin:17px auto;" />
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Heading -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="padding-bottom:8px;">
-                    <h1 style="margin:0;font-size:22px;font-weight:700;color:#f9fafb;line-height:1.3;">Reset your password</h1>
-                  </td>
-                </tr>
-                <tr>
-                  <td align="center" style="padding-bottom:32px;">
-                    <p style="margin:0;font-size:14px;color:#9ca3af;line-height:1.6;max-width:320px;">
-                      We received a request to reset your password. Click the button below to choose a new one.
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- CTA button -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="padding-bottom:32px;">
-                    <a href="${resetLink}" style="display:inline-block;background:#fa420f;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 36px;border-radius:10px;letter-spacing:0.1px;">
-                      Reset Password
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Divider -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td style="border-top:1px solid #2a2d3a;padding-top:24px;">
-                    <p style="margin:0 0 8px;font-size:12px;color:#6b7280;line-height:1.6;">
-                      Or copy and paste this link into your browser:
-                    </p>
-                    <p style="margin:0;font-size:11px;color:#4b5563;word-break:break-all;line-height:1.5;">
-                      <a href="${resetLink}" style="color:#fa420f;text-decoration:none;">${resetLink}</a>
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td align="center" style="padding-top:28px;">
-              <p style="margin:0 0 6px;font-size:12px;color:#4b5563;line-height:1.6;">
-                If you didn&rsquo;t request this, you can safely ignore this email.
+  const leadHtml = `<p style="margin:0;color:#d6deef;font-size:15px;line-height:1.62;">
+                We received a request to reset your Lumio password.
               </p>
-              <p style="margin:0;font-size:12px;color:#374151;">
-                &copy; ${new Date().getFullYear()} Lumio &mdash; <a href="https://getlumio.app" style="color:#6b7280;text-decoration:none;">getlumio.app</a>
-              </p>
-            </td>
-          </tr>
+              <p style="margin:8px 0 0;color:#a5afc4;font-size:13px;line-height:1.55;">
+                Use the secure link below to create a new password. This link is single-use and time-limited.
+              </p>`;
 
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+  const actionsHtml = renderEmailButtonRow(
+    renderPrimaryEmailButton({ href: safeResetLink, label: 'Reset Password' }),
+    renderSecondaryEmailButton({ href: `${safeRootUrl}/auth`, label: 'Open Lumio' }),
+  );
+
+  const sectionsHtml = `<tr>
+            <td style="padding-top:18px;">
+              ${renderEmailInfoPanel({
+                title: 'Security Note',
+                contentHtml: `<p style="margin:0 0 10px;color:#b9c2d8;font-size:13px;line-height:1.6;">
+                      If you did not request a password reset, you can safely ignore this email.
+                    </p>
+                    <p style="margin:0;color:#8d96ab;font-size:12px;line-height:1.55;word-break:break-all;">
+                      Reset link: <a href="${safeResetLink}" style="color:#ff8a5f;text-decoration:none;">${safeResetLink}</a>
+                    </p>`,
+              })}
+            </td>
+          </tr>`;
+
+  const footerHtml = `<p style="margin:0;color:#6f7891;font-size:12px;line-height:1.55;">
+                Need help? Visit Lumio and request another reset from the sign-in screen.
+              </p>
+              <p style="margin:8px 0 0;color:#5d667f;font-size:11px;line-height:1.5;word-break:break-all;">
+                Lumio: <a href="${safeRootUrl}" style="color:#ff8a5f;text-decoration:none;">${safeRootUrl}</a>
+              </p>`;
+
+  return renderLumioEmailShell({
+    documentTitle: 'Reset your Lumio password',
+    badgeText: 'Lumio Security',
+    headline: 'Reset your password',
+    leadHtml,
+    actionsHtml,
+    sectionsHtml,
+    footerHtml,
+  });
 }

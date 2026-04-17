@@ -186,6 +186,7 @@ export default function TeamDetailPage() {
 
   const isOwner = myRole === 'owner';
   const canEditNotes = myRole === 'owner' || myRole === 'editor';
+  const activeInviteCode = invites.find(i => i.is_active)?.invite_code ?? '';
 
   return (
     <div className="kb-root">
@@ -264,6 +265,10 @@ export default function TeamDetailPage() {
                 <Copy size={16} />
                 <span>{codeCopied ? 'Code Copied!' : 'Copy Invite Code'}</span>
               </button>
+            </div>
+            <div className="kb-invite-code-readout">
+              <span className="kb-invite-code-label">Invite Code</span>
+              <code className="kb-invite-code-value">{activeInviteCode || 'No active code yet'}</code>
             </div>
           </section>
         )}
@@ -613,6 +618,34 @@ const detailStyles = `
   .kb-copy-code-btn:hover { background: rgba(59, 130, 246, 0.15); border-color: #3b82f6; }
   .kb-copy-code-btn:active { transform: scale(0.98); }
   .kb-copy-code-btn.copied { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.35); color: #22c55e; }
+  .kb-invite-code-readout {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #2a2d3a;
+    background: rgba(17, 24, 39, 0.6);
+  }
+  .kb-invite-code-label {
+    font-size: 12px;
+    color: #9ca3af;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .kb-invite-code-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    font-size: 12px;
+    color: #cbd5e1;
+    background: rgba(51, 65, 85, 0.45);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 6px;
+    padding: 4px 8px;
+    white-space: nowrap;
+  }
 
   .kb-board-grid {
     display: grid;
@@ -881,6 +914,9 @@ const detailStyles = `
     .kb-invite-actions { grid-template-columns: minmax(0, 1fr); }
     .kb-copy-link-btn { padding: 12px 16px; font-size: 13px; }
     .kb-copy-code-btn { padding: 12px 16px; font-size: 13px; }
+    .kb-invite-code-readout { padding: 8px 10px; }
+    .kb-invite-code-label { font-size: 11px; }
+    .kb-invite-code-value { font-size: 11px; }
     .kb-btn { padding: 8px 12px; font-size: 12px; }
     .kb-note-panel { width: 100%; top: auto; height: 65vh; transform: translateY(100%); }
     .kb-note-panel.open { transform: translateY(0); }

@@ -10,6 +10,7 @@ const ACTION_TYPES: ColumnAutomationAction['type'][] = [
   'set_complete',
   'set_priority',
   'set_assignee',
+  'email_users',
   'set_labels',
   'clear_labels',
   'add_checklist',
@@ -22,6 +23,7 @@ const ACTION_LABELS: Record<ColumnAutomationAction['type'], string> = {
   set_complete:    'Set complete',
   set_priority:    'Set priority',
   set_assignee:    'Set assignee',
+  email_users:     'Email users',
   set_labels:      'Set labels',
   clear_labels:    'Strip labels',
   add_checklist:   'Add checklist',
@@ -34,6 +36,7 @@ const ACTION_ICONS: Record<ColumnAutomationAction['type'], string> = {
   set_complete:    '✓',
   set_priority:    '↑',
   set_assignee:    '@',
+  email_users:     '✉',
   set_labels:      '⬤',
   clear_labels:    '⊘',
   add_checklist:   '☑',
@@ -47,6 +50,7 @@ function defaultForType(type: ColumnAutomationAction['type']): ColumnAutomationA
     case 'set_complete':    return { type: 'set_complete', value: true };
     case 'set_priority':    return { type: 'set_priority', value: null };
     case 'set_assignee':    return { type: 'set_assignee', value: '' };
+    case 'email_users':     return { type: 'email_users', value: [] };
     case 'set_labels':      return { type: 'set_labels', value: [] };
     case 'clear_labels':    return { type: 'clear_labels', value: true };
     case 'add_checklist':   return { type: 'add_checklist', value: [] };
@@ -183,6 +187,37 @@ export default function ColumnAutomationsModal({
           />
         );
 
+      case 'email_users':
+        return userProfiles.length > 0 ? (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {userProfiles.filter(u => u.name || u.id).map(u => {
+              const selected = action.value.includes(u.id);
+              return (
+                <button
+                  key={u.id}
+                  onClick={() => updateAction({
+                    type: 'email_users',
+                    value: selected ? action.value.filter(id => id !== u.id) : [...action.value, u.id],
+                  })}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 11, padding: '3px 9px', borderRadius: 5, cursor: 'pointer',
+                    background: selected ? '#1f2937' : 'transparent',
+                    color: selected ? '#d1d5db' : '#6b7280',
+                    border: `1px solid ${selected ? '#4b5563' : '#374151'}`,
+                    transition: 'all 0.1s',
+                  }}
+                >
+                  <User size={10} />@{u.name || u.id}
+                </button>
+              );
+            })}
+            {userProfiles.length === 0 && <span style={{ fontSize: 11, color: '#4b5563' }}>No users available on this board</span>}
+          </div>
+        ) : (
+          <span style={{ fontSize: 11, color: '#6b7280' }}>No users available on this board.</span>
+        );
+
       case 'set_labels':
         return (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -292,7 +327,7 @@ export default function ColumnAutomationsModal({
         </div>
 
         <div className="kb-modal-body">
-          <p className="kb-automation-hint">When a card is moved into this list, automatically:</p>
+          <p className="kb-automation-hint">When a card is added or moved into this list, automatically:</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {ACTION_TYPES.map(type => {
