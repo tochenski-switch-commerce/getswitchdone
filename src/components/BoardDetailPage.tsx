@@ -24,6 +24,7 @@ import PullToRefreshIndicator from '@/components/PullToRefreshIndicator';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import SaveAsTemplateModal from '@/components/SaveAsTemplateModal';
 import { useTemplates } from '@/hooks/useTemplates';
+import { extractMentions } from '@/lib/mention-parser';
 
 const AiPanel = dynamic(() => import('@/components/AiPanel'), { ssr: false });
 // const AutopilotBanner = dynamic(() => import('@/components/AutopilotBanner'), { ssr: false });
@@ -2266,16 +2267,9 @@ function BoardPage() {
 
             const plainContent = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
             const snippet = plainContent.length > 80 ? plainContent.slice(0, 80) + '…' : plainContent;
-            const notifiedUserIds = new Set<string>();
-            const mentionRegex = /@"([^"]+)"|@(\S+)/g;
-            let match;
-            while ((match = mentionRegex.exec(plainContent)) !== null) {
-              const mentionName = match[1] || match[2];
-              const target = userProfiles.find(p => p.name.toLowerCase() === mentionName.toLowerCase());
-              if (target && target.id !== user?.id && !notifiedUserIds.has(target.id)) {
-                notifiedUserIds.add(target.id);
-              }
-            }
+            const notifiedUserIds = new Set<string>(
+              extractMentions(content, userProfiles).filter((id) => id !== user?.id)
+            );
 
             const cardAssignees = activeCard.assignees || (activeCard.assignee ? [activeCard.assignee] : []);
             for (const assigneeName of cardAssignees) {
