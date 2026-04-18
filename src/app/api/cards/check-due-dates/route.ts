@@ -236,7 +236,7 @@ export async function GET(req: NextRequest) {
   const now = new Date();
 
   try {
-    const [{ data: boards, error: boardsError }, { data: cards, error: cardsError }, { data: checklistAssignees, error: checklistAssigneeError }, { data: checklistItems, error: checklistError }] = await Promise.all([
+    const [{ data: boards, error: boardsError }, { data: cards, error: cardsError }, { data: checklistAssignees, error: checklistAssigneeError }, { data: checklistItems, error: checklistError }, { data: watcherRows }] = await Promise.all([
       supabaseAdmin
         .from('project_boards')
         .select('id, timezone')
@@ -259,6 +259,9 @@ export async function GET(req: NextRequest) {
         .not('due_date', 'is', null)
         .eq('board_cards.is_archived', false)
         .eq('board_cards.is_complete', false),
+      supabaseAdmin
+        .from('card_watchers')
+        .select('card_id, user_id'),
     ]);
 
     if (boardsError) {
@@ -286,6 +289,13 @@ export async function GET(req: NextRequest) {
       boardTimezones.set(board.id, board.timezone || fallbackTimeZone);
     }
 
+    const watchersByCard = new Map<string, string[]>();
+    for (const row of watcherRows || []) {
+      const list = watchersByCard.get(row.card_id) || [];
+      list.push(row.user_id);
+      watchersByCard.set(row.card_id, list);
+    }
+
     const checklistAssigneesByCard = new Map<string, Set<string>>();
     for (const row of (checklistAssignees || []) as ChecklistAssigneeRow[]) {
       const ids = uniqueAssigneeIds(row.assignees || []);
@@ -306,7 +316,8 @@ export async function GET(req: NextRequest) {
       const recipientIds = uniqueAssigneeIds(
         [card.assignee],
         card.assignees || [],
-        checklistAssigneesByCard.get(card.id) ? [...checklistAssigneesByCard.get(card.id)!] : []
+        checklistAssigneesByCard.get(card.id) ? [...checklistAssigneesByCard.get(card.id)!] : [],
+        watchersByCard.get(card.id) || []
       );
 
       if (!recipientIds.length || !card.due_date) continue;
@@ -356,7 +367,8 @@ export async function GET(req: NextRequest) {
       const recipientIds = uniqueAssigneeIds(
         (item.assignees && item.assignees.length > 0) ? item.assignees : [],
         (!item.assignees || item.assignees.length === 0) ? [card.assignee] : [],
-        (!item.assignees || item.assignees.length === 0) ? (card.assignees || []) : []
+        (!item.assignees || item.assignees.length === 0) ? (card.assignees || []) : [],
+        watchersByCard.get(item.card_id) || []
       );
 
       if (!recipientIds.length || !item.due_date) continue;

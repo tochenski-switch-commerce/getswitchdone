@@ -236,9 +236,26 @@ export function prefetchBoard(boardId: string): void {
   p.finally(() => setTimeout(() => _prefetchPromises.delete(boardId), 300_000));
 }
 
+const BOARDS_CACHE_KEY = 'lumio:boards:v1';
+
+function readBoardsCache(): ProjectBoard[] {
+  try {
+    const raw = typeof window !== 'undefined' && localStorage.getItem(BOARDS_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as ProjectBoard[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeBoardsCache(boards: ProjectBoard[]): void {
+  try {
+    localStorage.setItem(BOARDS_CACHE_KEY, JSON.stringify(boards));
+  } catch {}
+}
+
 // ── Hook ──
 export function useProjectBoard() {
-  const [boards, setBoards] = useState<ProjectBoard[]>([]);
+  const [boards, setBoards] = useState<ProjectBoard[]>(readBoardsCache);
   const [board, setBoard] = useState<FullBoard | null>(null);
   const [checklistTemplates, setChecklistTemplates] = useState<ChecklistTemplate[]>([]);
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
@@ -273,7 +290,9 @@ export function useProjectBoard() {
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
       if (err) throw err;
-      setBoards(data || []);
+      const fresh = data || [];
+      setBoards(fresh);
+      writeBoardsCache(fresh);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -2378,6 +2397,54 @@ export function useProjectBoard() {
     }
   }, []);
 
+  // ─── Card Watchers ─────────────────────────────────────────
+
+  const fetchCardWatchers = useCallback(async (cardId: string): Promise<string[]> => {
+    try {
+      const { data, error: err } = await supabase
+        .from('card_watchers')
+        .select('user_id')
+        .eq('card_id', cardId);
+      if (err) throw err;
+      return (data || []).map((r: { user_id: string }) => r.user_id);
+    } catch (err: any) {
+      console.error('[fetchCardWatchers] failed:', err.message);
+      return [];
+    }
+  }, []);
+
+  const watchCard = useCallback(async (cardId: string): Promise<boolean> => {
+    try {
+      const user = await getCachedUser();
+      if (!user) return false;
+      const { error: err } = await supabase
+        .from('card_watchers')
+        .upsert({ card_id: cardId, user_id: user.id });
+      if (err) throw err;
+      return true;
+    } catch (err: any) {
+      console.error('[watchCard] failed:', err.message);
+      return false;
+    }
+  }, []);
+
+  const unwatchCard = useCallback(async (cardId: string): Promise<boolean> => {
+    try {
+      const user = await getCachedUser();
+      if (!user) return false;
+      const { error: err } = await supabase
+        .from('card_watchers')
+        .delete()
+        .eq('card_id', cardId)
+        .eq('user_id', user.id);
+      if (err) throw err;
+      return true;
+    } catch (err: any) {
+      console.error('[unwatchCard] failed:', err.message);
+      return false;
+    }
+  }, []);
+
   return {
     boards, board, loading, error, checklistTemplates, userProfiles, boardMembers, notifications,
     boardEmails, unroutedEmails,
@@ -2397,6 +2464,7 @@ export function useProjectBoard() {
     fetchNotifications, createNotification, markNotificationRead, markCardNotificationsRead, markAllNotificationsRead, deleteNotification, clearAllNotifications,
     fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
     fetchRepeatSeries, updateRepeatSeries, stopRepeatSeries,
+    fetchCardWatchers, watchCard, unwatchCard,
     setBoard, applyRealtimeEvent,
   };
 }

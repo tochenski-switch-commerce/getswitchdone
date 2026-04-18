@@ -50,10 +50,14 @@ export default function TopNav() {
   const [cardSearchResults, setCardSearchResults] = useState<SearchResult[]>([]);
   const [cardSearchIdx, setCardSearchIdx] = useState(0);
   const searchBarRef = useRef<HTMLDivElement>(null);
+  const cardSearchRef = useRef(cardSearch);
 
   // Detect if we're on a board page and extract the boardId
   const boardMatch = pathname.match(/^\/boards\/([a-f0-9-]{36})/);
   const currentBoardId = boardMatch?.[1] ?? null;
+
+  // Keep ref in sync so the sync handler always has the latest value
+  useEffect(() => { cardSearchRef.current = cardSearch; }, [cardSearch]);
 
   // When on a board page, fire a custom event so BoardDetailPage can filter columns live
   useEffect(() => {
@@ -68,16 +72,30 @@ export default function TopNav() {
     }
   }, [currentBoardId]);
 
+  // Respond to BoardDetailPage mount-time sync requests so it picks up an in-flight search
+  useEffect(() => {
+    function onSearchSync() {
+      window.dispatchEvent(new CustomEvent('lumio:board-search', { detail: cardSearchRef.current }));
+    }
+    window.addEventListener('lumio:search-sync', onSearchSync);
+    return () => window.removeEventListener('lumio:search-sync', onSearchSync);
+  }, []);
+
   // Debounced global card search — always queries all boards; split in the UI when on a board page
   useEffect(() => {
-    if (!cardSearch.trim()) { setCardSearchResults([]); return; }
+    if (!cardSearch.trim() || !user) { setCardSearchResults([]); return; }
     const timer = setTimeout(async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('board_cards')
-        .select('id, title, board_id, column_id, board_columns(title), project_boards(title)')
+        .select('id, title, board_id, column_id, board_columns!column_id(title), project_boards!board_id(title)')
         .ilike('title', `%${cardSearch.trim()}%`)
         .eq('is_archived', false)
         .limit(12);
+      if (error) {
+        console.error('[global search] query failed:', error);
+        setCardSearchResults([]);
+        return;
+      }
       const results: SearchResult[] = (data || []).map((card: Record<string, unknown>) => ({
         id: card.id as string,
         title: card.title as string,
@@ -88,7 +106,7 @@ export default function TopNav() {
       setCardSearchResults(results);
     }, 300);
     return () => clearTimeout(timer);
-  }, [cardSearch]);
+  }, [cardSearch, user]);
 
   // Click-outside to dismiss search
   useEffect(() => {
@@ -103,14 +121,9 @@ export default function TopNav() {
 
   function handleSelectResult(result: SearchResult) {
     setCardSearchResults([]);
-    if (currentBoardId && result.boardId === currentBoardId) {
-      // Same board — keep filter active, open card via router (layout state is preserved on soft nav)
-      router.push(`/boards/${result.boardId}?card=${result.id}`, { scroll: false });
-    } else {
-      // Different board — clear search (leaving this board) and navigate
-      setCardSearch('');
-      router.push(`/boards/${result.boardId}?card=${result.id}`);
-    }
+    // Keep search active on all navigations — same board filters live, different board
+    // will receive the term via lumio:search-sync once it mounts
+    router.push(`/boards/${result.boardId}?card=${result.id}`, { scroll: false });
   }
 
   const fetchNotifications = useCallback(async () => {

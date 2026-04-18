@@ -50,6 +50,9 @@ export default function CardDetailModal({
   onSearchCards,
   userProfiles,
   onAddLabel,
+  onFetchWatchers,
+  onWatchCard,
+  onUnwatchCard,
   accessToken,
 }: {
   card: BoardCard;
@@ -86,6 +89,9 @@ export default function CardDetailModal({
   onSearchCards: (query: string) => Promise<{ id: string; title: string; board_id: string; column_id: string; is_archived: boolean }[]>;
   userProfiles: UserProfile[];
   onAddLabel: (name: string, color: string) => Promise<BoardLabel>;
+  onFetchWatchers: () => Promise<string[]>;
+  onWatchCard: () => Promise<void>;
+  onUnwatchCard: () => Promise<void>;
   accessToken: string;
 }) {
   const [editTitle, setEditTitle] = useState(card.title);
@@ -130,6 +136,11 @@ export default function CardDetailModal({
   const [cardLinkResults, setCardLinkResults] = useState<{ id: string; title: string; board_id: string; column_id: string; is_archived: boolean }[]>([]);
   const [cardLinkSearching, setCardLinkSearching] = useState(false);
   const cardLinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Watcher state
+  const [watchers, setWatchers] = useState<string[]>([]);
+  const [isWatching, setIsWatching] = useState(false);
+  const [watchLoading, setWatchLoading] = useState(false);
 
   // AI description state
   const [aiDescGenerating, setAiDescGenerating] = useState(false);
@@ -303,6 +314,13 @@ export default function CardDetailModal({
       }
     }
   }, [mentionActive, mentionUsers, mentionIndex, insertMention]);
+
+  useEffect(() => {
+    onFetchWatchers().then(ids => {
+      setWatchers(ids);
+      if (currentUserId) setIsWatching(ids.includes(currentUserId));
+    });
+  }, [card.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!mentionActive) return;
@@ -1614,6 +1632,42 @@ export default function CardDetailModal({
                   <option key={p.id} value={p.id}>@{p.name}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Watchers */}
+            <div className="kb-form-group">
+              <div className="kb-detail-section-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                Watchers {watchers.length > 0 && <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: 4 }}>({watchers.length})</span>}
+              </div>
+              <button
+                className={`kb-btn kb-btn-sm ${isWatching ? 'kb-btn-ghost' : 'kb-btn-ghost'}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  opacity: watchLoading ? 0.6 : 1,
+                  color: isWatching ? '#6366f1' : undefined,
+                  borderColor: isWatching ? 'rgba(99,102,241,0.4)' : undefined,
+                }}
+                disabled={watchLoading}
+                onClick={async () => {
+                  setWatchLoading(true);
+                  if (isWatching) {
+                    await onUnwatchCard();
+                    setIsWatching(false);
+                    setWatchers(prev => prev.filter(id => id !== currentUserId));
+                  } else {
+                    await onWatchCard();
+                    setIsWatching(true);
+                    if (currentUserId) setWatchers(prev => [...prev, currentUserId]);
+                  }
+                  setWatchLoading(false);
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill={isWatching ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                {isWatching ? 'Watching' : 'Watch'}
+              </button>
             </div>
 
             {/* Snooze status */}

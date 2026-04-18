@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Covers token refresh failures — clear stale credentials
         deleteLoginCredentials();
         clearWidgetSession();
+        try { localStorage.removeItem('lumio:boards:v1'); } catch {}
       }
       setSession(session);
       setUser(session?.user ?? null);

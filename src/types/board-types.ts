@@ -208,6 +208,15 @@ export interface ChecklistTemplate {
   created_at: string;
 }
 
+// ── Card Watchers ──
+
+export interface CardWatcher {
+  id: string;
+  card_id: string;
+  user_id: string;
+  created_at: string;
+}
+
 // ── Notifications ──
 
 export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention' | 'checklist_overdue' | 'comment_reaction' | 'list_automation';

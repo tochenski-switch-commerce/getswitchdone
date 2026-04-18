@@ -81,6 +81,7 @@ function BoardPage() {
     addCardLink, removeCardLink, searchCards, fetchCardDetail,
     boardEmails, unroutedEmails, fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
     loading, error: boardError, setBoard, toggleBoardStar,
+    fetchCardWatchers, watchCard, unwatchCard,
   } = useProjectBoard();
 
   const { teams, fetchTeams } = useTeams();
@@ -100,6 +101,8 @@ function BoardPage() {
       setSearch((e as CustomEvent<string>).detail);
     }
     window.addEventListener('lumio:board-search', onBoardSearch);
+    // Request current search value from TopNav in case we mounted after the event fired
+    window.dispatchEvent(new CustomEvent('lumio:search-sync'));
     return () => window.removeEventListener('lumio:board-search', onBoardSearch);
   }, []);
   const [selectedCard, setSelectedCard] = useState<BoardCard | null>(null);
@@ -2377,6 +2380,9 @@ function BoardPage() {
           onRemoveCardLink={async (linkId) => { await removeCardLink(linkId); }}
           onSearchCards={async (query) => searchCards(boardId, query)}
           onAddLabel={async (name, color) => (await addLabel(boardId, name, color))!}
+          onFetchWatchers={async () => fetchCardWatchers(activeCard.id)}
+          onWatchCard={async () => { await watchCard(activeCard.id); }}
+          onUnwatchCard={async () => { await unwatchCard(activeCard.id); }}
           accessToken={session?.access_token || ''}
         />
         );
