@@ -24,24 +24,24 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null);
-  const { name, emailNotificationsEnabled } = body ?? {};
+  const { name, emailNotificationsEnabled, dueSoonEnabled, commentEnabled, assignmentEnabled } = body ?? {};
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 });
   }
 
   const trimmedName = name.trim();
-  const emailEnabled = emailNotificationsEnabled !== false;
+  const bool = (v: unknown, fallback = true) => (typeof v === 'boolean' ? v : fallback);
 
   // Save profile
   const { error: profileError } = await supabaseAdmin
     .from('user_profiles')
     .update({
       name: trimmedName,
-      email_notifications_enabled: emailEnabled,
-      due_soon_notifications_enabled: emailEnabled,
-      comment_notifications_enabled: emailEnabled,
-      assignment_notifications_enabled: emailEnabled,
+      email_notifications_enabled: bool(emailNotificationsEnabled),
+      due_soon_notifications_enabled: bool(dueSoonEnabled),
+      comment_notifications_enabled: bool(commentEnabled),
+      assignment_notifications_enabled: bool(assignmentEnabled),
     })
     .eq('id', user.id);
 

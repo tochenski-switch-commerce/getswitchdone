@@ -27,7 +27,7 @@ function AuthForm() {
   const searchParams = useSearchParams();
   const returnTo = searchParams.get('returnTo') || '/boards';
   const inviteParam = searchParams.get('invite') || '';
-  const { user, loading, createUser } = useAuth();
+  const { user, profile, loading, createUser } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>(
     searchParams.get('tab') === 'signup' ? 'signup' : 'signin'
   );
@@ -50,9 +50,15 @@ function AuthForm() {
   // Redirect if already signed in (but not when showing biometric prompt)
   useEffect(() => {
     if (!loading && user && !showBiometricPrompt && !holdRedirect) {
-      router.replace(returnTo);
+      // Send nameless users through onboarding — profile may still be loading (null), so only redirect to
+      // onboarding when we're sure it's set and name is empty; otherwise fall through to returnTo
+      if (profile && !profile.name?.trim()) {
+        router.replace('/onboarding');
+      } else if (profile) {
+        router.replace(returnTo);
+      }
     }
-  }, [loading, user, router, returnTo, showBiometricPrompt, holdRedirect]);
+  }, [loading, user, profile, router, returnTo, showBiometricPrompt, holdRedirect]);
 
   // Check if stored biometric credentials exist (show Face ID button, but don't auto-trigger)
   useEffect(() => {
@@ -71,7 +77,7 @@ function AuthForm() {
     return () => { canceled = true; };
   }, [loading, user]);
 
-  if (!loading && user && !showBiometricPrompt && !holdRedirect) {
+  if (!loading && user && profile && !showBiometricPrompt && !holdRedirect) {
     return null;
   }
 

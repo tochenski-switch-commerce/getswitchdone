@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useWebPush } from '@/hooks/useWebPush';
-import { Bell, Mail } from 'lucide-react';
+import { Bell, Mail, Clock, MessageSquare, UserCheck } from 'lucide-react';
 
 export default function OnboardingPage() {
   return (
@@ -15,11 +15,23 @@ export default function OnboardingPage() {
   );
 }
 
+function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      className={`ob-toggle${on ? ' on' : ''}`}
+      onClick={onToggle}
+      aria-label={on ? 'Disable' : 'Enable'}
+    >
+      <span className="ob-toggle-knob" />
+    </button>
+  );
+}
+
 function OnboardingFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get('returnTo') || '/boards';
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading, updateProfileName } = useAuth();
   const { state: pushState, subscribe: pushSubscribe } = useWebPush(user?.id);
 
   const [step, setStep] = useState<1 | 2>(1);
@@ -29,29 +41,32 @@ function OnboardingFlow() {
   const [nameError, setNameError] = useState('');
   const [nameChecking, setNameChecking] = useState(false);
 
-  // Step 2
+  // Step 2 — notification prefs
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [dueSoonEnabled, setDueSoonEnabled] = useState(true);
+  const [commentEnabled, setCommentEnabled] = useState(true);
+  const [assignmentEnabled, setAssignmentEnabled] = useState(true);
   const [pushEnabling, setPushEnabling] = useState(false);
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
-  // Redirect if already fully set up
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace(`/auth?returnTo=/onboarding${returnTo !== '/boards' ? `&innerReturn=${encodeURIComponent(returnTo)}` : ''}`);
     }
   }, [authLoading, user, router, returnTo]);
 
+  // Already has a name — skip onboarding
   useEffect(() => {
-    if (profile?.name && profile.name.trim() !== '') {
+    if (!authLoading && user && profile && profile.name?.trim()) {
       router.replace(returnTo);
     }
-  }, [profile, router, returnTo]);
+  }, [authLoading, user, profile, router, returnTo]);
 
   if (authLoading || !user) return null;
-  if (profile?.name && profile.name.trim() !== '') return null;
+  if (profile && profile.name?.trim()) return null;
 
   const pushGranted = pushState === 'granted';
   const pushDenied = pushState === 'denied';
@@ -70,7 +85,6 @@ function OnboardingFlow() {
     setNameError('');
     setNameChecking(true);
 
-    // Check uniqueness (matches ProfilePage logic)
     const { data: existing } = await supabase
       .from('user_profiles')
       .select('id')
@@ -98,13 +112,21 @@ function OnboardingFlow() {
           'Content-Type': 'application/json',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ name: name.trim(), emailNotificationsEnabled: emailEnabled }),
+        body: JSON.stringify({
+          name: name.trim(),
+          emailNotificationsEnabled: emailEnabled,
+          dueSoonEnabled,
+          commentEnabled,
+          assignmentEnabled,
+        }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         setSubmitError(json.error || 'Something went wrong. Please try again.');
         return;
       }
+      // Update AuthContext local state so redirect guards don't loop
+      await updateProfileName(name.trim());
       router.replace(returnTo);
     } catch {
       setSubmitError('Something went wrong. Please try again.');
@@ -163,7 +185,7 @@ function OnboardingFlow() {
               />
               {nameError && <p className="ob-error">{nameError}</p>}
               <p style={{ margin: '6px 0 0', fontSize: 12, color: '#4b5563', lineHeight: 1.5 }}>
-                This is how you'll appear to teammates. You can change it later in your profile.
+                This is how you'll appear to teammates. You can change it any time in your profile.
               </p>
             </div>
             <button
@@ -182,56 +204,87 @@ function OnboardingFlow() {
           <>
             <h1 className="ob-title">Stay in the loop</h1>
             <p className="ob-subtitle">
-              Choose how Lumio keeps you updated. You can fine-tune these any time in your profile.
+              Choose how Lumio keeps you updated. Fine-tune these any time in your profile.
             </p>
 
             {/* Push notifications */}
             {!pushUnsupported && (
               <div className="ob-notif-row">
                 <div className="ob-notif-icon" style={{ background: 'rgba(99,102,241,0.12)' }}>
-                  <Bell size={18} color="#818cf8" />
+                  <Bell size={16} color="#818cf8" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p className="ob-notif-title">Push notifications</p>
                   <p className="ob-notif-desc">
                     {pushDenied
-                      ? 'Blocked in browser settings — enable in your browser to receive alerts.'
-                      : 'Get alerts for assignments, comments, and due dates.'}
+                      ? 'Blocked in browser settings — enable there to receive alerts.'
+                      : 'Real-time alerts for assignments, comments, and due dates.'}
                   </p>
                 </div>
-                {!pushDenied && (
-                  pushGranted ? (
-                    <span className="ob-notif-badge enabled">Enabled</span>
-                  ) : (
-                    <button
-                      className="ob-notif-enable-btn"
-                      onClick={handleEnablePush}
-                      disabled={pushEnabling}
-                    >
-                      {pushEnabling ? 'Enabling…' : 'Enable'}
-                    </button>
-                  )
-                )}
-                {pushDenied && <span className="ob-notif-badge denied">Blocked</span>}
+                {pushDenied
+                  ? <span className="ob-notif-badge denied">Blocked</span>
+                  : pushGranted
+                    ? <span className="ob-notif-badge enabled">On</span>
+                    : <button className="ob-notif-enable-btn" onClick={handleEnablePush} disabled={pushEnabling}>
+                        {pushEnabling ? '…' : 'Enable'}
+                      </button>
+                }
               </div>
             )}
 
-            {/* Email notifications */}
+            {/* Email — master toggle */}
             <div className="ob-notif-row">
               <div className="ob-notif-icon" style={{ background: 'rgba(250,66,15,0.1)' }}>
-                <Mail size={18} color="#fa420f" />
+                <Mail size={16} color="#fa420f" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p className="ob-notif-title">Email updates</p>
-                <p className="ob-notif-desc">Summaries, due date reminders, and comment notifications.</p>
+                <p className="ob-notif-title">Email notifications</p>
+                <p className="ob-notif-desc">Master toggle for all email updates.</p>
               </div>
-              <button
-                className={`ob-toggle${emailEnabled ? ' on' : ''}`}
-                onClick={() => setEmailEnabled(prev => !prev)}
-                aria-label="Toggle email notifications"
-              >
-                <span className="ob-toggle-knob" />
-              </button>
+              <Toggle on={emailEnabled} onToggle={() => {
+                const next = !emailEnabled;
+                setEmailEnabled(next);
+                if (!next) {
+                  setDueSoonEnabled(false);
+                  setCommentEnabled(false);
+                  setAssignmentEnabled(false);
+                } else {
+                  setDueSoonEnabled(true);
+                  setCommentEnabled(true);
+                  setAssignmentEnabled(true);
+                }
+              }} />
+            </div>
+
+            {/* Per-type toggles — indented under email */}
+            <div className="ob-notif-sub">
+              <div className="ob-notif-sub-row">
+                <Clock size={13} color="#6b7280" style={{ flexShrink: 0 }} />
+                <span className="ob-notif-sub-label">Due date reminders</span>
+                <Toggle on={dueSoonEnabled} onToggle={() => {
+                  const next = !dueSoonEnabled;
+                  setDueSoonEnabled(next);
+                  if (next && !emailEnabled) setEmailEnabled(true);
+                }} />
+              </div>
+              <div className="ob-notif-sub-row">
+                <MessageSquare size={13} color="#6b7280" style={{ flexShrink: 0 }} />
+                <span className="ob-notif-sub-label">Comments</span>
+                <Toggle on={commentEnabled} onToggle={() => {
+                  const next = !commentEnabled;
+                  setCommentEnabled(next);
+                  if (next && !emailEnabled) setEmailEnabled(true);
+                }} />
+              </div>
+              <div className="ob-notif-sub-row">
+                <UserCheck size={13} color="#6b7280" style={{ flexShrink: 0 }} />
+                <span className="ob-notif-sub-label">Assignments</span>
+                <Toggle on={assignmentEnabled} onToggle={() => {
+                  const next = !assignmentEnabled;
+                  setAssignmentEnabled(next);
+                  if (next && !emailEnabled) setEmailEnabled(true);
+                }} />
+              </div>
             </div>
 
             {submitError && <p className="ob-error" style={{ marginTop: 8 }}>{submitError}</p>}
@@ -240,7 +293,7 @@ function OnboardingFlow() {
               className="ob-btn-primary"
               onClick={handleComplete}
               disabled={submitting}
-              style={{ marginTop: 24 }}
+              style={{ marginTop: 20 }}
             >
               {submitting ? 'Setting up your workspace…' : 'Get Started →'}
             </button>
@@ -277,190 +330,113 @@ const onboardingStyles = `
     gap: 0;
     margin-bottom: 28px;
   }
-
   .ob-step-dot {
-    width: 8px;
-    height: 8px;
+    width: 8px; height: 8px;
     border-radius: 50%;
     background: #2a2d3a;
     transition: background 0.2s;
   }
   .ob-step-dot.active { background: #fa420f; }
-
-  .ob-step-line {
-    width: 32px;
-    height: 2px;
-    background: #2a2d3a;
-    margin: 0 6px;
-  }
+  .ob-step-line { width: 32px; height: 2px; background: #2a2d3a; margin: 0 6px; }
 
   .ob-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: #f9fafb;
-    margin: 0 0 6px;
-    text-align: center;
+    font-size: 22px; font-weight: 700; color: #f9fafb;
+    margin: 0 0 6px; text-align: center;
   }
-
   .ob-subtitle {
-    font-size: 14px;
-    color: #9ca3af;
-    margin: 0 0 24px;
-    text-align: center;
-    line-height: 1.6;
+    font-size: 14px; color: #9ca3af; margin: 0 0 20px;
+    text-align: center; line-height: 1.6;
   }
 
   .ob-label {
-    display: block;
-    font-size: 11px;
-    font-weight: 600;
-    color: #9ca3af;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 6px;
+    display: block; font-size: 11px; font-weight: 600; color: #9ca3af;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
   }
-
   .ob-input {
-    width: 100%;
-    background: #0f1117;
-    border: 1px solid #374151;
-    border-radius: 10px;
-    padding: 11px 14px;
-    font-size: 15px;
-    color: #e5e7eb;
-    outline: none;
-    box-sizing: border-box;
-    transition: border-color 0.15s;
+    width: 100%; background: #0f1117; border: 1px solid #374151;
+    border-radius: 10px; padding: 11px 14px; font-size: 15px;
+    color: #e5e7eb; outline: none; box-sizing: border-box; transition: border-color 0.15s;
   }
-  .ob-input:focus {
-    border-color: #fa420f;
-    box-shadow: 0 0 0 2px rgba(250,66,15,0.18);
-  }
+  .ob-input:focus { border-color: #fa420f; box-shadow: 0 0 0 2px rgba(250,66,15,0.18); }
 
-  .ob-error {
-    font-size: 12px;
-    color: #ef4444;
-    margin: 6px 0 0;
-  }
+  .ob-error { font-size: 12px; color: #ef4444; margin: 6px 0 0; }
 
   .ob-btn-primary {
-    display: block;
-    width: 100%;
-    padding: 13px;
-    background: #fa420f;
-    color: #fff;
-    border: none;
-    border-radius: 11px;
-    font-size: 15px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 0.15s;
+    display: block; width: 100%; padding: 13px;
+    background: #fa420f; color: #fff; border: none;
+    border-radius: 11px; font-size: 15px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s;
   }
   .ob-btn-primary:hover { background: #e03a0d; }
   .ob-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .ob-btn-ghost {
-    display: block;
-    width: 100%;
-    padding: 11px;
-    background: transparent;
-    color: #6b7280;
-    border: none;
-    border-radius: 11px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    margin-top: 8px;
+    display: block; width: 100%; padding: 11px;
+    background: transparent; color: #6b7280; border: none;
+    border-radius: 11px; font-size: 13px; font-weight: 500;
+    cursor: pointer; margin-top: 8px;
   }
   .ob-btn-ghost:hover { color: #9ca3af; }
   .ob-btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* Notification rows */
   .ob-notif-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 14px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 12px;
-    margin-bottom: 10px;
+    border-radius: 10px; margin-bottom: 6px;
   }
-
   .ob-notif-icon {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
+    width: 34px; height: 34px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
-
-  .ob-notif-title {
-    margin: 0 0 2px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #e5e7eb;
-  }
-  .ob-notif-desc {
-    margin: 0;
-    font-size: 11px;
-    color: #6b7280;
-    line-height: 1.5;
-  }
+  .ob-notif-title { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: #e5e7eb; }
+  .ob-notif-desc { margin: 0; font-size: 11px; color: #6b7280; line-height: 1.5; }
 
   .ob-notif-enable-btn {
-    background: #fa420f;
-    color: #fff;
-    border: none;
-    border-radius: 7px;
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
+    background: #fa420f; color: #fff; border: none;
+    border-radius: 7px; padding: 5px 11px; font-size: 12px;
+    font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0;
   }
   .ob-notif-enable-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
   .ob-notif-badge {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 4px 8px;
-    border-radius: 20px;
-    white-space: nowrap;
-    flex-shrink: 0;
+    font-size: 11px; font-weight: 600; padding: 4px 8px;
+    border-radius: 20px; white-space: nowrap; flex-shrink: 0;
   }
   .ob-notif-badge.enabled { background: rgba(34,197,94,0.12); color: #22c55e; }
   .ob-notif-badge.denied { background: rgba(239,68,68,0.1); color: #f87171; }
 
+  /* Sub-toggles */
+  .ob-notif-sub {
+    background: rgba(255,255,255,0.015);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 10px; overflow: hidden; margin-bottom: 6px;
+  }
+  .ob-notif-sub-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .ob-notif-sub-row:last-child { border-bottom: none; }
+  .ob-notif-sub-label {
+    flex: 1; font-size: 12px; color: #9ca3af;
+  }
+
   /* Toggle */
   .ob-toggle {
-    width: 40px;
-    height: 22px;
-    border-radius: 11px;
-    background: #374151;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    position: relative;
-    transition: background 0.2s;
-    flex-shrink: 0;
+    width: 36px; height: 20px; border-radius: 10px;
+    background: #2a2d3a; border: none; cursor: pointer;
+    padding: 0; position: relative; transition: background 0.2s; flex-shrink: 0;
   }
   .ob-toggle.on { background: #fa420f; }
-
   .ob-toggle-knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: #fff;
-    transition: left 0.2s;
+    position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; transition: left 0.18s;
   }
-  .ob-toggle.on .ob-toggle-knob { left: 20px; }
+  .ob-toggle.on .ob-toggle-knob { left: 18px; }
 
   @media (max-width: 480px) {
     .ob-card { padding: 28px 20px; border-radius: 0; border-left: none; border-right: none; min-height: 100vh; }
