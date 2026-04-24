@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
       position: 0,
       created_by: user.id,
       due_date: today,
+      assignees: [user.id],
     })
     .select('id')
     .single();
