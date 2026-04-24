@@ -89,6 +89,8 @@ export async function POST(req: NextRequest) {
   // Create the welcome card
   const description = `<p>Welcome to Lumio, ${trimmedName}! 👋 This is your personal board — a good place to get oriented. Work through the checklist below to get comfortable with the app.</p>`;
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const { data: card, error: cardError } = await supabaseAdmin
     .from('board_cards')
     .insert({
@@ -98,6 +100,7 @@ export async function POST(req: NextRequest) {
       description,
       position: 0,
       created_by: user.id,
+      due_date: today,
     })
     .select('id')
     .single();
