@@ -77,18 +77,31 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Fetch card + board details for email ─────────────────────────────────
-  const { data: cardRow } = await db
+  const { data: cardRow, error: cardErr } = await db
     .from('board_cards')
-    .select('id, title, description, board_id, board_columns(title), boards(title)')
+    .select('id, title, description, board_id, column_id')
     .eq('id', cardId)
     .single();
 
-  if (!cardRow) {
+  if (cardErr || !cardRow) {
     return NextResponse.json({ error: 'Card not found' }, { status: 404 });
   }
 
-  const col = Array.isArray(cardRow.board_columns) ? cardRow.board_columns[0] : cardRow.board_columns;
-  const board = Array.isArray(cardRow.boards) ? cardRow.boards[0] : cardRow.boards;
+  // Fetch column and board separately
+  const { data: colRow } = await db
+    .from('board_columns')
+    .select('id, title')
+    .eq('id', cardRow.column_id)
+    .single();
+
+  const { data: boardRow } = await db
+    .from('boards')
+    .select('id, title')
+    .eq('id', cardRow.board_id)
+    .single();
+
+  const col = colRow;
+  const board = boardRow;
 
   // ── Create invite record ──────────────────────────────────────────────────
   const { data: invite, error: inviteErr } = await db

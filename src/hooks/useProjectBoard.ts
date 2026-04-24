@@ -2500,40 +2500,63 @@ export function useProjectBoard() {
     try {
       const user = await getCachedUser();
       if (!user) return [];
-      const { data, error: err } = await supabase
+
+      // Fetch watchers with basic card data
+      const { data: watchers, error: watchErr } = await supabase
         .from('card_watchers')
-        .select(`
-          created_at,
-          board_cards (
-            id, title, priority, due_date, is_complete, assignees,
-            board_id,
-            board_columns ( id, title ),
-            boards ( id, title )
-          )
-        `)
+        .select('created_at, card_id')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
-      if (err) throw err;
-      return (data || [])
-        .filter((row: any) => row.board_cards)
-        .map((row: any) => {
-          const c = row.board_cards;
-          const col = Array.isArray(c.board_columns) ? c.board_columns[0] : c.board_columns;
-          const b = Array.isArray(c.boards) ? c.boards[0] : c.boards;
-          return {
-            card_id: c.id,
-            card_title: c.title,
-            card_priority: c.priority,
-            card_due_date: c.due_date,
-            card_is_complete: c.is_complete ?? false,
-            card_assignees: c.assignees ?? [],
-            board_id: c.board_id,
-            board_title: b?.title ?? '',
-            column_id: col?.id ?? '',
-            column_title: col?.title ?? '',
-            watched_at: row.created_at,
-          } as WatchedCard;
-        });
+      if (watchErr) throw watchErr;
+      if (!watchers?.length) return [];
+
+      // Fetch all referenced cards
+      const cardIds = watchers.map((w: any) => w.card_id);
+      const { data: cards, error: cardErr } = await supabase
+        .from('board_cards')
+        .select('id, title, priority, due_date, is_complete, assignees, board_id, column_id')
+        .in('id', cardIds);
+      if (cardErr) throw cardErr;
+
+      // Fetch columns for those cards
+      const columnIds = [...new Set((cards || []).map((c: any) => c.column_id))];
+      const { data: columns, error: colErr } = await supabase
+        .from('board_columns')
+        .select('id, title')
+        .in('id', columnIds);
+      if (colErr) throw colErr;
+
+      // Fetch boards for those cards
+      const boardIds = [...new Set((cards || []).map((c: any) => c.board_id))];
+      const { data: boards, error: boardErr } = await supabase
+        .from('boards')
+        .select('id, title')
+        .in('id', boardIds);
+      if (boardErr) throw boardErr;
+
+      const colMap = new Map((columns || []).map((c: any) => [c.id, c]));
+      const boardMap = new Map((boards || []).map((b: any) => [b.id, b]));
+      const cardMap = new Map((cards || []).map((c: any) => [c.id, c]));
+
+      return watchers.map((w: any) => {
+        const c = cardMap.get(w.card_id);
+        if (!c) return undefined;
+        const col = colMap.get(c.column_id);
+        const b = boardMap.get(c.board_id);
+        return {
+          card_id: c.id,
+          card_title: c.title,
+          card_priority: c.priority,
+          card_due_date: c.due_date,
+          card_is_complete: c.is_complete ?? false,
+          card_assignees: c.assignees ?? [],
+          board_id: c.board_id,
+          board_title: b?.title ?? '',
+          column_id: c.column_id,
+          column_title: col?.title ?? '',
+          watched_at: w.created_at,
+        } as WatchedCard;
+      }).filter((x): x is WatchedCard => x !== undefined);
     } catch (err: any) {
       console.error('[fetchWatchedCards] failed:', err.message);
       return [];
