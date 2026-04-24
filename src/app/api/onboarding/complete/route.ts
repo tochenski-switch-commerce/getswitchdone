@@ -124,5 +124,33 @@ export async function POST(req: NextRequest) {
     .from('card_checklists')
     .insert(checklistItems.map(item => ({ ...item, card_id: card.id })));
 
+  // Second card: automations guide
+  const automationDescription = `<p>Lumio can do the busywork for you. Automations fire when cards move or change — so your board stays organised without you having to touch it.</p><p><strong style="color:#eaf1ff;">Column automations</strong> — run whenever a card is dropped into a specific column. Use them to auto-mark cards complete when they hit Done, assign a priority, notify teammates, or even move completed subtasks to another column.</p><p><strong style="color:#eaf1ff;">Board automations</strong> — react to broader events across the whole board: move a card when it's completed, bump it to the top when a due date passes, or trigger an action the moment an assignee is added.</p>`;
+
+  const { data: automationCard, error: automationCardError } = await supabaseAdmin
+    .from('board_cards')
+    .insert({
+      board_id: board.id,
+      column_id: todoColumn.id,
+      title: 'Set Up Lists & Board Automations',
+      description: automationDescription,
+      position: 1,
+      created_by: user.id,
+    })
+    .select('id')
+    .single();
+
+  if (!automationCardError && automationCard) {
+    const automationChecklist = [
+      { title: 'Open a board and go to Settings → Automations', is_completed: false, position: 0 },
+      { title: 'Add a column automation — e.g. mark complete when moved to Done', is_completed: false, position: 1 },
+      { title: 'Add a board automation — e.g. move card to Done when completed', is_completed: false, position: 2 },
+      { title: 'Move a card into that column and watch it fire', is_completed: false, position: 3 },
+    ];
+    await supabaseAdmin
+      .from('card_checklists')
+      .insert(automationChecklist.map(item => ({ ...item, card_id: automationCard.id })));
+  }
+
   return NextResponse.json({ ok: true, boardId: board.id });
 }
