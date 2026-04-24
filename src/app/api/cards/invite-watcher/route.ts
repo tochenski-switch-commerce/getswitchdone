@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   const { data: boardRow } = await db
-    .from('boards')
+    .from('project_boards')
     .select('id, title')
     .eq('id', cardRow.board_id)
     .single();

@@ -2529,7 +2529,7 @@ export function useProjectBoard() {
       // Fetch boards for those cards
       const boardIds = [...new Set((cards || []).map((c: any) => c.board_id))];
       const { data: boards, error: boardErr } = await supabase
-        .from('boards')
+        .from('project_boards')
         .select('id, title')
         .in('id', boardIds);
       if (boardErr) throw boardErr;
