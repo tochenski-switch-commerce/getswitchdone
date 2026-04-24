@@ -56,6 +56,7 @@ export default function CardDetailModal({
   onAddWatcher,
   onRemoveWatcher,
   onInviteWatcher,
+  onFetchWatcherProfiles,
   accessToken,
 }: {
   card: BoardCard;
@@ -98,6 +99,7 @@ export default function CardDetailModal({
   onAddWatcher?: (userId: string) => Promise<void>;
   onRemoveWatcher?: (userId: string) => Promise<void>;
   onInviteWatcher?: (email: string) => Promise<{ ok: boolean; alreadyUser?: boolean }>;
+  onFetchWatcherProfiles?: (cardId: string) => Promise<UserProfile[]>;
   accessToken: string;
 }) {
   const [editTitle, setEditTitle] = useState(card.title);
@@ -145,6 +147,7 @@ export default function CardDetailModal({
 
   // Watcher state
   const [watchers, setWatchers] = useState<string[]>([]);
+  const [watcherProfiles, setWatcherProfiles] = useState<UserProfile[]>([]);
   const [isWatching, setIsWatching] = useState(false);
   const [watchLoading, setWatchLoading] = useState(false);
   const [showWatcherPicker, setShowWatcherPicker] = useState(false);
@@ -329,6 +332,9 @@ export default function CardDetailModal({
     onFetchWatchers().then(ids => {
       setWatchers(ids);
       if (currentUserId) setIsWatching(ids.includes(currentUserId));
+      if (onFetchWatcherProfiles) {
+        onFetchWatcherProfiles(card.id).then(profiles => setWatcherProfiles(profiles));
+      }
     });
   }, [card.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1824,7 +1830,7 @@ export default function CardDetailModal({
               {watchers.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
                   {watchers.map(uid => {
-                    const profile = userProfiles.find(p => p.id === uid);
+                    const profile = userProfiles.find(p => p.id === uid) || watcherProfiles.find(p => p.id === uid);
                     const name = profile?.name ?? uid.slice(0, 8);
                     const isCurrentUser = uid === currentUserId;
                     return (
