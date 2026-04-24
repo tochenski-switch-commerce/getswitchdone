@@ -2479,11 +2479,15 @@ export function useProjectBoard() {
   const inviteWatcherByEmail = useCallback(async (cardId: string, email: string): Promise<{ ok: boolean; alreadyUser?: boolean }> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        console.error('[inviteWatcherByEmail] no session token');
+        throw new Error('Not authenticated');
+      }
       const res = await fetch('/api/cards/invite-watcher', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ cardId, email }),
       });

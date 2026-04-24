@@ -27,11 +27,17 @@ export async function POST(req: NextRequest) {
   const db = getSupabaseAdmin();
 
   // Verify caller is authenticated
+  console.log('[invite-watcher] auth header:', authHeader);
+  console.log('[invite-watcher] token:', token ? `${token.slice(0, 20)}...` : 'none');
+
   const { data: { user }, error: authErr } = token
     ? await db.auth.getUser(token)
     : { data: { user: null }, error: new Error('No token') };
 
+  console.log('[invite-watcher] auth result:', { user: user?.id, error: authErr?.message });
+
   if (authErr || !user) {
+    console.error('[invite-watcher] auth failed:', authErr?.message || 'no user');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
