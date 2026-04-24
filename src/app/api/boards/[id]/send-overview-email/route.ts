@@ -179,7 +179,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const html = buildTestEmail(fullBoard, profiles, todayStr, baseUrl, displayName);
 
     // Send the email
-    const from = process.env.NOTIFICATION_FROM_EMAIL || 'Lumio <notifications@getlumio.app>';
+    const from = process.env.NOTIFICATION_FROM_EMAIL || 'Lumio <notifications@mail.switchcommerce.team>';
     const result = await resend.emails.send({
       from,
       to: toEmail,

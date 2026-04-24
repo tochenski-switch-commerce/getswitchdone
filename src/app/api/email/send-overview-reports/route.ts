@@ -279,7 +279,7 @@ export async function GET(req: NextRequest) {
   }
 
   const baseUrl = appBaseUrl();
-  const from = process.env.NOTIFICATION_FROM_EMAIL || 'Lumio <notifications@getlumio.app>';
+  const from = process.env.NOTIFICATION_FROM_EMAIL || 'Lumio <notifications@mail.switchcommerce.team>';
   let sent = 0;
 
   for (const schedule of schedules) {
