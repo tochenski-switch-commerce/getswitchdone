@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { X } from 'lucide-react';
+import { X, Calendar } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
+import ScheduleModal, { OverviewSchedule } from '@/components/board-overview/ScheduleModal';
 import type { BoardCard } from '@/types/board-types';
 import FlameLoader from '@/components/FlameLoader';
 import {
@@ -110,9 +112,43 @@ export default function BoardOverviewPage() {
   const [sortCol, setSortCol] = useState<'title' | 'column' | 'priority' | 'assignee' | 'due' | 'done' | null>(() => (readSaved().sortCol as 'title' | 'column' | 'priority' | 'assignee' | 'due' | 'done' | null) ?? null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() => (readSaved().sortDir as 'asc' | 'desc') ?? 'asc');
 
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [schedule, setSchedule] = useState<OverviewSchedule | null>(null);
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
+
   useEffect(() => {
     if (boardId) fetchBoard(boardId);
   }, [boardId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load existing schedule
+  useEffect(() => {
+    if (!boardId) return;
+    setLoadingSchedule(true);
+    const fetchSchedule = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setLoadingSchedule(false);
+          return;
+        }
+
+        const res = await fetch(`/api/boards/${boardId}/overview-schedule`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSchedule(data.schedule ?? null);
+        }
+      } catch (err) {
+        console.error('Failed to load schedule:', err);
+      } finally {
+        setLoadingSchedule(false);
+      }
+    };
+    fetchSchedule();
+  }, [boardId]);
 
   // Persist filters to localStorage whenever they change
   useEffect(() => {
@@ -375,6 +411,14 @@ const priorityBreakdown = useMemo(() => board ? computePriorityBreakdown(board) 
           </div>
         </div>
         <div className="kb-ov-header-actions">
+          <button
+            className={`kb-ov-schedule-btn${schedule ? ' active' : ''}`}
+            onClick={() => setShowScheduleModal(true)}
+            title={schedule ? 'Edit schedule' : 'Schedule email reports'}
+          >
+            <Calendar size={13} />
+            Schedule
+          </button>
           <button className="kb-ov-print-btn" onClick={handlePrintAll}>
             <Printer size={13} /> Print All
           </button>
@@ -629,6 +673,15 @@ const priorityBreakdown = useMemo(() => board ? computePriorityBreakdown(board) 
 
       </div>
 
+      {showScheduleModal && (
+        <ScheduleModal
+          boardId={boardId}
+          existing={schedule}
+          onClose={() => setShowScheduleModal(false)}
+          onSaved={(s) => { setSchedule(s); setShowScheduleModal(false); }}
+          onDeleted={() => { setSchedule(null); setShowScheduleModal(false); }}
+        />
+      )}
     </div>
   );
 }

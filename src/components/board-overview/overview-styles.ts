@@ -491,4 +491,259 @@ export const overviewStyles = `
     font-weight: 600;
     color: #34d399;
   }
+
+  /* ── Schedule button (header) ── */
+  .kb-ov-schedule-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #9ca3af;
+    background: transparent;
+    border: 1px solid #2d3246;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+    white-space: nowrap;
+  }
+  .kb-ov-schedule-btn:hover {
+    color: #e5e7eb;
+    border-color: #6366f1;
+    background: rgba(99,102,241,0.08);
+  }
+  .kb-ov-schedule-btn.active {
+    color: #a5b4fc;
+    border-color: #6366f1;
+    background: rgba(99,102,241,0.12);
+  }
+
+  /* ── Modal shared (schedule + export) ── */
+  .kb-ov-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 20px;
+  }
+  .kb-ov-modal {
+    background: #141925;
+    border: 1px solid #2a3142;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 400px;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.7);
+  }
+  .kb-ov-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #1e2130;
+  }
+  .kb-ov-modal-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #f9fafb;
+  }
+  .kb-ov-modal-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .kb-ov-modal-description {
+    margin: 0;
+    color: #8d96ab;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .kb-ov-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 20px;
+    border-top: 1px solid #1e2130;
+  }
+  .kb-ov-modal-select-all {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .kb-ov-modal-select-all button {
+    font-size: 12px;
+    color: #6366f1;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+  }
+  .kb-ov-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .kb-ov-checkbox-row:hover {
+    background: rgba(255,255,255,0.04);
+  }
+  .kb-ov-checkbox-label {
+    font-size: 13px;
+    color: #d1d5db;
+  }
+
+  /* ── Form fields (schedule modal) ── */
+  .kb-ov-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .kb-ov-form-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+  }
+  .kb-ov-form-select {
+    padding: 9px 12px;
+    background: #0f1117;
+    border: 1px solid #1e2130;
+    border-radius: 8px;
+    color: #e5e7eb;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    width: 100%;
+  }
+  .kb-ov-form-select:focus {
+    border-color: #6366f1;
+  }
+  .kb-ov-form-error {
+    margin: 0;
+    font-size: 12px;
+    color: #f87171;
+  }
+  .kb-ov-tz-display {
+    padding: 9px 12px;
+    background: #0f1117;
+    border: 1px solid #1e2130;
+    border-radius: 8px;
+    color: #6b7280;
+    font-size: 12px;
+  }
+
+  /* ── Segmented control (frequency) ── */
+  .kb-ov-seg-group {
+    display: flex;
+    background: #0f1117;
+    border: 1px solid #1e2130;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .kb-ov-seg-btn {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color 0.12s, background 0.12s;
+  }
+  .kb-ov-seg-btn.active {
+    color: #e5e7eb;
+    background: #1e2130;
+  }
+  .kb-ov-seg-btn:hover:not(.active) {
+    color: #9ca3af;
+  }
+
+  /* ── Modal buttons ── */
+  .kb-ov-btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #6b7280;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .kb-ov-btn-icon:hover {
+    background: rgba(255,255,255,0.06);
+    color: #e5e7eb;
+  }
+  .kb-ov-btn-ghost {
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #9ca3af;
+    background: transparent;
+    border: 1px solid #2d3246;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .kb-ov-btn-ghost:hover {
+    color: #e5e7eb;
+    border-color: #4b5563;
+  }
+  .kb-ov-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: #6366f1;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .kb-ov-btn-primary:hover:not(:disabled) {
+    background: #4f46e5;
+  }
+  .kb-ov-btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .kb-ov-btn-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #f87171;
+    background: transparent;
+    border: 1px solid rgba(248,113,113,0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .kb-ov-btn-danger:hover:not(:disabled) {
+    background: rgba(248,113,113,0.08);
+    border-color: #f87171;
+  }
+  .kb-ov-btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `;

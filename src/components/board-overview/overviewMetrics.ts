@@ -11,6 +11,12 @@ export function getTodayStr(): string {
   return `${y}-${m}-${day}`;
 }
 
+export function getTodayStrInTimezone(timezone: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
+
 export function getSaturdayStr(todayStr: string): string {
   const d = new Date(todayStr + 'T00:00:00');
   const diff = 6 - d.getDay();
