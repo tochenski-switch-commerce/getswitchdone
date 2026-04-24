@@ -77,13 +77,26 @@ export function renderRichText(text: string): React.ReactNode[] {
 /* ═══════════════════════════════════════════════════════════
    Rich text sanitization
    ═══════════════════════════════════════════════════════════ */
+function linkifyBareUrls(html: string): string {
+  // Matches: full <a>...</a> blocks | any HTML tag | bare URLs — in that priority order.
+  // Existing anchor tags and all other HTML tags are preserved verbatim; bare URLs get wrapped.
+  return html.replace(
+    /(<a\b[^>]*>[\s\S]*?<\/a>)|(<[^>]+>)|(https?:\/\/[^\s<>"']+)/gi,
+    (match, anchor, tag, url) => {
+      if (anchor !== undefined || tag !== undefined) return match;
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    }
+  );
+}
+
 export function sanitizeRichText(html: string): string {
   if (!html) return '';
-  // If plain text (no HTML tags), convert newlines to <br>
+  // If plain text (no HTML tags), convert newlines to <br> then auto-link URLs
   if (!/<[a-z][\s\S]*>/i.test(html)) {
-    return html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    const escaped = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    return linkifyBareUrls(escaped);
   }
-  return html
+  const sanitized = html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
     .replace(/<object[\s\S]*?<\/object>/gi, '')
@@ -97,6 +110,7 @@ export function sanitizeRichText(html: string): string {
       if (/target=/i.test(attrs)) return match;
       return `<a ${attrs} target="_blank" rel="noopener noreferrer">`;
     });
+  return linkifyBareUrls(sanitized);
 }
 
 /* ═══════════════════════════════════════════════════════════

@@ -476,7 +476,7 @@ function BoardPage() {
       cards = cards.filter(c => {
         switch (filterDate) {
           case 'overdue': {
-            if (!c.due_date) return false;
+            if (!c.due_date || c.is_complete) return false;
             if (c.due_date < todayStr) return true;
             if (c.due_date === todayStr && c.due_time) {
               const [h, m] = c.due_time.split(':').map(Number);

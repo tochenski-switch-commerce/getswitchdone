@@ -4,9 +4,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useProjectBoard } from '@/hooks/useProjectBoard';
 import type { WatchedCard } from '@/types/board-types';
-import { PRIORITY_CONFIG } from '@/components/board-detail/helpers';
+import { PRIORITY_CONFIG, sanitizeRichText } from '@/components/board-detail/helpers';
 import { X, Eye, EyeOff, Flag, CalendarDays, User, Tag, MessageSquare, CheckSquare } from 'lucide-react';
-import DOMPurify from 'isomorphic-dompurify';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -123,9 +122,7 @@ export default function WatchCardDetailPanel({
   }
 
   const pri = card?.priority ? PRIORITY_CONFIG[card.priority as keyof typeof PRIORITY_CONFIG] : null;
-  const safeDesc = card?.description
-    ? DOMPurify.sanitize(card.description)
-    : null;
+  const safeDesc = card?.description ? sanitizeRichText(card.description) : null;
 
   return (
     <>
@@ -313,6 +310,13 @@ export default function WatchCardDetailPanel({
                       color: '#c9d3ea',
                     }}
                     className="kb-prose"
+                    onClick={(e) => {
+                      const anchor = (e.target as HTMLElement).closest('a');
+                      if (anchor) {
+                        e.preventDefault();
+                        window.open(anchor.getAttribute('href') || '', '_blank', 'noopener,noreferrer');
+                      }
+                    }}
                   />
                 </Section>
               )}
@@ -384,7 +388,7 @@ export default function WatchCardDetailPanel({
                         </div>
                         <div
                           dangerouslySetInnerHTML={{
-                            __html: DOMPurify.sanitize(comment.content),
+                            __html: sanitizeRichText(comment.content),
                           }}
                           style={{ fontSize: 13, lineHeight: 1.6, color: '#9ca3af' }}
                         />

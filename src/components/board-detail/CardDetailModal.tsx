@@ -187,6 +187,7 @@ export default function CardDetailModal({
 
   const titleRef = useRef<HTMLInputElement>(null);
   const descRef = useRef<HTMLDivElement>(null);
+  const descEditorReadyRef = useRef(false);
   const commentAddRef = useRef<HTMLDivElement>(null);
   const commentEditRef = useRef<HTMLDivElement>(null);
   const savingRef = useRef(false);
@@ -365,7 +366,11 @@ export default function CardDetailModal({
       } else {
         descRef.current.innerHTML = html || '';
       }
+      descEditorReadyRef.current = true;
       descRef.current.focus();
+    }
+    if (!editingDesc) {
+      descEditorReadyRef.current = false;
     }
   }, [editingDesc]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -411,7 +416,7 @@ export default function CardDetailModal({
       if (commentAddRef.current) commentAddRef.current.innerHTML = '';
       await onAddComment(pendingComment);
     }
-    const descHtml = descRef.current?.innerHTML || editDesc;
+    const descHtml = descRef.current !== null ? descRef.current.innerHTML : editDesc;
 
     // Build repeat_rule
     let repeat_rule: RepeatRule | null = null;
@@ -845,10 +850,10 @@ export default function CardDetailModal({
                       if (descRef.current) setEditDesc(descRef.current.innerHTML);
                     }}
                     onBlur={() => {
-                      if (descRef.current) setEditDesc(descRef.current.innerHTML);
+                      if (descRef.current && descEditorReadyRef.current) setEditDesc(descRef.current.innerHTML);
                       setEditingDesc(false);
                     }}
-                    onKeyDown={e => { if (e.key === 'Escape') { if (descRef.current) setEditDesc(descRef.current.innerHTML); setEditingDesc(false); } }}
+                    onKeyDown={e => { if (e.key === 'Escape') { if (descRef.current && descEditorReadyRef.current) setEditDesc(descRef.current.innerHTML); setEditingDesc(false); } }}
                     onClick={handleClickLink}
                     data-placeholder="Add a more detailed description..."
                   />
@@ -857,6 +862,14 @@ export default function CardDetailModal({
                 <div
                   className="kb-desc-display kb-rt-display"
                   onDoubleClick={() => setEditingDesc(true)}
+                  onClick={(e) => {
+                    const anchor = (e.target as HTMLElement).closest('a');
+                    if (anchor) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      window.open(anchor.getAttribute('href') || '', '_blank', 'noopener,noreferrer');
+                    }
+                  }}
                   title="Double-click to edit"
                 >
                   {editDesc ? (
