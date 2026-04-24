@@ -166,12 +166,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Build the board object
     const fullBoard: FullBoard = {
       ...board,
-      columns: colsRes.data ?? [],
-      cards,
-      labels: [],
-      customFields: [],
-      boardLinks: [],
-      boardLinkStats: [],
+      columns: (colsRes.data ?? []) as FullBoard['columns'],
+      cards: cards as FullBoard['cards'],
+      labels: [] as FullBoard['labels'],
+      customFields: [] as FullBoard['customFields'],
+      boardLinks: [] as FullBoard['boardLinks'],
+      boardLinkStats: [] as FullBoard['boardLinkStats'],
     };
 
     const baseUrl = appBaseUrl();
