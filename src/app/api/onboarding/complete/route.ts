@@ -152,5 +152,61 @@ export async function POST(req: NextRequest) {
       .insert(automationChecklist.map(item => ({ ...item, card_id: automationCard.id })));
   }
 
+  // Third card: teams guide
+  const teamsDescription = `<p>Teams let you share boards with other people and collaborate in real time. Every team has its own workspace — members can see and work on all boards added to that team.</p><p><strong style="color:#eaf1ff;">Roles</strong> — each member gets a role: <strong style="color:#eaf1ff;">Owner</strong> (full control, can invite and remove), <strong style="color:#eaf1ff;">Editor</strong> (can add and edit cards), or <strong style="color:#eaf1ff;">Viewer</strong> (read-only). You can change roles or transfer ownership any time.</p><p><strong style="color:#eaf1ff;">Inviting people</strong> — share an invite link, paste an invite code, or send a direct invite email from the team page. Anyone who joins via the link lands straight in the team.</p>`;
+
+  const { data: teamsCard, error: teamsCardError } = await supabaseAdmin
+    .from('board_cards')
+    .insert({
+      board_id: board.id,
+      column_id: todoColumn.id,
+      title: 'Collaborate with Teams',
+      description: teamsDescription,
+      position: 2,
+      created_by: user.id,
+    })
+    .select('id')
+    .single();
+
+  if (!teamsCardError && teamsCard) {
+    const teamsChecklist = [
+      { title: 'Go to Teams and create your first team', is_completed: false, position: 0 },
+      { title: 'Invite a teammate via email or invite link', is_completed: false, position: 1 },
+      { title: 'Add a board to the team so everyone can access it', is_completed: false, position: 2 },
+      { title: 'Set a member\'s role to Editor or Viewer', is_completed: false, position: 3 },
+    ];
+    await supabaseAdmin
+      .from('card_checklists')
+      .insert(teamsChecklist.map(item => ({ ...item, card_id: teamsCard.id })));
+  }
+
+  // Fourth card: forms guide
+  const formsDescription = `<p>Forms let anyone submit a card to your board — no Lumio account required. Share the form link with clients, teammates, or embed it on a website, and submissions come straight in as cards.</p><p><strong style="color:#eaf1ff;">Custom fields</strong> — add text, dropdown, date, email, or number fields. Each field maps directly to a card property so nothing gets lost in translation.</p><p><strong style="color:#eaf1ff;">Auto-routing</strong> — choose which column new cards land in, set a default assignee, and apply labels automatically. Submissions arrive ready to work on.</p>`;
+
+  const { data: formsCard, error: formsCardError } = await supabaseAdmin
+    .from('board_cards')
+    .insert({
+      board_id: board.id,
+      column_id: todoColumn.id,
+      title: 'Capture Work with Forms',
+      description: formsDescription,
+      position: 3,
+      created_by: user.id,
+    })
+    .select('id')
+    .single();
+
+  if (!formsCardError && formsCard) {
+    const formsChecklist = [
+      { title: 'Open a board and go to Forms', is_completed: false, position: 0 },
+      { title: 'Create a form and add a couple of custom fields', is_completed: false, position: 1 },
+      { title: 'Set the target column and a default assignee', is_completed: false, position: 2 },
+      { title: 'Copy the form link and submit a test entry', is_completed: false, position: 3 },
+    ];
+    await supabaseAdmin
+      .from('card_checklists')
+      .insert(formsChecklist.map(item => ({ ...item, card_id: formsCard.id })));
+  }
+
   return NextResponse.json({ ok: true, boardId: board.id });
 }
