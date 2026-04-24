@@ -2,18 +2,60 @@
 
 import { useState, useEffect } from 'react';
 
+const LOADING_PHRASES = [
+  'Loading your boards...',
+  'Syncing your cards...',
+  'Organizing your lists...',
+  'Fetching team data...',
+  'Setting up your workspace...',
+  'Building your views...',
+  'Preparing your tasks...',
+  'Indexing your projects...',
+  'Checking your schedule...',
+  'Loading your assignments...',
+  'Syncing recent activity...',
+  'Getting things in order...',
+  'Checking for updates...',
+  'Loading column settings...',
+  'Almost ready...',
+];
+
 export default function SplashScreen() {
   const [phase, setPhase] = useState<'animating' | 'fading' | 'done'>('animating');
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  const [displayedText, setDisplayedText] = useState('');
 
   useEffect(() => {
-    // After animations finish, start fading out the splash
-    const fadeTimer = setTimeout(() => setPhase('fading'), 2200);
-    const doneTimer = setTimeout(() => setPhase('done'), 2800);
+    const fadeTimer = setTimeout(() => setPhase('fading'), 3800);
+    const doneTimer = setTimeout(() => setPhase('done'), 4400);
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(doneTimer);
     };
   }, []);
+
+  useEffect(() => {
+    const phrase = LOADING_PHRASES[phraseIndex];
+    let charIndex = 0;
+    let holdTimer: ReturnType<typeof setTimeout>;
+
+    const typingInterval = setInterval(() => {
+      charIndex++;
+      setDisplayedText(phrase.slice(0, charIndex));
+      if (charIndex >= phrase.length) {
+        clearInterval(typingInterval);
+        holdTimer = setTimeout(() => {
+          setDisplayedText('');
+          setPhraseIndex(i => (i + 1) % LOADING_PHRASES.length);
+        }, 550);
+      }
+    }, 22);
+
+    return () => {
+      clearInterval(typingInterval);
+      clearTimeout(holdTimer);
+    };
+  }, [phraseIndex]);
 
   if (phase === 'done') return null;
 
@@ -24,6 +66,7 @@ export default function SplashScreen() {
         inset: 0,
         zIndex: 99999,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#fa420f',
@@ -41,6 +84,10 @@ export default function SplashScreen() {
           0%   { transform: scaleY(0) scaleX(0); opacity: 0; }
           30%  { opacity: 1; }
           100% { transform: scaleY(1) scaleX(1); opacity: 1; }
+        }
+        @keyframes splash-cursor-blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
         }
         .splash-text {
           opacity: 0;
@@ -74,6 +121,41 @@ export default function SplashScreen() {
           d="M607.665,85.002 C599.884,85.002 593.331,82.269 587.998,76.798 C582.665,71.331 580.028,64.768 579.998,57.107 C579.941,42.541 586.944,32.765 592.177,28.186 C589.274,44.173 605.779,44.594 601.191,31.580 C594.742,10.187 607.500,0.000 607.500,0.000 C607.500,0.000 608.726,13.316 627.498,37.416 C631.946,43.126 634.998,49.231 634.998,57.107 C634.998,64.768 632.498,71.331 627.498,76.798 C622.498,82.269 615.883,85.002 607.665,85.002 Z"
         />
       </svg>
+
+      <div
+        style={{
+          marginTop: 32,
+          height: 20,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {displayedText.length > 0 && (
+          <span
+            style={{
+              color: 'rgba(255,255,255,0.72)',
+              fontSize: 13,
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+              fontWeight: 400,
+              letterSpacing: '0.02em',
+            }}
+          >
+            {displayedText}
+            <span
+              style={{
+                display: 'inline-block',
+                width: 2,
+                height: '0.85em',
+                background: 'rgba(255,255,255,0.72)',
+                marginLeft: 2,
+                verticalAlign: 'text-bottom',
+                animation: 'splash-cursor-blink 0.7s steps(1) infinite',
+              }}
+            />
+          </span>
+        )}
+      </div>
     </div>
   );
 }
