@@ -180,16 +180,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Send the email
     const from = process.env.NOTIFICATION_FROM_EMAIL || 'Lumio <notifications@getlumio.app>';
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from,
       to: toEmail,
       subject: `${board.title} — Test Overview Email`,
       html,
     });
 
-    return NextResponse.json({ ok: true, message: `Test email sent to ${toEmail}` });
+    console.log('[send-overview-email] Resend result:', JSON.stringify(result));
+
+    if (result.error) {
+      console.error('[send-overview-email] Resend error:', result.error);
+      return NextResponse.json({
+        error: `Resend error: ${result.error.message || JSON.stringify(result.error)}`,
+      }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, message: `Test email sent to ${toEmail}`, id: result.data?.id });
   } catch (error) {
     console.error('[send-overview-email] error:', error);
-    return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'Failed to send email',
+    }, { status: 500 });
   }
 }
