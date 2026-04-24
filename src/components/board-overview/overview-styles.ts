@@ -638,6 +638,7 @@ export const overviewStyles = `
     margin: 0;
     font-size: 12px;
     color: #34d399;
+    text-align: center;
   }
   .kb-ov-tz-display {
     padding: 9px 12px;
