@@ -458,7 +458,27 @@ function AuthForm() {
                 />
               </div>
             )}
-            {error && <p className="kb-auth-error">{error}</p>}
+            {error && (
+              <div>
+                <p className="kb-auth-error">{
+                  error.toLowerCase().includes('invalid login credentials')
+                    ? 'No account found with those details.'
+                    : error
+                }</p>
+                {mode === 'signin' && error.toLowerCase().includes('invalid login credentials') && (
+                  <p style={{ fontSize: 13, color: '#9ca3af', margin: '8px 0 0', textAlign: 'center' }}>
+                    Don't have an account?{' '}
+                    <button
+                      type="button"
+                      onClick={() => { setMode('signup'); setError(''); }}
+                      style={{ background: 'none', border: 'none', padding: 0, color: '#fa420f', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                    >
+                      Sign up instead
+                    </button>
+                  </p>
+                )}
+              </div>
+            )}
             <button
               className="kb-btn kb-btn-primary kb-auth-submit"
               type="submit"
