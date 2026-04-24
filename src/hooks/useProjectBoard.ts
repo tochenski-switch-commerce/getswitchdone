@@ -2576,15 +2576,53 @@ export function useProjectBoard() {
       if (wErr) throw wErr;
       if (!watcherRows?.length) return [];
       const ids = watcherRows.map((r: any) => r.user_id);
-      const { data: profiles, error: pErr } = await supabase
-        .from('user_profiles')
-        .select('id, name, updated_at')
-        .in('id', ids);
-      if (pErr) throw pErr;
-      return (profiles || []) as UserProfile[];
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/users/resolve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error('resolve failed');
+      const json = await res.json();
+      return (json.users as Array<{ id: string; display: string }>).map(u => ({
+        id: u.id,
+        name: u.display,
+        updated_at: '',
+      })) as UserProfile[];
     } catch (err: any) {
       console.error('[fetchWatcherProfiles] failed:', err.message);
       return [];
+    }
+  }, []);
+
+  const fetchPendingWatcherInvites = useCallback(async (cardId: string): Promise<Array<{ id: string; email: string }>> => {
+    try {
+      const { data, error } = await supabase
+        .from('watcher_invites')
+        .select('id, email')
+        .eq('card_id', cardId)
+        .is('claimed_at', null);
+      if (error) throw error;
+      return (data || []) as Array<{ id: string; email: string }>;
+    } catch (err: any) {
+      console.error('[fetchPendingWatcherInvites] failed:', err.message);
+      return [];
+    }
+  }, []);
+
+  const cancelWatcherInvite = useCallback(async (inviteId: string): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from('watcher_invites')
+        .delete()
+        .eq('id', inviteId);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('[cancelWatcherInvite] failed:', err.message);
     }
   }, []);
 
@@ -2608,7 +2646,7 @@ export function useProjectBoard() {
     fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
     fetchRepeatSeries, updateRepeatSeries, stopRepeatSeries,
     fetchCardWatchers, watchCard, unwatchCard,
-    addWatcherForUser, removeWatcherForUser, inviteWatcherByEmail, fetchWatchedCards, fetchWatcherProfiles,
+    addWatcherForUser, removeWatcherForUser, inviteWatcherByEmail, fetchWatchedCards, fetchWatcherProfiles, fetchPendingWatcherInvites, cancelWatcherInvite,
     setBoard, applyRealtimeEvent,
   };
 }

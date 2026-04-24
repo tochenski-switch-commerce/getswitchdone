@@ -9,7 +9,7 @@ import {
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, Pencil,
   Check, Copy, LinkIcon, SlidersHorizontal, Repeat, ClipboardList,
   Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered,
-  ThumbsUp, ThumbsDown, Star, GripVertical, Sparkles, Archive,
+  ThumbsUp, ThumbsDown, Star, GripVertical, Sparkles, Archive, Mail,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import CustomFieldInput from './CustomFieldInput';
@@ -57,6 +57,8 @@ export default function CardDetailModal({
   onRemoveWatcher,
   onInviteWatcher,
   onFetchWatcherProfiles,
+  onFetchPendingWatcherInvites,
+  onCancelWatcherInvite,
   accessToken,
 }: {
   card: BoardCard;
@@ -100,6 +102,8 @@ export default function CardDetailModal({
   onRemoveWatcher?: (userId: string) => Promise<void>;
   onInviteWatcher?: (email: string, cardId: string) => Promise<{ ok: boolean; alreadyUser?: boolean }>;
   onFetchWatcherProfiles?: (cardId: string) => Promise<UserProfile[]>;
+  onFetchPendingWatcherInvites?: (cardId: string) => Promise<Array<{ id: string; email: string }>>;
+  onCancelWatcherInvite?: (inviteId: string) => Promise<void>;
   accessToken: string;
 }) {
   const [editTitle, setEditTitle] = useState(card.title);
@@ -148,6 +152,7 @@ export default function CardDetailModal({
   // Watcher state
   const [watchers, setWatchers] = useState<string[]>([]);
   const [watcherProfiles, setWatcherProfiles] = useState<UserProfile[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<Array<{ id: string; email: string }>>([]);
   const [isWatching, setIsWatching] = useState(false);
   const [watchLoading, setWatchLoading] = useState(false);
   const [showWatcherPicker, setShowWatcherPicker] = useState(false);
@@ -336,6 +341,9 @@ export default function CardDetailModal({
         onFetchWatcherProfiles(card.id).then(profiles => setWatcherProfiles(profiles));
       }
     });
+    if (onFetchPendingWatcherInvites) {
+      onFetchPendingWatcherInvites(card.id).then(setPendingInvites);
+    }
   }, [card.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -1657,36 +1665,6 @@ export default function CardDetailModal({
                 Watchers {watchers.length > 0 && <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: 4 }}>({watchers.length})</span>}
               </div>
 
-              {/* Watch / Unwatch self */}
-              <button
-                className={`kb-btn kb-btn-sm ${isWatching ? 'kb-btn-ghost' : 'kb-btn-ghost'}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  opacity: watchLoading ? 0.6 : 1,
-                  color: isWatching ? '#6366f1' : undefined,
-                  borderColor: isWatching ? 'rgba(99,102,241,0.4)' : undefined,
-                }}
-                disabled={watchLoading}
-                onClick={async () => {
-                  setWatchLoading(true);
-                  if (isWatching) {
-                    await onUnwatchCard();
-                    setIsWatching(false);
-                    setWatchers(prev => prev.filter(id => id !== currentUserId));
-                  } else {
-                    await onWatchCard();
-                    setIsWatching(true);
-                    if (currentUserId) setWatchers(prev => [...prev, currentUserId]);
-                  }
-                  setWatchLoading(false);
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill={isWatching ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                {isWatching ? 'Watching' : 'Watch'}
-              </button>
-
               {/* Add watcher picker */}
               {(onAddWatcher || onInviteWatcher) && (
                 <div style={{ position: 'relative', marginTop: 6 }}>
@@ -1732,6 +1710,35 @@ export default function CardDetailModal({
 
                         {/* Matching users */}
                         <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                          {/* Self — shown at top when not already watching */}
+                          {currentUserId && !isWatching && (!watcherSearch || 'me'.includes(watcherSearch.toLowerCase()) || userProfiles.find(p => p.id === currentUserId)?.name?.toLowerCase().includes(watcherSearch.toLowerCase())) && (
+                            <button
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 7,
+                                width: '100%', padding: '7px 12px',
+                                background: 'rgba(99,102,241,0.06)',
+                                borderBottom: '1px solid rgba(255,255,255,0.06)',
+                                border: 'none', color: '#818cf8', fontSize: 13,
+                                cursor: 'pointer', textAlign: 'left',
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.12)')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.06)')}
+                              onClick={async () => {
+                                setWatchLoading(true);
+                                await onWatchCard();
+                                setIsWatching(true);
+                                if (currentUserId) setWatchers(prev => [...prev, currentUserId]);
+                                setWatchLoading(false);
+                                setShowWatcherPicker(false);
+                                if (onFetchWatcherProfiles) {
+                                  onFetchWatcherProfiles(card.id).then(setWatcherProfiles);
+                                }
+                              }}
+                            >
+                              <User size={11} />
+                              Add me as a watcher
+                            </button>
+                          )}
                           {userProfiles
                             .filter(p => p.name && !watchers.includes(p.id) && p.id !== currentUserId &&
                               p.name.toLowerCase().includes(watcherSearch.toLowerCase()))
@@ -1797,6 +1804,11 @@ export default function CardDetailModal({
                                     ? 'Added as watcher!'
                                     : 'Invite sent!'
                                   );
+                                  // Refresh watchers and pending invites
+                                  onFetchWatchers().then(setWatchers);
+                                  if (onFetchPendingWatcherInvites) {
+                                    onFetchPendingWatcherInvites(card.id).then(setPendingInvites);
+                                  }
                                   setTimeout(() => { setShowWatcherPicker(false); setWatcherInviteFeedback(null); }, 1500);
                                 } else {
                                   setWatcherInviteFeedback('Failed to invite. Try again.');
@@ -1826,38 +1838,101 @@ export default function CardDetailModal({
                 </div>
               )}
 
-              {/* Current watcher list (names) */}
-              {watchers.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
-                  {watchers.map(uid => {
+              {/* Current watcher list (table) */}
+              {(watchers.length > 0 || pendingInvites.length > 0) && (
+                <div style={{
+                  marginTop: 8,
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 6,
+                  overflow: 'hidden',
+                }}>
+                  {watchers.map((uid, idx) => {
                     const profile = userProfiles.find(p => p.id === uid) || watcherProfiles.find(p => p.id === uid);
-                    const name = profile?.name ?? uid.slice(0, 8);
+                    const name = profile?.name?.trim() || null;
                     const isCurrentUser = uid === currentUserId;
+                    const isLast = idx === watchers.length - 1 && pendingInvites.length === 0;
                     return (
-                      <span key={uid} style={{
-                        display: 'inline-flex',
+                      <div key={uid} style={{
+                        display: 'flex',
                         alignItems: 'center',
-                        gap: 4,
-                        background: isCurrentUser ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.06)',
-                        border: `1px solid ${isCurrentUser ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.1)'}`,
-                        borderRadius: 20,
-                        fontSize: 11,
-                        padding: '2px 7px',
-                        color: isCurrentUser ? '#818cf8' : '#9ca3af',
+                        gap: 6,
+                        padding: '6px 10px',
+                        fontSize: 12,
+                        borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                        background: isCurrentUser ? 'rgba(99,102,241,0.06)' : 'transparent',
+                        minWidth: 0,
                       }}>
-                        @{name}
-                        {!isCurrentUser && onRemoveWatcher && (
-                          <button
-                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#6b7280', display: 'flex', lineHeight: 1 }}
-                            onClick={async () => {
+                        <User size={11} style={{ color: '#6b7280', flexShrink: 0 }} />
+                        <span style={{
+                          flex: 1,
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: isCurrentUser ? '#818cf8' : '#d1d5db',
+                        }}>
+                          {name ? `@${name}` : uid}
+                          {isCurrentUser && <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 4 }}>(you)</span>}
+                        </span>
+                        <button
+                          style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: '#6b7280', display: 'flex', flexShrink: 0 }}
+                          onClick={async () => {
+                            if (isCurrentUser) {
+                              setWatchLoading(true);
+                              await onUnwatchCard();
+                              setIsWatching(false);
+                              setWatchers(prev => prev.filter(id => id !== uid));
+                              setWatchLoading(false);
+                            } else if (onRemoveWatcher) {
                               await onRemoveWatcher(uid);
                               setWatchers(prev => prev.filter(id => id !== uid));
+                            }
+                          }}
+                          title={isCurrentUser ? 'Stop watching' : 'Remove watcher'}
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {pendingInvites.map((inv, idx) => {
+                    const isLast = idx === pendingInvites.length - 1;
+                    return (
+                      <div key={inv.id} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 10px',
+                        fontSize: 12,
+                        borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                        background: 'rgba(255,255,255,0.015)',
+                        minWidth: 0,
+                      }}>
+                        <Mail size={11} style={{ color: '#6b7280', flexShrink: 0 }} />
+                        <span style={{
+                          flex: 1,
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: '#9ca3af',
+                        }} title={inv.email}>
+                          {inv.email}
+                        </span>
+                        <span style={{ fontSize: 10, color: '#6b7280', fontStyle: 'italic', flexShrink: 0 }}>pending</span>
+                        {onCancelWatcherInvite && (
+                          <button
+                            style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: '#6b7280', display: 'flex', flexShrink: 0 }}
+                            onClick={async () => {
+                              await onCancelWatcherInvite(inv.id);
+                              setPendingInvites(prev => prev.filter(p => p.id !== inv.id));
                             }}
+                            title={`Cancel invite for ${inv.email}`}
                           >
-                            <X size={9} />
+                            <X size={11} />
                           </button>
                         )}
-                      </span>
+                      </div>
                     );
                   })}
                 </div>

@@ -63,6 +63,18 @@ AS $$
   SELECT team_id FROM team_members WHERE user_id = auth.uid() AND role = 'owner';
 $$;
 
+CREATE OR REPLACE FUNCTION get_my_watched_board_ids()
+RETURNS SETOF uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT DISTINCT bc.board_id
+  FROM card_watchers cw
+  JOIN board_cards bc ON bc.id = cw.card_id
+  WHERE cw.user_id = auth.uid();
+$$;
+
 -- ============================================================
 -- Row-Level Security
 -- ============================================================
@@ -160,6 +172,7 @@ CREATE POLICY "View accessible boards" ON project_boards
     auth.uid() = user_id
     OR is_public = true
     OR team_id IN (SELECT get_my_team_ids())
+    OR id IN (SELECT get_my_watched_board_ids())
   );
 
 DROP POLICY IF EXISTS "Insert own boards" ON project_boards;
@@ -198,12 +211,7 @@ AS $$
         OR team_id IN (SELECT get_my_team_ids())
       )
   )
-  OR EXISTS (
-    SELECT 1 FROM card_watchers cw
-    JOIN board_cards bc ON bc.id = cw.card_id
-    WHERE bc.board_id = board_uuid
-      AND cw.user_id = auth.uid()
-  );
+  OR board_uuid IN (SELECT get_my_watched_board_ids());
 $$;
 
 -- ============================================================

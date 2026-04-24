@@ -38,8 +38,8 @@ export async function POST(req: NextRequest) {
         model: gsdModel,
         output: Output.object({ schema: z.object({ description: z.string() }) }),
         prompt: hasExisting
-          ? `You are a senior project manager writing a professional card description. Improve and expand the existing content while keeping the original intent. Be clear and outcome-focused. Do NOT repeat or include the card title in the output. Return ONLY clean HTML using these tags: <b>, <ul>, <li>, <p>, <h3>. No markdown, no wrapper div, no inline styles, no other tags.\n\n${context}`
-          : `You are a senior project manager writing a professional card description. Based on the card title and any context provided, write a clear, outcome-focused description. Use authoritative language. Keep it brief — 2-4 sentences or a short bulleted structure if appropriate. Do NOT repeat or include the card title in the output. Return ONLY clean HTML using these tags: <b>, <ul>, <li>, <p>, <h3>. No markdown, no wrapper div, no inline styles, no other tags.\n\n${context}`,
+          ? `Write a clear, helpful description for this task card. Improve and expand the existing content while keeping the original intent. Write like you're explaining it to a teammate — friendly and to the point, not formal. Do NOT repeat or include the card title in the output. Return ONLY clean HTML using these tags: <b>, <ul>, <li>, <p>, <h3>. No markdown, no wrapper div, no inline styles, no other tags.\n\n${context}`
+          : `Write a clear, helpful description for this task card. Based on the card title and any context provided, explain what needs to happen and why it matters — like you're explaining it to a teammate. Keep it brief: 2-4 sentences or a short list if that's clearer. Do NOT repeat or include the card title in the output. Return ONLY clean HTML using these tags: <b>, <ul>, <li>, <p>, <h3>. No markdown, no wrapper div, no inline styles, no other tags.\n\n${context}`,
       });
       return NextResponse.json(result.output);
     }
@@ -51,13 +51,13 @@ export async function POST(req: NextRequest) {
       const result = await generateText({
         model: gsdModel,
         output: Output.object({ schema: z.object({ items: z.array(z.string()) }) }),
-        prompt: `You are a senior project manager breaking down a task into a concrete completion checklist. Generate 5-7 checklist items for this card.
+        prompt: `Generate 5-7 checklist items that break this task into clear, doable steps. Write them the way you'd tell a teammate what to do — plain and direct.
 
 Rules:
-- Use imperative mood: start each item with an action verb (e.g. "Review", "Draft", "Send", "Test", "Confirm", "Update")
-- Each item must be a specific, verifiable deliverable — someone should be able to check it off when clearly done
-- Scope items to THIS card only — do not include work that belongs to a different task or phase
-- Vary the verbs — do not start multiple items with the same word
+- Start each item with an action verb (e.g. "Send", "Review", "Update", "Check", "Confirm", "Add")
+- Each item should be specific enough that someone knows when they're done with it
+- Keep items focused on this task only — nothing that belongs to a separate task
+- Vary the verbs — don't start multiple items with the same word
 - Keep each item under 60 characters
 - Do not repeat or rephrase any existing items${existing}
 

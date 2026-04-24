@@ -53,46 +53,64 @@ export default function WatchCardDetailPanel({
   useEffect(() => {
     async function fetchCard() {
       setLoading(true);
-      const { data, error } = await supabase
+
+      const { data: cardRow, error: cardErr } = await supabase
         .from('board_cards')
-        .select(`
-          id, title, description, priority, start_date, due_date, assignees, is_complete,
-          card_label_assignments ( board_labels ( id, name, color ) ),
-          checklists:card_checklists ( id, title, is_completed ),
-          comments:card_comments (
-            id, content, created_at,
-            user_profiles ( name )
-          )
-        `)
+        .select('id, title, description, priority, start_date, due_date, assignees, is_complete')
         .eq('id', watchedCard.card_id)
-        .order('created_at', { foreignTable: 'card_comments', ascending: true })
-        .single();
+        .maybeSingle();
 
-      if (!error && data) {
-        const labels = ((data.card_label_assignments || []) as any[])
-          .map((a: any) => {
-            const bl = Array.isArray(a.board_labels) ? a.board_labels[0] : a.board_labels;
-            return bl ? { id: bl.id, name: bl.name, color: bl.color } : null;
-          })
-          .filter(Boolean);
-
-        const comments = ((data.comments || []) as any[]).map((c: any) => ({
-          ...c,
-          user_profiles: Array.isArray(c.user_profiles) ? c.user_profiles[0] : c.user_profiles,
-        }));
-
-        setCard({ ...data, labels, comments } as FullCardData);
-
-        // Fetch assignee profiles
-        const ids: string[] = data.assignees ?? [];
-        if (ids.length > 0) {
-          const { data: profiles } = await supabase
-            .from('user_profiles')
-            .select('id, name')
-            .in('id', ids);
-          setAssigneeProfiles((profiles || []) as AssigneeProfile[]);
-        }
+      if (cardErr || !cardRow) {
+        console.error('[WatchCardDetailPanel] card fetch failed:', cardErr);
+        setLoading(false);
+        return;
       }
+
+      const [labelAssignRes, checklistRes, commentsRes] = await Promise.all([
+        supabase.from('card_label_assignments').select('label_id').eq('card_id', watchedCard.card_id),
+        supabase.from('card_checklists').select('id, title, is_completed').eq('card_id', watchedCard.card_id),
+        supabase.from('card_comments').select('id, content, created_at, user_id').eq('card_id', watchedCard.card_id).order('created_at', { ascending: true }),
+      ]);
+
+      const labelIds = (labelAssignRes.data || []).map((a: any) => a.label_id);
+      let labels: Array<{ id: string; name: string; color: string }> = [];
+      if (labelIds.length > 0) {
+        const { data: labelRows } = await supabase
+          .from('board_labels')
+          .select('id, name, color')
+          .in('id', labelIds);
+        labels = (labelRows || []) as any[];
+      }
+
+      const commentUserIds = [...new Set((commentsRes.data || []).map((c: any) => c.user_id).filter(Boolean))];
+      const assigneeIds: string[] = cardRow.assignees ?? [];
+      const allProfileIds = [...new Set([...commentUserIds, ...assigneeIds])];
+
+      let profileMap = new Map<string, { id: string; name: string }>();
+      if (allProfileIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('id, name')
+          .in('id', allProfileIds);
+        profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+      }
+
+      const comments = (commentsRes.data || []).map((c: any) => ({
+        id: c.id,
+        content: c.content,
+        created_at: c.created_at,
+        user_profiles: profileMap.get(c.user_id),
+      }));
+
+      setCard({
+        ...cardRow,
+        labels,
+        checklists: (checklistRes.data || []) as any[],
+        comments,
+      } as FullCardData);
+
+      setAssigneeProfiles(assigneeIds.map((id) => profileMap.get(id)).filter(Boolean) as AssigneeProfile[]);
+
       setLoading(false);
     }
     fetchCard();
