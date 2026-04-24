@@ -729,27 +729,34 @@ export const overviewStyles = `
     opacity: 0.5;
     cursor: not-allowed;
   }
-  .kb-ov-btn-secondary {
+  .kb-ov-test-row {
+    display: flex;
+    justify-content: center;
+    padding: 4px 0 2px;
+    border-top: 1px dashed #1e2130;
+    margin-top: 4px;
+    padding-top: 12px;
+  }
+  .kb-ov-test-link {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 14px;
-    font-size: 13px;
+    padding: 6px 12px;
+    font-size: 12px;
     font-weight: 500;
-    color: #9ca3af;
+    color: #a5b4fc;
     background: transparent;
-    border: 1px solid #2d3246;
-    border-radius: 8px;
+    border: none;
+    border-radius: 6px;
     cursor: pointer;
-    transition: color 0.12s, border-color 0.12s, background 0.12s;
+    transition: color 0.12s, background 0.12s;
   }
-  .kb-ov-btn-secondary:hover:not(:disabled) {
-    color: #e5e7eb;
-    border-color: #4b5563;
-    background: rgba(255,255,255,0.04);
+  .kb-ov-test-link:hover:not(:disabled) {
+    color: #c7d2fe;
+    background: rgba(99,102,241,0.1);
   }
-  .kb-ov-btn-secondary:disabled {
-    opacity: 0.5;
+  .kb-ov-test-link:disabled {
+    opacity: 0.6;
     cursor: not-allowed;
   }
   .kb-ov-btn-danger {

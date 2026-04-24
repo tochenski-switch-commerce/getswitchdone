@@ -208,6 +208,19 @@ export default function ScheduleModal({ boardId, existing, onClose, onSaved, onD
             <div className="kb-ov-tz-display">{timezone}</div>
           </div>
 
+          {/* Test email row */}
+          <div className="kb-ov-test-row">
+            <button
+              type="button"
+              className="kb-ov-test-link"
+              onClick={handleSendTest}
+              disabled={sendingTest}
+            >
+              <Mail size={13} />
+              {sendingTest ? 'Sending test email…' : 'Send a test email now'}
+            </button>
+          </div>
+
           {error && <p className="kb-ov-form-error">{error}</p>}
           {testSuccess && <p className="kb-ov-form-success">{testSuccess}</p>}
         </div>
@@ -225,14 +238,6 @@ export default function ScheduleModal({ boardId, existing, onClose, onSaved, onD
             </button>
           )}
           <button className="kb-ov-btn-ghost" onClick={onClose}>Cancel</button>
-          <button
-            className="kb-ov-btn-secondary"
-            onClick={handleSendTest}
-            disabled={sendingTest}
-          >
-            <Mail size={13} />
-            {sendingTest ? 'Sending…' : 'Send Test Email'}
-          </button>
           <button
             className="kb-ov-btn-primary"
             onClick={handleSave}
