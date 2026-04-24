@@ -26,6 +26,7 @@ const tabs = [
   { label: 'Calendar', href: '/calendar' },
   { label: 'Boards', href: '/boards' },
   { label: 'Teams', href: '/teams' },
+  { label: 'Watching', href: '/watching' },
   { label: 'Forms', href: '/forms' },
 ] as const;
 

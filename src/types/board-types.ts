@@ -217,6 +217,31 @@ export interface CardWatcher {
   created_at: string;
 }
 
+export interface WatcherInvite {
+  id: string;
+  card_id: string;
+  email: string;
+  token: string;
+  invited_by: string | null;
+  created_at: string;
+  claimed_at: string | null;
+  claimed_by: string | null;
+}
+
+export interface WatchedCard {
+  card_id: string;
+  card_title: string;
+  card_priority: CardPriority | null;
+  card_due_date: string | null;
+  card_is_complete: boolean;
+  card_assignees: string[];
+  board_id: string;
+  board_title: string;
+  column_id: string;
+  column_title: string;
+  watched_at: string;
+}
+
 // ── Notifications ──
 
 export type NotificationType = 'comment' | 'assignment' | 'due_soon' | 'overdue' | 'email_unrouted' | 'mention' | 'checklist_overdue' | 'comment_reaction' | 'list_automation';

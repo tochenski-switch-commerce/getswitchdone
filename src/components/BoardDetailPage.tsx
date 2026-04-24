@@ -82,6 +82,7 @@ function BoardPage() {
     boardEmails, unroutedEmails, fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
     loading, error: boardError, setBoard, toggleBoardStar,
     fetchCardWatchers, watchCard, unwatchCard,
+    addWatcherForUser, removeWatcherForUser, inviteWatcherByEmail,
   } = useProjectBoard();
 
   const { teams, fetchTeams } = useTeams();
@@ -2383,6 +2384,9 @@ function BoardPage() {
           onFetchWatchers={async () => fetchCardWatchers(activeCard.id)}
           onWatchCard={async () => { await watchCard(activeCard.id); }}
           onUnwatchCard={async () => { await unwatchCard(activeCard.id); }}
+          onAddWatcher={async (userId) => { await addWatcherForUser(activeCard.id, userId); }}
+          onRemoveWatcher={async (userId) => { await removeWatcherForUser(activeCard.id, userId); }}
+          onInviteWatcher={async (email) => inviteWatcherByEmail(activeCard.id, email)}
           accessToken={session?.access_token || ''}
         />
         );

@@ -53,6 +53,9 @@ export default function CardDetailModal({
   onFetchWatchers,
   onWatchCard,
   onUnwatchCard,
+  onAddWatcher,
+  onRemoveWatcher,
+  onInviteWatcher,
   accessToken,
 }: {
   card: BoardCard;
@@ -92,6 +95,9 @@ export default function CardDetailModal({
   onFetchWatchers: () => Promise<string[]>;
   onWatchCard: () => Promise<void>;
   onUnwatchCard: () => Promise<void>;
+  onAddWatcher?: (userId: string) => Promise<void>;
+  onRemoveWatcher?: (userId: string) => Promise<void>;
+  onInviteWatcher?: (email: string) => Promise<{ ok: boolean; alreadyUser?: boolean }>;
   accessToken: string;
 }) {
   const [editTitle, setEditTitle] = useState(card.title);
@@ -141,6 +147,10 @@ export default function CardDetailModal({
   const [watchers, setWatchers] = useState<string[]>([]);
   const [isWatching, setIsWatching] = useState(false);
   const [watchLoading, setWatchLoading] = useState(false);
+  const [showWatcherPicker, setShowWatcherPicker] = useState(false);
+  const [watcherSearch, setWatcherSearch] = useState('');
+  const [watcherInviteLoading, setWatcherInviteLoading] = useState(false);
+  const [watcherInviteFeedback, setWatcherInviteFeedback] = useState<string | null>(null);
 
   // AI description state
   const [aiDescGenerating, setAiDescGenerating] = useState(false);
@@ -1640,6 +1650,8 @@ export default function CardDetailModal({
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 Watchers {watchers.length > 0 && <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: 4 }}>({watchers.length})</span>}
               </div>
+
+              {/* Watch / Unwatch self */}
               <button
                 className={`kb-btn kb-btn-sm ${isWatching ? 'kb-btn-ghost' : 'kb-btn-ghost'}`}
                 style={{
@@ -1668,6 +1680,182 @@ export default function CardDetailModal({
                 <svg width="13" height="13" viewBox="0 0 24 24" fill={isWatching ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 {isWatching ? 'Watching' : 'Watch'}
               </button>
+
+              {/* Add watcher picker */}
+              {(onAddWatcher || onInviteWatcher) && (
+                <div style={{ position: 'relative', marginTop: 6 }}>
+                  <button
+                    className="kb-btn kb-btn-sm kb-btn-ghost"
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}
+                    onClick={() => { setShowWatcherPicker(p => !p); setWatcherSearch(''); setWatcherInviteFeedback(null); }}
+                  >
+                    <Plus size={11} />
+                    Add watcher
+                  </button>
+
+                  {showWatcherPicker && (
+                    <>
+                      <div
+                        style={{ position: 'fixed', inset: 0, zIndex: 200 }}
+                        onClick={() => setShowWatcherPicker(false)}
+                      />
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        marginTop: 4,
+                        width: 240,
+                        background: '#1a2035',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 8,
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                        zIndex: 201,
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{ padding: '8px 8px 6px' }}>
+                          <input
+                            autoFocus
+                            type="text"
+                            placeholder="Search by name or enter email…"
+                            value={watcherSearch}
+                            onChange={e => { setWatcherSearch(e.target.value); setWatcherInviteFeedback(null); }}
+                            className="kb-input"
+                            style={{ width: '100%', fontSize: 12, padding: '6px 8px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+
+                        {/* Matching users */}
+                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                          {userProfiles
+                            .filter(p => p.name && !watchers.includes(p.id) && p.id !== currentUserId &&
+                              p.name.toLowerCase().includes(watcherSearch.toLowerCase()))
+                            .map(p => (
+                              <button
+                                key={p.id}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 7,
+                                  width: '100%',
+                                  padding: '7px 12px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: '#d1d5db',
+                                  fontSize: 13,
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                onClick={async () => {
+                                  if (onAddWatcher) await onAddWatcher(p.id);
+                                  setWatchers(prev => [...prev, p.id]);
+                                  setShowWatcherPicker(false);
+                                }}
+                              >
+                                <User size={11} style={{ color: '#6b7280' }} />
+                                @{p.name}
+                              </button>
+                            ))}
+                        </div>
+
+                        {/* Email invite fallback */}
+                        {onInviteWatcher && watcherSearch.includes('@') && !watcherSearch.endsWith('@') && (
+                          <div style={{
+                            borderTop: '1px solid rgba(255,255,255,0.06)',
+                            padding: '6px 8px',
+                          }}>
+                            <button
+                              disabled={watcherInviteLoading}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                width: '100%',
+                                padding: '7px 8px',
+                                background: 'rgba(99,102,241,0.1)',
+                                border: '1px solid rgba(99,102,241,0.2)',
+                                borderRadius: 6,
+                                color: '#818cf8',
+                                fontSize: 12,
+                                cursor: watcherInviteLoading ? 'not-allowed' : 'pointer',
+                                textAlign: 'left',
+                                opacity: watcherInviteLoading ? 0.6 : 1,
+                              }}
+                              onClick={async () => {
+                                setWatcherInviteLoading(true);
+                                const result = await onInviteWatcher!(watcherSearch.trim());
+                                setWatcherInviteLoading(false);
+                                if (result.ok) {
+                                  setWatcherInviteFeedback(result.alreadyUser
+                                    ? 'Added as watcher!'
+                                    : 'Invite sent!'
+                                  );
+                                  setTimeout(() => { setShowWatcherPicker(false); setWatcherInviteFeedback(null); }, 1500);
+                                } else {
+                                  setWatcherInviteFeedback('Failed to invite. Try again.');
+                                }
+                              }}
+                            >
+                              {watcherInviteLoading ? 'Sending…' : `Invite ${watcherSearch.trim()}`}
+                            </button>
+                            {watcherInviteFeedback && (
+                              <p style={{ margin: '5px 0 0', fontSize: 11, color: watcherInviteFeedback.startsWith('Failed') ? '#ef4444' : '#22c55e' }}>
+                                {watcherInviteFeedback}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* No matches hint */}
+                        {userProfiles.filter(p => p.name && !watchers.includes(p.id) && p.id !== currentUserId && p.name.toLowerCase().includes(watcherSearch.toLowerCase())).length === 0 &&
+                          !watcherSearch.includes('@') && watcherSearch.length > 0 && (
+                          <p style={{ margin: 0, padding: '8px 12px', fontSize: 12, color: '#6b7280' }}>
+                            No users found. Enter an email to invite.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Current watcher list (names) */}
+              {watchers.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                  {watchers.map(uid => {
+                    const profile = userProfiles.find(p => p.id === uid);
+                    const name = profile?.name ?? uid.slice(0, 8);
+                    const isCurrentUser = uid === currentUserId;
+                    return (
+                      <span key={uid} style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        background: isCurrentUser ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.06)',
+                        border: `1px solid ${isCurrentUser ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                        borderRadius: 20,
+                        fontSize: 11,
+                        padding: '2px 7px',
+                        color: isCurrentUser ? '#818cf8' : '#9ca3af',
+                      }}>
+                        @{name}
+                        {!isCurrentUser && onRemoveWatcher && (
+                          <button
+                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#6b7280', display: 'flex', lineHeight: 1 }}
+                            onClick={async () => {
+                              await onRemoveWatcher(uid);
+                              setWatchers(prev => prev.filter(id => id !== uid));
+                            }}
+                          >
+                            <X size={9} />
+                          </button>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Snooze status */}

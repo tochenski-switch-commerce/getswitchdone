@@ -35,6 +35,7 @@ import type {
   CardLink,
   TemplateData,
   RepeatRule,
+  WatchedCard,
 } from '@/types/board-types';
 
 export interface RepeatSeriesRow {
@@ -2445,6 +2446,121 @@ export function useProjectBoard() {
     }
   }, []);
 
+  // ─── Extended Watcher Operations ───────────────────────────────────────────
+
+  const addWatcherForUser = useCallback(async (cardId: string, userId: string): Promise<boolean> => {
+    try {
+      const { error: err } = await supabase
+        .from('card_watchers')
+        .upsert({ card_id: cardId, user_id: userId });
+      if (err) throw err;
+      return true;
+    } catch (err: any) {
+      console.error('[addWatcherForUser] failed:', err.message);
+      return false;
+    }
+  }, []);
+
+  const removeWatcherForUser = useCallback(async (cardId: string, userId: string): Promise<boolean> => {
+    try {
+      const { error: err } = await supabase
+        .from('card_watchers')
+        .delete()
+        .eq('card_id', cardId)
+        .eq('user_id', userId);
+      if (err) throw err;
+      return true;
+    } catch (err: any) {
+      console.error('[removeWatcherForUser] failed:', err.message);
+      return false;
+    }
+  }, []);
+
+  const inviteWatcherByEmail = useCallback(async (cardId: string, email: string): Promise<{ ok: boolean; alreadyUser?: boolean }> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/cards/invite-watcher', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ cardId, email }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to invite watcher');
+      return { ok: true, alreadyUser: json.alreadyUser };
+    } catch (err: any) {
+      console.error('[inviteWatcherByEmail] failed:', err.message);
+      return { ok: false };
+    }
+  }, []);
+
+  const fetchWatchedCards = useCallback(async (): Promise<WatchedCard[]> => {
+    try {
+      const user = await getCachedUser();
+      if (!user) return [];
+      const { data, error: err } = await supabase
+        .from('card_watchers')
+        .select(`
+          created_at,
+          board_cards (
+            id, title, priority, due_date, is_complete, assignees,
+            board_id,
+            board_columns ( id, title ),
+            boards ( id, title )
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (err) throw err;
+      return (data || [])
+        .filter((row: any) => row.board_cards)
+        .map((row: any) => {
+          const c = row.board_cards;
+          const col = Array.isArray(c.board_columns) ? c.board_columns[0] : c.board_columns;
+          const b = Array.isArray(c.boards) ? c.boards[0] : c.boards;
+          return {
+            card_id: c.id,
+            card_title: c.title,
+            card_priority: c.priority,
+            card_due_date: c.due_date,
+            card_is_complete: c.is_complete ?? false,
+            card_assignees: c.assignees ?? [],
+            board_id: c.board_id,
+            board_title: b?.title ?? '',
+            column_id: col?.id ?? '',
+            column_title: col?.title ?? '',
+            watched_at: row.created_at,
+          } as WatchedCard;
+        });
+    } catch (err: any) {
+      console.error('[fetchWatchedCards] failed:', err.message);
+      return [];
+    }
+  }, []);
+
+  const fetchWatcherProfiles = useCallback(async (cardId: string): Promise<UserProfile[]> => {
+    try {
+      const { data: watcherRows, error: wErr } = await supabase
+        .from('card_watchers')
+        .select('user_id')
+        .eq('card_id', cardId);
+      if (wErr) throw wErr;
+      if (!watcherRows?.length) return [];
+      const ids = watcherRows.map((r: any) => r.user_id);
+      const { data: profiles, error: pErr } = await supabase
+        .from('user_profiles')
+        .select('id, name, updated_at')
+        .in('id', ids);
+      if (pErr) throw pErr;
+      return (profiles || []) as UserProfile[];
+    } catch (err: any) {
+      console.error('[fetchWatcherProfiles] failed:', err.message);
+      return [];
+    }
+  }, []);
+
   return {
     boards, board, loading, error, checklistTemplates, userProfiles, boardMembers, notifications,
     boardEmails, unroutedEmails,
@@ -2465,6 +2581,7 @@ export function useProjectBoard() {
     fetchBoardEmails, fetchUnroutedEmails, searchBoardEmails, deleteBoardEmail, routeEmail,
     fetchRepeatSeries, updateRepeatSeries, stopRepeatSeries,
     fetchCardWatchers, watchCard, unwatchCard,
+    addWatcherForUser, removeWatcherForUser, inviteWatcherByEmail, fetchWatchedCards, fetchWatcherProfiles,
     setBoard, applyRealtimeEvent,
   };
 }
