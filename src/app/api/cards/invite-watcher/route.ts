@@ -39,8 +39,11 @@ export async function POST(req: NextRequest) {
   const { cardId, email, userId } = body as { cardId?: string; email?: string; userId?: string };
 
   if (!cardId) {
+    console.error('[invite-watcher] no cardId in body:', body);
     return NextResponse.json({ error: 'cardId is required' }, { status: 400 });
   }
+
+  console.log('[invite-watcher] received:', { cardId, email, userId });
 
   // ── Direct add by userId ──────────────────────────────────────────────────
   if (userId) {
@@ -84,6 +87,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (cardErr || !cardRow) {
+    console.error('[invite-watcher] card not found:', { cardId, cardErr });
     return NextResponse.json({ error: 'Card not found' }, { status: 404 });
   }
 

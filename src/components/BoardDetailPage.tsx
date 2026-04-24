@@ -2386,7 +2386,7 @@ function BoardPage() {
           onUnwatchCard={async () => { await unwatchCard(activeCard.id); }}
           onAddWatcher={async (userId) => { await addWatcherForUser(activeCard.id, userId); }}
           onRemoveWatcher={async (userId) => { await removeWatcherForUser(activeCard.id, userId); }}
-          onInviteWatcher={async (email) => inviteWatcherByEmail(activeCard.id, email)}
+          onInviteWatcher={async (email, cardId) => inviteWatcherByEmail(cardId, email)}
           onFetchWatcherProfiles={async (cardId) => fetchWatcherProfiles(cardId)}
           accessToken={session?.access_token || ''}
         />

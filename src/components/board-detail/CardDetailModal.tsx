@@ -98,7 +98,7 @@ export default function CardDetailModal({
   onUnwatchCard: () => Promise<void>;
   onAddWatcher?: (userId: string) => Promise<void>;
   onRemoveWatcher?: (userId: string) => Promise<void>;
-  onInviteWatcher?: (email: string) => Promise<{ ok: boolean; alreadyUser?: boolean }>;
+  onInviteWatcher?: (email: string, cardId: string) => Promise<{ ok: boolean; alreadyUser?: boolean }>;
   onFetchWatcherProfiles?: (cardId: string) => Promise<UserProfile[]>;
   accessToken: string;
 }) {
@@ -1790,7 +1790,7 @@ export default function CardDetailModal({
                               }}
                               onClick={async () => {
                                 setWatcherInviteLoading(true);
-                                const result = await onInviteWatcher!(watcherSearch.trim());
+                                const result = await onInviteWatcher!(watcherSearch.trim(), card.id);
                                 setWatcherInviteLoading(false);
                                 if (result.ok) {
                                   setWatcherInviteFeedback(result.alreadyUser
