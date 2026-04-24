@@ -194,17 +194,21 @@ export default function ProfilePage() {
     if (deleteConfirm !== 'DELETE') return;
     setDeleting(true);
     setDeleteMsg(null);
-    const { error } = await supabase.functions.invoke('delete-account');
-    if (error) {
-      // Fallback: try calling the API route
-      try {
-        const res = await fetch('/api/account/delete', { method: 'DELETE' });
-        if (!res.ok) throw new Error(await res.text());
-      } catch (e: any) {
-        setDeleteMsg({ type: 'err', text: e.message || 'Failed to delete account.' });
-        setDeleting(false);
-        return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/account/delete', {
+        method: 'DELETE',
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: 'Failed to delete account.' }));
+        throw new Error(body.error || 'Failed to delete account.');
       }
+    } catch (e: any) {
+      setDeleteMsg({ type: 'err', text: e.message || 'Failed to delete account.' });
+      setDeleting(false);
+      return;
     }
     await signOut();
     router.push('/auth');

@@ -928,6 +928,29 @@ export const kanbanStyles = `
     border-top: 1px solid #2a2d3a;
     gap: 6px;
   }
+  .kb-hashtag-color-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 6px 10px 9px;
+  }
+  .kb-hashtag-color-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.1s, border-color 0.1s;
+  }
+  .kb-hashtag-color-dot:hover {
+    transform: scale(1.2);
+  }
+  .kb-hashtag-color-dot.selected {
+    border-color: rgba(255,255,255,0.75);
+    transform: scale(1.15);
+  }
   .kb-hashtag-empty {
     padding: 10px 12px;
     font-size: 12px;

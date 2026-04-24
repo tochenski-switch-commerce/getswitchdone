@@ -30,7 +30,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 function OnboardingFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = searchParams.get('returnTo') || '/boards';
+  const returnTo = searchParams.get('returnTo') || '/focus';
   const { user, profile, loading: authLoading, updateProfileName } = useAuth();
   const { state: pushState, subscribe: pushSubscribe } = useWebPush(user?.id);
 

@@ -113,6 +113,7 @@ function BoardPage() {
   const [newCardTitle, setNewCardTitle] = useState('');
   const [hashtagQuery, setHashtagQuery] = useState<string | null>(null);
   const [hashtagFocusIdx, setHashtagFocusIdx] = useState(0);
+  const [pendingLabelColor, setPendingLabelColor] = useState<string>('');
   const [pendingLabelIds, setPendingLabelIds] = useState<string[]>([]);
   const [bulkCardPreview, setBulkCardPreview] = useState<{ colId: string; items: string[] } | null>(null);
   const [addingColumn, setAddingColumn] = useState(false);
@@ -165,7 +166,12 @@ function BoardPage() {
   }, [boardId, fetchBoard, fetchNotifications]);
   const { pulling, pullDistance, refreshing } = usePullToRefresh(handlePullRefresh);
 
-  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
+  const hoveredCardIdRef = useRef<string | null>(null);
+  const [isHoveringCard, setIsHoveringCard] = useState(false);
+  const hoveredCardRectRef = useRef<DOMRect | null>(null);
+  const [dueDatePopover, setDueDatePopover] = useState<{ cardId: string; x: number; y: number; currentDate: string } | null>(null);
+  const [labelPopover, setLabelPopover] = useState<{ cardId: string; x: number; y: number } | null>(null);
+  const [dueDatePopoverView, setDueDatePopoverView] = useState<{ year: number; month: number }>({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [dragCardId, setDragCardId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
@@ -683,7 +689,6 @@ function BoardPage() {
     if (!canCreateCard(activeCardCount)) { showPaywall(); return; }
     addingCardRef.current = true;
 
-    const LABEL_COLORS = ['#3b82f6', '#8b5cf6', '#ef4444', '#f97316', '#10b981', '#f59e0b', '#ec4899', '#06b6d4'];
     const hashtagMatches = newCardTitle.match(/#([a-zA-Z0-9_]+)/g) || [];
     const cleanTitle = hashtagMatches.length
       ? (newCardTitle.replace(/#[a-zA-Z0-9_]+/g, '').replace(/\s+/g, ' ').trim() || newCardTitle.trim())
@@ -697,7 +702,7 @@ function BoardPage() {
       if (existing) {
         if (!labelIds.includes(existing.id)) labelIds.push(existing.id);
       } else {
-        const newLabel = await addLabel(boardId, tagName, LABEL_COLORS[colorOffset % LABEL_COLORS.length]);
+        const newLabel = await addLabel(boardId, tagName, LABEL_COLORS[colorOffset % LABEL_COLORS.length].hex);
         colorOffset++;
         if (newLabel && !labelIds.includes(newLabel.id)) labelIds.push(newLabel.id);
       }
@@ -867,6 +872,7 @@ function BoardPage() {
         (e.target as HTMLElement).isContentEditable;
       if (isEditable) return;
 
+      const hoveredCardId = hoveredCardIdRef.current;
       if (!hoveredCardId || activeCard) return;
       const card = board?.cards.find(c => c.id === hoveredCardId);
       if (!card) return;
@@ -901,11 +907,23 @@ function BoardPage() {
         }
       } else if (e.key === 'd') {
         e.preventDefault();
-        const today = new Date().toISOString().split('T')[0];
-        const newDueDate = card.due_date ? null : today;
-        markCardUpdated(card.id);
-        updateCard(boardId, card.id, { due_date: newDueDate });
-        if (newDueDate) runBoardAutomation(card, 'due_date_overdue');
+        const rect = hoveredCardRectRef.current;
+        if (rect) {
+          const today = new Date();
+          setDueDatePopoverView({ year: today.getFullYear(), month: today.getMonth() });
+          const x = Math.min(rect.right + 8, window.innerWidth - 276);
+          const y = Math.min(rect.top, window.innerHeight - 340);
+          setDueDatePopover({ cardId: card.id, x, y, currentDate: card.due_date || '' });
+        }
+      } else if (e.key === 'l') {
+        e.preventDefault();
+        if ((board?.labels?.length ?? 0) === 0) return;
+        const rect = hoveredCardRectRef.current;
+        if (rect) {
+          const x = Math.min(rect.right + 8, window.innerWidth - 220);
+          const y = Math.min(rect.top, window.innerHeight - 50 - (board?.labels?.length ?? 0) * 36);
+          setLabelPopover({ cardId: card.id, x, y });
+        }
       } else if (e.key === 'm') {
         e.preventDefault();
         const myId = user?.id;
@@ -943,7 +961,20 @@ function BoardPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [hoveredCardId, activeCard, board, boardId, user, profile, addCard, deleteCard, updateCard, addChecklistItem, openCardDetail, navigateCard, archiveCard]);
+  }, [activeCard, board, boardId, user, profile, addCard, deleteCard, updateCard, addChecklistItem, openCardDetail, navigateCard, archiveCard, setDueDatePopover, setLabelPopover]);
+
+  // Dismiss popovers on outside click or Escape
+  useEffect(() => {
+    if (!dueDatePopover && !labelPopover) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setDueDatePopover(null); setLabelPopover(null); }
+    };
+    // Mousedown on anything outside the popover (popover's onMouseDown calls stopPropagation)
+    const onMouse = () => { setDueDatePopover(null); setLabelPopover(null); };
+    document.addEventListener('mousedown', onMouse);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onMouse); document.removeEventListener('keydown', onKey); };
+  }, [dueDatePopover, labelPopover]);
 
   if (!board) {
     return (
@@ -1904,8 +1935,8 @@ function BoardPage() {
                           onDragStart={() => handleDragStart(card.id)}
                           onDragEnd={handleDragEnd}
                           onDragOver={e => handleCardDragOver(e, card.id, col.id)}
-                          onMouseEnter={() => setHoveredCardId(card.id)}
-                          onMouseLeave={() => setHoveredCardId(prev => prev === card.id ? null : prev)}
+                          onMouseEnter={(e) => { hoveredCardIdRef.current = card.id; hoveredCardRectRef.current = (e.currentTarget as HTMLElement).getBoundingClientRect(); setIsHoveringCard(true); }}
+                          onMouseLeave={() => { if (hoveredCardIdRef.current === card.id) { hoveredCardIdRef.current = null; setIsHoveringCard(false); } }}
                           className={`kb-card-wrapper ${
                             dragOverCardId === card.id && dragCardId !== card.id
                               ? `drop-${dragOverPos}` : ''
@@ -1986,7 +2017,7 @@ function BoardPage() {
                                   }}
                                   placeholder="Card title... (use # to add labels)"
                                   onPaste={e => handleCardPaste(e, col.id)}
-                                  onKeyDown={e => {
+                                  onKeyDown={async e => {
                                     if (hashtagQuery !== null) {
                                       const opts = [...(board.labels || [])].sort((a, b) => a.name.localeCompare(b.name))
                                         .filter(l => l.name.toLowerCase().startsWith(hashtagQuery.toLowerCase()));
@@ -2002,7 +2033,16 @@ function BoardPage() {
                                             setNewCardTitle(prev => prev.replace(new RegExp('#' + hashtagQuery + '[a-zA-Z0-9_]*', 'i'), '').trimEnd());
                                             if (!pendingLabelIds.includes(label.id)) setPendingLabelIds(prev => [...prev, label.id]);
                                           } else {
-                                            // leave #query in title; submit logic creates it
+                                            const query = hashtagQuery;
+                                            const color = pendingLabelColor || LABEL_COLORS[(board?.labels.length ?? 0) % LABEL_COLORS.length].hex;
+                                            setHashtagQuery(null);
+                                            setPendingLabelColor('');
+                                            const newLabel = await addLabel(boardId, query, color);
+                                            if (newLabel) {
+                                              setNewCardTitle(prev => prev.replace(new RegExp('#' + query + '[a-zA-Z0-9_]*', 'i'), '').trimEnd());
+                                              setPendingLabelIds(prev => [...prev, newLabel.id]);
+                                            }
+                                            return;
                                           }
                                         }
                                         setHashtagQuery(null);
@@ -2046,15 +2086,43 @@ function BoardPage() {
                                           {label.name}
                                         </button>
                                       ))}
-                                      {hasCreate && (
-                                        <button
-                                          className={`kb-hashtag-option kb-hashtag-option-create${opts.length === hashtagFocusIdx ? ' focused' : ''}`}
-                                          onMouseDown={e => { e.preventDefault(); setHashtagQuery(null); }}
-                                        >
-                                          <Plus size={12} />
-                                          Create "{hashtagQuery}"
-                                        </button>
-                                      )}
+                                      {hasCreate && (() => {
+                                        const defaultColor = LABEL_COLORS[(board?.labels.length ?? 0) % LABEL_COLORS.length].hex;
+                                        const createColor = pendingLabelColor || defaultColor;
+                                        return (
+                                          <>
+                                            <button
+                                              className={`kb-hashtag-option kb-hashtag-option-create${opts.length === hashtagFocusIdx ? ' focused' : ''}`}
+                                              onMouseDown={async e => {
+                                                e.preventDefault();
+                                                const query = hashtagQuery;
+                                                const color = createColor;
+                                                setHashtagQuery(null);
+                                                setPendingLabelColor('');
+                                                const newLabel = await addLabel(boardId, query, color);
+                                                if (newLabel) {
+                                                  setNewCardTitle(prev => prev.replace(new RegExp('#' + query + '[a-zA-Z0-9_]*', 'i'), '').trimEnd());
+                                                  setPendingLabelIds(prev => [...prev, newLabel.id]);
+                                                }
+                                              }}
+                                            >
+                                              <span style={{ width: 10, height: 10, borderRadius: '50%', background: createColor, flexShrink: 0, display: 'inline-block' }} />
+                                              Create "{hashtagQuery}"
+                                            </button>
+                                            <div className="kb-hashtag-color-row" onMouseDown={e => e.preventDefault()}>
+                                              {LABEL_COLORS.map(c => (
+                                                <button
+                                                  key={c.hex}
+                                                  className={`kb-hashtag-color-dot${createColor === c.hex ? ' selected' : ''}`}
+                                                  style={{ background: c.hex }}
+                                                  onMouseDown={e => { e.preventDefault(); setPendingLabelColor(c.hex); }}
+                                                  title={c.name}
+                                                />
+                                              ))}
+                                            </div>
+                                          </>
+                                        );
+                                      })()}
                                     </div>,
                                     document.body
                                   );
@@ -2198,15 +2266,128 @@ function BoardPage() {
         </div>
       </div>
 
+      {/* ── Due date picker popover (D shortcut) ── */}
+      {dueDatePopover && ReactDOM.createPortal(
+        (() => {
+          const MONTHS_SHORT = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+          const DAYS_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+          const { year, month } = dueDatePopoverView;
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+          const firstDow = new Date(year, month, 1).getDay();
+          const totalDays = new Date(year, month + 1, 0).getDate();
+          const cells: (number | null)[] = [];
+          for (let i = 0; i < firstDow; i++) cells.push(null);
+          for (let d = 1; d <= totalDays; d++) cells.push(d);
+          const fmt = (y: number, m: number, d: number) => `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          const selectDay = (day: number) => {
+            const dateStr = fmt(year, month, day);
+            const card = board?.cards.find(c => c.id === dueDatePopover.cardId);
+            if (card) {
+              markCardUpdated(card.id);
+              updateCard(boardId, card.id, { due_date: dateStr });
+              if (dateStr <= todayStr) runBoardAutomation(card, 'due_date_overdue');
+            }
+            setDueDatePopover(null);
+          };
+          const clearDate = () => {
+            const card = board?.cards.find(c => c.id === dueDatePopover.cardId);
+            if (card) { markCardUpdated(card.id); updateCard(boardId, card.id, { due_date: null }); }
+            setDueDatePopover(null);
+          };
+          const prevMonth = () => setDueDatePopoverView(v => v.month === 0 ? { year: v.year - 1, month: 11 } : { ...v, month: v.month - 1 });
+          const nextMonth = () => setDueDatePopoverView(v => v.month === 11 ? { year: v.year + 1, month: 0 } : { ...v, month: v.month + 1 });
+          return (
+            <div
+              style={{ position: 'fixed', top: dueDatePopover.y, left: dueDatePopover.x, zIndex: 99999, background: '#1a1d2e', border: '1px solid #374151', borderRadius: 12, padding: 12, width: 260, boxSizing: 'border-box', boxShadow: '0 12px 40px rgba(0,0,0,0.5)', animation: 'dp-fade-in 0.12s ease' }}
+              onMouseDown={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <button onClick={prevMonth} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' }}><ChevronLeft size={14} /></button>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#e5e7eb' }}>{MONTHS_SHORT[month]} {year}</span>
+                <button onClick={nextMonth} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+                {DAYS_SHORT.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#6b7280', padding: '2px 0' }}>{d}</div>)}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+                {cells.map((day, i) => {
+                  if (day === null) return <div key={`e-${i}`} />;
+                  const dateStr = fmt(year, month, day);
+                  const isSelected = dateStr === dueDatePopover.currentDate;
+                  const isToday = dateStr === todayStr;
+                  return (
+                    <div
+                      key={day}
+                      onClick={() => selectDay(day)}
+                      style={{ textAlign: 'center', fontSize: 12, padding: '5px 0', borderRadius: 6, cursor: 'pointer', background: isSelected ? '#4f46e5' : 'transparent', color: isSelected ? '#fff' : isToday ? '#a5b4fc' : '#d1d5db', border: isToday && !isSelected ? '1px solid #6366f1' : '1px solid transparent', fontWeight: isSelected ? 600 : 400 }}
+                    >
+                      {day}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTop: '1px solid #2d3148' }}>
+                <button onClick={() => { setDueDatePopoverView({ year: today.getFullYear(), month: today.getMonth() }); selectDay(today.getDate()); }} style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: 12, cursor: 'pointer', padding: '3px 10px', borderRadius: 6 }}>Today</button>
+                {dueDatePopover.currentDate && <button onClick={clearDate} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '3px 10px', borderRadius: 6 }}>Clear</button>}
+              </div>
+            </div>
+          );
+        })(),
+        document.body
+      )}
+
+      {/* ── Label list popover (L shortcut) ── */}
+      {labelPopover && board && ReactDOM.createPortal(
+        (() => {
+          const sortedLabels = [...board.labels].sort((a, b) => a.name.localeCompare(b.name));
+          const card = board.cards.find(c => c.id === labelPopover.cardId);
+          const activeIds = new Set((card?.labels || []).map(l => l.id));
+          return (
+            <div
+              style={{ position: 'fixed', top: labelPopover.y, left: labelPopover.x, zIndex: 99999, background: '#1a1d2e', border: '1px solid #374151', borderRadius: 12, padding: '8px 0', minWidth: 200, boxSizing: 'border-box', boxShadow: '0 12px 40px rgba(0,0,0,0.5)', animation: 'dp-fade-in 0.12s ease' }}
+              onMouseDown={e => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', padding: '4px 14px 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Labels</div>
+              {sortedLabels.map((label, i) => {
+                const isActive = activeIds.has(label.id);
+                const keyHint = i < 9 ? `${i + 1}` : i === 9 ? '0' : '';
+                return (
+                  <div
+                    key={label.id}
+                    onClick={() => {
+                      if (!card) return;
+                      const currentIds = (card.labels || []).map(l => l.id);
+                      const newIds = isActive ? currentIds.filter(id => id !== label.id) : [...currentIds, label.id];
+                      markCardUpdated(card.id);
+                      updateCard(boardId, card.id, { label_ids: newIds });
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px', cursor: 'pointer', transition: 'background 0.1s' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#2d3148'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                  >
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: label.color, flexShrink: 0, boxShadow: isActive ? `0 0 0 2px ${label.color}55` : 'none' }} />
+                    <span style={{ fontSize: 13, color: '#e5e7eb', flex: 1 }}>{label.name}</span>
+                    {isActive && <Check size={13} style={{ color: label.color, flexShrink: 0 }} />}
+                    {keyHint && <span style={{ fontSize: 11, color: '#6b7280', fontFamily: 'monospace', marginLeft: 4 }}>{keyHint}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })(),
+        document.body
+      )}
+
       {/* ── Keyboard shortcut help bar ── */}
-      {hoveredCardId && !activeCard && (
+      {isHoveringCard && !activeCard && (
         <div className="kb-shortcut-bar">
           <span>Hover shortcuts:</span>
           <span className="kb-shortcut-bar-item"><kbd>↵</kbd> Open</span>
           <span className="kb-shortcut-bar-sep">·</span>
           <span className="kb-shortcut-bar-item"><kbd>C</kbd> Copy</span>
           <span className="kb-shortcut-bar-sep">·</span>
-          <span className="kb-shortcut-bar-item"><kbd>D</kbd> Due today</span>
+          <span className="kb-shortcut-bar-item"><kbd>D</kbd> Set due date</span>
           <span className="kb-shortcut-bar-sep">·</span>
           <span className="kb-shortcut-bar-item"><kbd>M</kbd> Assign me</span>
           <span className="kb-shortcut-bar-sep">·</span>
@@ -2215,6 +2396,8 @@ function BoardPage() {
           <span className="kb-shortcut-bar-item"><kbd>⌫</kbd> Delete</span>
           {(board.labels?.length ?? 0) > 0 && (
             <>
+              <span className="kb-shortcut-bar-sep">·</span>
+              <span className="kb-shortcut-bar-item"><kbd>L</kbd> Labels</span>
               <span className="kb-shortcut-bar-sep">·</span>
               <span className="kb-shortcut-bar-item"><kbd>1–0</kbd> Toggle label</span>
             </>

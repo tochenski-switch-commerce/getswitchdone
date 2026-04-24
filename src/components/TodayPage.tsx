@@ -12,6 +12,17 @@ import type { CardPriority } from '@/types/board-types';
 import { getBoardIcon, DEFAULT_ICON_COLOR } from '@/components/BoardIcons';
 import { Check, X, Plus, Square, SquareCheck, MessageSquare, RotateCcw, Star, CircleCheck, Flame, LayoutDashboard } from 'lucide-react';
 
+// ─── html helpers ────────────────────────────────────────────────────────────
+
+function stripHtml(html: string): string {
+  if (typeof document !== 'undefined') {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
+  }
+  return html.replace(/<[^>]*>/g, '');
+}
+
 // ─── date/time helpers ───────────────────────────────────────────────────────
 
 const TODAY = toDateStr(new Date());
@@ -368,7 +379,8 @@ function TodayCardRow({ card, onComplete, done }: TodayCardRowProps) {
     card.checklistTotal > 0 ||
     card.commentCount > 0
   );
-  const hasDescription = !done && !!card.description?.trim();
+  const descriptionText = card.description ? stripHtml(card.description).trim() : '';
+  const hasDescription = !done && !!descriptionText;
 
   const handleComplete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -428,7 +440,7 @@ function TodayCardRow({ card, onComplete, done }: TodayCardRowProps) {
 
       {/* Description snippet */}
       {hasDescription && (
-        <p className="td-card-desc">{card.description}</p>
+        <p className="td-card-desc">{descriptionText}</p>
       )}
 
       {/* Metadata row */}

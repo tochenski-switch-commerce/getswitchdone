@@ -754,6 +754,15 @@ export function useProjectBoard() {
     try {
       const { label_ids, ...cardUpdates } = updates;
 
+      // Optimistic update: for label-only changes apply immediately so the UI feels instant
+      if (label_ids !== undefined && Object.keys(cardUpdates).length === 0) {
+        setBoard(prev => {
+          if (!prev) return prev;
+          const updatedLabels = prev.labels.filter(l => label_ids.includes(l.id));
+          return { ...prev, cards: prev.cards.map(c => c.id === cardId ? { ...c, labels: updatedLabels } : c) };
+        });
+      }
+
       // Get current card state to detect assignee changes
       const currentCard = board?.cards.find(c => c.id === cardId);
       const oldAssignees = currentCard?.assignees || [];
