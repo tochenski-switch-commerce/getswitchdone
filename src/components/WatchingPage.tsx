@@ -237,12 +237,15 @@ function EmptyState() {
       padding: '60px 20px',
       color: '#6b7280',
     }}>
-      <Eye size={36} color="#374151" style={{ marginBottom: 16 }} />
-      <p style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600, color: '#9ca3af' }}>
-        Not watching any cards yet
+      <Eye size={40} color="#374151" style={{ marginBottom: 16 }} />
+      <p style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700, color: '#d1d5db' }}>
+        Stay close to what matters
       </p>
-      <p style={{ margin: 0, fontSize: 14, color: '#6b7280', maxWidth: 320, marginLeft: 'auto', marginRight: 'auto' }}>
-        Open a card and click <strong style={{ color: '#818cf8' }}>Watch</strong> to start tracking it here.
+      <p style={{ margin: '0 0 10px', fontSize: 14, color: '#9ca3af', maxWidth: 340, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.65 }}>
+        Watching is how you keep an eye on cards without being assigned to them. Get notified when they're updated, commented on, or completed.
+      </p>
+      <p style={{ margin: 0, fontSize: 13, color: '#6b7280', maxWidth: 300, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
+        Open any card and click <strong style={{ color: '#818cf8' }}>Watch</strong> to start tracking it here.
       </p>
     </div>
   );

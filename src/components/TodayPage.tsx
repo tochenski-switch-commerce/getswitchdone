@@ -10,7 +10,7 @@ import FlameLoader from '@/components/FlameLoader';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import type { CardPriority } from '@/types/board-types';
 import { getBoardIcon, DEFAULT_ICON_COLOR } from '@/components/BoardIcons';
-import { Check, X, Plus, Square, SquareCheck, MessageSquare, RotateCcw, Star, CircleCheck, Flame } from 'lucide-react';
+import { Check, X, Plus, Square, SquareCheck, MessageSquare, RotateCcw, Star, CircleCheck, Flame, LayoutDashboard } from 'lucide-react';
 
 // ─── date/time helpers ───────────────────────────────────────────────────────
 
@@ -744,8 +744,28 @@ export default function TodayPage() {
           <div className="td-loader-inline"><FlameLoader delay={0} size={40} /></div>
         )}
 
+        {/* ── Empty: no boards yet (new user) ── */}
+        {!loading && isEmpty && boards.length === 0 && (
+          <div className="td-all-clear">
+            <div className="td-all-clear-ring">
+              <LayoutDashboard size={48} color="#4b5563" strokeWidth={1.5} />
+            </div>
+            <p className="td-all-clear-title">Your focus view is ready</p>
+            <p className="td-all-clear-sub">
+              Focus shows you everything due today, overdue, and assigned to you — across all your boards at once. Create a board and add cards with due dates to see them here.
+            </p>
+            <button
+              className="td-create-board-btn"
+              onClick={() => router.push('/boards?addBoard=1')}
+            >
+              <Plus size={15} />
+              Create a Board
+            </button>
+          </div>
+        )}
+
         {/* ── All clear ── */}
-        {!loading && isEmpty && (
+        {!loading && isEmpty && boards.length > 0 && (
           <div className="td-all-clear">
             <div className="td-all-clear-ring">
               <CircleCheck size={52} color="#22c55e" strokeWidth={1.5} />
@@ -1438,6 +1458,22 @@ const todayStyles = `
     max-width: 280px;
     line-height: 1.6;
   }
+
+  .td-create-board-btn {
+    margin-top: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    background: #fa420f;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .td-create-board-btn:hover { background: #e03508; }
 
   /* ── Sections ── */
   .td-sections {

@@ -1851,6 +1851,13 @@ export default function CardDetailModal({
                 </div>
               )}
 
+              {/* Watchers empty state */}
+              {watchers.length === 0 && pendingInvites.length === 0 && (
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#4b5563', lineHeight: 1.55 }}>
+                  No one is watching yet. Add watchers to keep people in the loop when this card changes.
+                </p>
+              )}
+
               {/* Current watcher list (table) */}
               {(watchers.length > 0 || pendingInvites.length > 0) && (
                 <div style={{

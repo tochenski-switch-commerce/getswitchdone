@@ -570,14 +570,19 @@ function BoardsListPage() {
         ) : boards.length === 0 ? (
           <div className="kb-empty">
             <LayoutDashboard size={48} style={{ color: '#4b5563', marginBottom: '16px' }} />
-            <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>No boards yet</h3>
-            <p style={{ color: '#9ca3af', fontSize: '14px', marginBottom: '20px' }}>Create your first project board to get started.</p>
+            <h3 style={{ color: '#e5e7eb', fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>Your workspace is ready</h3>
+            <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: '1.65', marginBottom: '8px', maxWidth: 360 }}>
+              Boards are how you organize work in Lumio. Each board has columns and cards — drag tasks forward as they progress, assign them to people, set due dates, and stay on top of everything from one place.
+            </p>
+            <p style={{ color: '#6b7280', fontSize: '13px', lineHeight: '1.6', marginBottom: '24px', maxWidth: 340 }}>
+              Start with one board for a project you're already working on — you can always add more.
+            </p>
             <button className="kb-btn kb-btn-primary" onClick={() => {
               if (!canCreateBoard(boards.length)) { showPaywall(); return; }
               setShowWizard(true);
             }}>
               <Plus size={16} />
-              Create Board
+              Create Your First Board
             </button>
           </div>
         ) : (

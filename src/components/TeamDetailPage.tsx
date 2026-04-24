@@ -9,6 +9,7 @@ import {
   ArrowLeft, Users, Trash2, Edit3, Check, X, Copy, UserMinus, LogOut, Calendar,
   getBoardIcon, DEFAULT_ICON_COLOR,
   StickyNote, Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered, LinkIcon,
+  Mail, Send,
 } from '@/components/BoardIcons';
 import type { Team, ProjectBoard } from '@/types/board-types';
 
@@ -30,6 +31,10 @@ export default function TeamDetailPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
   const [teamBoards, setTeamBoards] = useState<ProjectBoard[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   // ── Notes panel ──
   const [showNotePanel, setShowNotePanel] = useState(false);
@@ -155,6 +160,37 @@ export default function TeamDetailPage() {
     setTimeout(() => setCodeCopied(false), 2000);
   };
 
+  const handleSendInviteEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim() || inviteSending) return;
+    setInviteSending(true);
+    setInviteError(null);
+    setInviteSent(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/teams/send-invite-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ teamId, email: inviteEmail.trim() }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setInviteError(json.error || 'Failed to send invite. Please try again.');
+      } else {
+        setInviteSent(true);
+        setInviteEmail('');
+        setTimeout(() => setInviteSent(false), 4000);
+      }
+    } catch {
+      setInviteError('Something went wrong. Please try again.');
+    } finally {
+      setInviteSending(false);
+    }
+  };
+
   const handleRoleChange = async (userId: string, role: 'editor' | 'viewer') => {
     await updateMemberRole(teamId, userId, role);
   };
@@ -270,6 +306,42 @@ export default function TeamDetailPage() {
               <span className="kb-invite-code-label">Invite Code</span>
               <code className="kb-invite-code-value">{activeInviteCode || 'No active code yet'}</code>
             </div>
+
+            {/* Email invite */}
+            <div style={{ marginTop: 16 }}>
+              <p style={{ margin: '0 0 8px', fontSize: 13, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Mail size={13} style={{ color: '#6b7280' }} />
+                Send a personal invite by email
+              </p>
+              <form onSubmit={handleSendInviteEmail} style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="kb-input"
+                  type="email"
+                  placeholder="teammate@example.com"
+                  value={inviteEmail}
+                  onChange={e => { setInviteEmail(e.target.value); setInviteError(null); setInviteSent(false); }}
+                  disabled={inviteSending}
+                  style={{ flex: 1, fontSize: 13, padding: '8px 12px' }}
+                />
+                <button
+                  type="submit"
+                  className="kb-btn kb-btn-primary"
+                  disabled={inviteSending || !inviteEmail.trim()}
+                  style={{ padding: '8px 14px', fontSize: 13, gap: 6, flexShrink: 0 }}
+                >
+                  <Send size={13} />
+                  {inviteSending ? 'Sending…' : 'Send'}
+                </button>
+              </form>
+              {inviteSent && (
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#22c55e' }}>
+                  Invite sent! They'll receive an email with a link to join.
+                </p>
+              )}
+              {inviteError && (
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#ef4444' }}>{inviteError}</p>
+              )}
+            </div>
           </section>
         )}
 
@@ -277,7 +349,19 @@ export default function TeamDetailPage() {
         <section className="kb-section">
           <h2 className="kb-section-title">Boards ({teamBoards.length})</h2>
           {teamBoards.length === 0 ? (
-            <p style={{ fontSize: 13, color: '#6b7280' }}>No boards in this team yet.</p>
+            <div style={{ padding: '24px 0 8px', textAlign: 'center' }}>
+              <p style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 600, color: '#9ca3af' }}>No boards yet</p>
+              <p style={{ margin: '0 0 14px', fontSize: 13, color: '#6b7280', maxWidth: 320, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
+                Boards are where the work lives. Create one for a project, a goal, or a workflow — then invite the team to collaborate.
+              </p>
+              <button
+                className="kb-btn kb-btn-primary"
+                onClick={() => router.push('/boards?addBoard=1')}
+                style={{ fontSize: 13 }}
+              >
+                Create a Board
+              </button>
+            </div>
           ) : (
             <div className="kb-board-grid">
               {teamBoards.map(board => {
