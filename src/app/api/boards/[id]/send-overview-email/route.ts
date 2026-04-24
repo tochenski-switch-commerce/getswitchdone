@@ -145,6 +145,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const profiles: UserProfile[] = (profileRows ?? []).map((p: { id: string; name: string }) => ({
       id: p.id,
       name: p.name ?? 'Unknown',
+      updated_at: new Date().toISOString(),
     }));
 
     // Get user email and name
