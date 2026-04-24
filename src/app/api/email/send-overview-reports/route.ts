@@ -147,39 +147,78 @@ function buildTimelinePanel(board: FullBoard, todayStr: string, profiles: UserPr
     { label: 'Due Today',      cards: tl.today,      color: '#fbbf24' },
     { label: 'Due This Week',  cards: tl.thisWeek,   color: '#a5b4fc' },
     { label: 'Due This Month', cards: tl.thisMonth,  color: '#9ca3af' },
+    { label: 'No Due Date',    cards: tl.noDate,     color: '#6b7280' },
   ].filter(g => g.cards.length > 0);
 
   if (groups.length === 0) return '';
 
+  const headerCells = ['Card', 'Column', 'Priority', 'Assignee', 'Due'].map(
+    h => `<th style="padding:0 10px 6px 0;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap;">${h}</th>`
+  ).join('');
+
   const groupsHtml = groups.map(({ label, cards, color }) => {
-    const rows = cards.slice(0, 10).map(card => `
+    const rows = cards.map(card => `
       <tr>
-        <td style="padding:4px 10px 4px 0;color:#d9dfed;font-size:12px;max-width:200px;word-break:break-word;">${esc(card.title)}</td>
+        <td style="padding:4px 10px 4px 0;color:#d9dfed;font-size:12px;word-break:break-word;">${esc(card.title)}</td>
         <td style="padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${esc(colById.get(card.column_id) ?? '—')}</td>
         <td style="padding:4px 10px 4px 0;">${priorityBadge(card.priority)}</td>
         <td style="padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${esc(getAssignee(card))}</td>
         <td style="padding:4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${fmtDate(card.due_date)}</td>
       </tr>`).join('');
 
-    const overflow = cards.length > 10 ? `<tr><td colspan="5" style="padding:6px 0 2px;color:#6b7280;font-size:11px;">+ ${cards.length - 10} more</td></tr>` : '';
-
     return `
-      <tr><td colspan="5" style="padding:8px 0 4px;">
+      <tr><td colspan="5" style="padding:12px 0 4px;">
         <span style="color:${color};font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">${esc(label)}</span>
         <span style="color:#4b5563;font-size:11px;margin-left:6px;">${cards.length}</span>
       </td></tr>
-      ${rows}${overflow}`;
+      ${rows}`;
   }).join('');
-
-  const headerCells = ['Card', 'Column', 'Priority', 'Assignee', 'Due'].map(
-    h => `<th style="padding:0 10px 6px 0;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap;">${h}</th>`
-  ).join('');
 
   return renderEmailInfoPanel({
     title: 'Timeline & Due Dates',
     contentHtml: `<table width="100%" cellpadding="0" cellspacing="0" border="0">
       <thead><tr>${headerCells}</tr></thead>
       <tbody>${groupsHtml}</tbody>
+    </table>`,
+  });
+}
+
+function buildAllCardsPanel(board: FullBoard, profiles: UserProfile[]): string {
+  const colById = new Map(board.columns.map(c => [c.id, c.title]));
+  const profileById = new Map(profiles.map(p => [p.id, p.name]));
+  const cards = board.cards.filter(c => !c.is_archived);
+
+  if (cards.length === 0) return '';
+
+  const getAssignee = (card: FullBoard['cards'][number]) => {
+    const ids = (card.assignees && card.assignees.length > 0) ? card.assignees : (card.assignee ? [card.assignee] : []);
+    return ids.length > 0 ? (profileById.get(ids[0]) ?? '—') : '—';
+  };
+
+  const headerCells = ['Card', 'Column', 'Priority', 'Assignee', 'Due', 'Done'].map(
+    h => `<th style="padding:0 10px 6px 0;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap;">${h}</th>`
+  ).join('');
+
+  const rows = cards.map(card => {
+    const doneHtml = card.is_complete
+      ? `<span style="color:#34d399;font-size:12px;font-weight:600;">Yes</span>`
+      : `<span style="color:#6b7280;font-size:12px;">No</span>`;
+    return `
+      <tr>
+        <td style="padding:4px 10px 4px 0;color:#d9dfed;font-size:12px;word-break:break-word;">${esc(card.title)}</td>
+        <td style="padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${esc(colById.get(card.column_id) ?? '—')}</td>
+        <td style="padding:4px 10px 4px 0;">${priorityBadge(card.priority)}</td>
+        <td style="padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${esc(getAssignee(card))}</td>
+        <td style="padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${fmtDate(card.due_date)}</td>
+        <td style="padding:4px 0;">${doneHtml}</td>
+      </tr>`;
+  }).join('');
+
+  return renderEmailInfoPanel({
+    title: `All Cards (${cards.length})`,
+    contentHtml: `<table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <thead><tr>${headerCells}</tr></thead>
+      <tbody>${rows}</tbody>
     </table>`,
   });
 }
@@ -214,8 +253,9 @@ function buildOverviewEmail(args: {
   const priorityHtml = buildPriorityPanel(board);
   const assigneeHtml = buildAssigneePanel(board, profiles, todayStr);
   const timelineHtml = buildTimelinePanel(board, todayStr, profiles);
+  const allCardsHtml = buildAllCardsPanel(board, profiles);
 
-  const sectionsHtml = [summaryHtml, priorityHtml, assigneeHtml, timelineHtml]
+  const sectionsHtml = [summaryHtml, priorityHtml, assigneeHtml, timelineHtml, allCardsHtml]
     .filter(Boolean)
     .map(html => `<tr><td style="padding-top:16px;">${html}</td></tr>`)
     .join('') +

@@ -7,12 +7,9 @@ import {
   renderEmailInfoPanel,
   renderLumioEmailShell,
   renderPrimaryEmailButton,
-  renderSecondaryEmailButton,
 } from '@/lib/email-theme';
 import {
   computeSummary,
-  computePriorityBreakdown,
-  computeAssigneeWorkload,
   computeTimeline,
   getTodayStrInTimezone,
 } from '@/components/board-overview/overviewMetrics';
@@ -46,48 +43,136 @@ async function getAuthUserId(req: NextRequest): Promise<string | null> {
   }
 }
 
-// Import the email building functions from the cron route
-// (simplified version for test emails)
+function esc(s: string) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function fmtDate(d: string | null | undefined) {
+  if (!d) return '—';
+  const [y, m, day] = d.split('-');
+  return `${m}-${day}-${y}`;
+}
+
+const PRIORITY_COLORS: Record<string, { color: string; bg: string; label: string }> = {
+  urgent: { color: '#dc2626', bg: '#fee2e2', label: 'URGENT' },
+  high:   { color: '#c2410c', bg: '#ffedd5', label: 'HIGH' },
+  medium: { color: '#b45309', bg: '#fef3c7', label: 'MEDIUM' },
+  low:    { color: '#16a34a', bg: '#dcfce7', label: 'LOW' },
+};
+
+function priorityBadge(priority: string | null | undefined): string {
+  const p = priority ? PRIORITY_COLORS[priority] : null;
+  return p
+    ? `<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:4px;background:${p.bg};color:${p.color}">${p.label}</span>`
+    : '<span style="color:#6b7280">—</span>';
+}
+
+function getAssigneeName(card: FullBoard['cards'][number], profileById: Map<string, string>): string {
+  const ids = (card.assignees && card.assignees.length > 0) ? card.assignees : (card.assignee ? [card.assignee] : []);
+  return ids.length > 0 ? (profileById.get(ids[0]) ?? '—') : '—';
+}
+
+function buildTimelineSection(board: FullBoard, todayStr: string, profileById: Map<string, string>, colById: Map<string, string>): string {
+  const tl = computeTimeline(board, todayStr);
+  const groups = [
+    { label: 'Overdue',        cards: tl.overdue,    color: '#f87171' },
+    { label: 'Due Today',      cards: tl.today,      color: '#fbbf24' },
+    { label: 'Due This Week',  cards: tl.thisWeek,   color: '#a5b4fc' },
+    { label: 'Due This Month', cards: tl.thisMonth,  color: '#9ca3af' },
+    { label: 'No Due Date',    cards: tl.noDate,     color: '#6b7280' },
+  ].filter(g => g.cards.length > 0);
+  if (groups.length === 0) return '';
+
+  const headerCells = ['Card', 'Column', 'Priority', 'Assignee', 'Due'].map(
+    h => `<th style="padding:0 10px 6px 0;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap;">${h}</th>`
+  ).join('');
+
+  const groupsHtml = groups.map(({ label, cards, color }) => {
+    const rows = cards.map(card => `
+      <tr>
+        <td style="padding:4px 10px 4px 0;color:#d9dfed;font-size:12px;word-break:break-word;">${esc(card.title)}</td>
+        <td style="padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${esc(colById.get(card.column_id) ?? '—')}</td>
+        <td style="padding:4px 10px 4px 0;">${priorityBadge(card.priority)}</td>
+        <td style="padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${esc(getAssigneeName(card, profileById))}</td>
+        <td style="padding:4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${fmtDate(card.due_date)}</td>
+      </tr>`).join('');
+    return `
+      <tr><td colspan="5" style="padding:12px 0 4px;">
+        <span style="color:${color};font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">${esc(label)}</span>
+        <span style="color:#4b5563;font-size:11px;margin-left:6px;">${cards.length}</span>
+      </td></tr>${rows}`;
+  }).join('');
+
+  return renderEmailInfoPanel({
+    title: 'Timeline & Due Dates',
+    contentHtml: `<table width="100%" cellpadding="0" cellspacing="0" border="0"><thead><tr>${headerCells}</tr></thead><tbody>${groupsHtml}</tbody></table>`,
+  });
+}
+
+function buildAllCardsSection(board: FullBoard, profileById: Map<string, string>, colById: Map<string, string>): string {
+  const cards = board.cards.filter(c => !c.is_archived);
+  if (cards.length === 0) return '';
+
+  const headerCells = ['Card', 'Column', 'Priority', 'Assignee', 'Due', 'Done'].map(
+    h => `<th style="padding:0 10px 6px 0;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap;">${h}</th>`
+  ).join('');
+
+  const rows = cards.map(card => `
+    <tr>
+      <td style="padding:4px 10px 4px 0;color:#d9dfed;font-size:12px;word-break:break-word;">${esc(card.title)}</td>
+      <td style="padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${esc(colById.get(card.column_id) ?? '—')}</td>
+      <td style="padding:4px 10px 4px 0;">${priorityBadge(card.priority)}</td>
+      <td style="padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${esc(getAssigneeName(card, profileById))}</td>
+      <td style="padding:4px 10px 4px 0;color:#6b7280;font-size:12px;white-space:nowrap;">${fmtDate(card.due_date)}</td>
+      <td style="padding:4px 0;">${card.is_complete ? '<span style="color:#34d399;font-size:12px;font-weight:600;">Yes</span>' : '<span style="color:#6b7280;font-size:12px;">No</span>'}</td>
+    </tr>`).join('');
+
+  return renderEmailInfoPanel({
+    title: `All Cards (${cards.length})`,
+    contentHtml: `<table width="100%" cellpadding="0" cellspacing="0" border="0"><thead><tr>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`,
+  });
+}
+
 function buildTestEmail(board: FullBoard, profiles: UserProfile[], todayStr: string, baseUrl: string, displayName: string): string {
   const boardUrl = `${baseUrl}/boards/${board.id}`;
-  const printUrl = `${baseUrl}/boards/${board.id}/overview?print=1`;
   const overviewUrl = `${baseUrl}/boards/${board.id}/overview`;
-
   const sentAt = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+  const profileById = new Map(profiles.map(p => [p.id, p.name]));
+  const colById = new Map(board.columns.map(c => [c.id, c.title]));
+
   const leadHtml = `
-    <p style="margin:0;color:#9aa4ba;font-size:13px;line-height:1.6;">Hi ${displayName},</p>
-    <p style="margin:8px 0 0;color:#d6deef;font-size:15px;line-height:1.62;"><strong>Test email</strong> — Your overview report for <strong style="color:#ffffff;">${board.title}</strong>.</p>
+    <p style="margin:0;color:#9aa4ba;font-size:13px;line-height:1.6;">Hi ${esc(displayName)},</p>
+    <p style="margin:8px 0 0;color:#d6deef;font-size:15px;line-height:1.62;"><strong>Test email</strong> — Your overview report for <strong style="color:#ffffff;">${esc(board.title)}</strong>.</p>
     <p style="margin:6px 0 0;color:#6b7280;font-size:12px;">${sentAt}</p>`;
 
   const actionsHtml = renderEmailButtonRow(
     renderPrimaryEmailButton({ href: overviewUrl, label: 'View Overview' }),
   );
 
-  // Build summary panel
   const s = computeSummary(board, todayStr);
   const summaryHtml = renderEmailInfoPanel({
     title: 'Summary',
-    contentHtml: `
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr><td style="padding:4px 12px 4px 0;color:#8d96ab;font-size:12px;">Total Cards</td><td style="padding:4px 0;color:#d9dfed;font-size:13px;font-weight:600;">${s.total}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#8d96ab;font-size:12px;">Completed</td><td style="padding:4px 0;color:#d9dfed;font-size:13px;font-weight:600;">${s.completed} (${s.completionPct}%)</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#8d96ab;font-size:12px;">Overdue</td><td style="padding:4px 0;color:${s.overdue > 0 ? '#f87171' : '#d9dfed'};font-size:13px;font-weight:600;">${s.overdue}</td></tr>
-      </table>`,
+    contentHtml: `<table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr><td style="padding:4px 12px 4px 0;color:#8d96ab;font-size:12px;">Total Cards</td><td style="padding:4px 0;color:#d9dfed;font-size:13px;font-weight:600;">${s.total}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#8d96ab;font-size:12px;">Completed</td><td style="padding:4px 0;color:#d9dfed;font-size:13px;font-weight:600;">${s.completed} (${s.completionPct}%)</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#8d96ab;font-size:12px;">Overdue</td><td style="padding:4px 0;color:${s.overdue > 0 ? '#f87171' : '#d9dfed'};font-size:13px;font-weight:600;">${s.overdue}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#8d96ab;font-size:12px;">Due Today</td><td style="padding:4px 0;color:#d9dfed;font-size:13px;font-weight:600;">${s.dueToday}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#8d96ab;font-size:12px;">Due This Week</td><td style="padding:4px 0;color:#d9dfed;font-size:13px;font-weight:600;">${s.dueThisWeek}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#8d96ab;font-size:12px;">High Priority</td><td style="padding:4px 0;color:${s.highPriorityCount > 0 ? '#f87171' : '#d9dfed'};font-size:13px;font-weight:600;">${s.highPriorityCount}</td></tr>
+    </table>`,
   });
 
-  const sectionsHtml = `
-    <tr><td style="padding-top:16px;">${summaryHtml}</td></tr>
-    <tr><td style="padding-top:14px;">
-      <p style="margin:0;color:#8f98ad;font-size:12px;line-height:1.6;">
-        This is a test email. If you set up a schedule, emails will be sent automatically at your configured time.
-      </p>
-    </td></tr>`;
+  const timelineHtml = buildTimelineSection(board, todayStr, profileById, colById);
+  const allCardsHtml = buildAllCardsSection(board, profileById, colById);
 
-  const footerHtml = `
-    <p style="margin:0;color:#5d667f;font-size:11px;line-height:1.5;word-break:break-all;">
-      Board: <a href="${boardUrl}" style="color:#fa420f;text-decoration:none;">${boardUrl}</a>
-    </p>`;
+  const sectionsHtml = [summaryHtml, timelineHtml, allCardsHtml]
+    .filter(Boolean)
+    .map(html => `<tr><td style="padding-top:16px;">${html}</td></tr>`)
+    .join('') +
+    `<tr><td style="padding-top:14px;"><p style="margin:0;color:#8f98ad;font-size:12px;line-height:1.6;">This is a test email. If you set up a schedule, emails will be sent automatically at your configured time.</p></td></tr>`;
+
+  const footerHtml = `<p style="margin:0;color:#5d667f;font-size:11px;line-height:1.5;word-break:break-all;">Board: <a href="${boardUrl}" style="color:#fa420f;text-decoration:none;">${boardUrl}</a></p>`;
 
   return renderLumioEmailShell({
     documentTitle: `${board.title} — Test Overview Email`,
