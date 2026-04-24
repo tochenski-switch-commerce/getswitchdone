@@ -208,7 +208,6 @@ function buildOverviewEmail(args: {
 
   const actionsHtml = renderEmailButtonRow(
     renderPrimaryEmailButton({ href: overviewUrl, label: 'View Overview' }),
-    renderSecondaryEmailButton({ href: printUrl, label: 'Printable Version' }),
   );
 
   const summaryHtml = buildSummaryPanel(board, todayStr);

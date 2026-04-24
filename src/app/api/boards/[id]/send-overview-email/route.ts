@@ -62,7 +62,6 @@ function buildTestEmail(board: FullBoard, profiles: UserProfile[], todayStr: str
 
   const actionsHtml = renderEmailButtonRow(
     renderPrimaryEmailButton({ href: overviewUrl, label: 'View Overview' }),
-    renderSecondaryEmailButton({ href: printUrl, label: 'Printable Version' }),
   );
 
   // Build summary panel
