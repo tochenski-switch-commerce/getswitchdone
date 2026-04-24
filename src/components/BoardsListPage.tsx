@@ -86,7 +86,7 @@ function relativeTime(isoStr: string): string {
 
 // ── Component ────────────────────────────────────────────────────────────────
 function BoardsListPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { boards, fetchBoards, createBoard, createBoardFromTemplate, deleteBoard, duplicateBoard, toggleBoardStar, loading } = useProjectBoard();
@@ -151,6 +151,13 @@ function BoardsListPage() {
       router.replace('/auth?returnTo=%2Fboards');
     }
   }, [authLoading, user, router]);
+
+  // Existing users who never completed onboarding (no display name)
+  useEffect(() => {
+    if (!authLoading && user && profile && !profile.name?.trim()) {
+      router.replace('/onboarding');
+    }
+  }, [authLoading, user, profile, router]);
 
   useEffect(() => {
     if (user) {

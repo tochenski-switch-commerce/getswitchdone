@@ -122,19 +122,23 @@ function AuthForm() {
         setHoldRedirect(false);
         return;
       }
+      // New signups go through onboarding; preserve returnTo for team-join flows
+      const onboardingDest = teamId
+        ? `/teams/${teamId}`
+        : `/onboarding${returnTo !== '/boards' ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`;
+
       // Offer Face ID enrollment after sign-up too
       const available = await isBiometricAvailable();
       if (available) {
         const type = await getBiometryType();
         setBiometryType(type);
         setPendingCredentials({ email, password });
-        setPendingDestination(teamId ? `/teams/${teamId}` : returnTo);
+        setPendingDestination(onboardingDest);
         setShowBiometricPrompt(true);
         return;
       }
       setHoldRedirect(false);
-      // If joined via createUser (manual invite code), go to team page; otherwise use returnTo
-      router.push(teamId ? `/teams/${teamId}` : returnTo);
+      router.push(onboardingDest);
       return;
     }
 
