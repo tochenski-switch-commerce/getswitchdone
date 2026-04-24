@@ -1,5 +1,3 @@
-import type { Config } from "@netlify/functions";
-
 export default async () => {
   const baseUrl = process.env.URL || "http://localhost:3000";
   const cronSecret = process.env.CRON_SECRET;
@@ -32,6 +30,6 @@ export default async () => {
   }
 };
 
-export const config: Config = {
+export const config = {
   schedule: "*/30 * * * *", // Every 30 minutes
 };
