@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Calendar, Trash2 } from 'lucide-react';
+import { X, Calendar, Trash2, Mail } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const DAY_OPTIONS = [
@@ -56,7 +56,9 @@ export default function ScheduleModal({ boardId, existing, onClose, onSaved, onD
   const [dayOfWeek, setDayOfWeek] = useState<number>(existing?.day_of_week ?? 1);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [testSuccess, setTestSuccess] = useState<string | null>(null);
 
   const timezone = existing?.timezone ?? detectedTz;
 
@@ -112,6 +114,30 @@ export default function ScheduleModal({ boardId, existing, onClose, onSaved, onD
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleSendTest = async () => {
+    setSendingTest(true);
+    setError(null);
+    setTestSuccess(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const res = await fetch(`/api/boards/${boardId}/send-overview-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Failed to send');
+      setTestSuccess(json.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setSendingTest(false);
     }
   };
 
@@ -183,6 +209,7 @@ export default function ScheduleModal({ boardId, existing, onClose, onSaved, onD
           </div>
 
           {error && <p className="kb-ov-form-error">{error}</p>}
+          {testSuccess && <p className="kb-ov-form-success">{testSuccess}</p>}
         </div>
 
         <div className="kb-ov-modal-footer">
@@ -198,6 +225,14 @@ export default function ScheduleModal({ boardId, existing, onClose, onSaved, onD
             </button>
           )}
           <button className="kb-ov-btn-ghost" onClick={onClose}>Cancel</button>
+          <button
+            className="kb-ov-btn-secondary"
+            onClick={handleSendTest}
+            disabled={sendingTest}
+          >
+            <Mail size={13} />
+            {sendingTest ? 'Sending…' : 'Send Test Email'}
+          </button>
           <button
             className="kb-ov-btn-primary"
             onClick={handleSave}

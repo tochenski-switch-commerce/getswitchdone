@@ -634,6 +634,11 @@ export const overviewStyles = `
     font-size: 12px;
     color: #f87171;
   }
+  .kb-ov-form-success {
+    margin: 0;
+    font-size: 12px;
+    color: #34d399;
+  }
   .kb-ov-tz-display {
     padding: 9px 12px;
     background: #0f1117;
@@ -721,6 +726,29 @@ export const overviewStyles = `
     background: #4f46e5;
   }
   .kb-ov-btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .kb-ov-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #9ca3af;
+    background: transparent;
+    border: 1px solid #2d3246;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .kb-ov-btn-secondary:hover:not(:disabled) {
+    color: #e5e7eb;
+    border-color: #4b5563;
+    background: rgba(255,255,255,0.04);
+  }
+  .kb-ov-btn-secondary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }

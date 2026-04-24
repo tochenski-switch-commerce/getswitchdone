@@ -92,7 +92,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const userId = await getAuthUserId(req);
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('board_overview_schedules')
     .delete()
     .eq('board_id', boardId)
