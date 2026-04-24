@@ -20,26 +20,38 @@ function getSupabaseAdmin() {
   );
 }
 
+function getSupabaseClient(token: string) {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    }
+  );
+}
+
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   const token = authHeader?.replace('Bearer ', '');
 
-  const db = getSupabaseAdmin();
+  if (!token) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-  // Verify caller is authenticated
-  console.log('[invite-watcher] auth header:', authHeader);
-  console.log('[invite-watcher] token:', token ? `${token.slice(0, 20)}...` : 'none');
-
-  const { data: { user }, error: authErr } = token
-    ? await db.auth.getUser(token)
-    : { data: { user: null }, error: new Error('No token') };
-
-  console.log('[invite-watcher] auth result:', { user: user?.id, error: authErr?.message });
+  // Verify caller is authenticated by trying to get their own user data
+  const userClient = getSupabaseClient(token);
+  const { data: { user }, error: authErr } = await userClient.auth.getUser();
 
   if (authErr || !user) {
     console.error('[invite-watcher] auth failed:', authErr?.message || 'no user');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const db = getSupabaseAdmin();
 
   const body = await req.json();
   const { cardId, email, userId } = body as { cardId?: string; email?: string; userId?: string };
