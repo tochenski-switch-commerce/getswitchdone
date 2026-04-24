@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { resend } from '@/lib/resend';
+import { computeNextSendAt } from '@/lib/schedule-utils';
 import {
   appBaseUrl,
   escapeHtml,
@@ -19,7 +20,6 @@ import {
 } from '@/components/board-overview/overviewMetrics';
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import type { UserProfile } from '@/types/board-types';
-import { computeNextSendAt } from '@/app/api/boards/[id]/overview-schedule/route';
 
 function getDb() {
   return createClient(
