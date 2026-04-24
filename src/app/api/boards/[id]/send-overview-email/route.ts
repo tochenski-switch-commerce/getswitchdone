@@ -116,7 +116,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Verify user owns this board (has access to it)
     const { data: board, error: boardErr } = await db
       .from('project_boards')
-      .select('id, title')
+      .select('*')
       .eq('id', boardId)
       .maybeSingle();
 

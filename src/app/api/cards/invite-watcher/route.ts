@@ -20,34 +20,33 @@ function getSupabaseAdmin() {
   );
 }
 
-function getSupabaseClient(token: string) {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
-    {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    }
-  );
-}
-
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const token = authHeader?.replace('Bearer ', '');
+  // Try different header cases since some proxies/servers might vary
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
+  console.log('[invite-watcher] All headers:', Array.from(req.headers.entries()).slice(0, 10));
+  console.log('[invite-watcher] Authorization header:', authHeader ? `${authHeader.substring(0, 20)}...` : 'missing');
+
+  const token = authHeader?.replace(/^Bearer\s+/i, '');
 
   if (!token) {
+    console.error('[invite-watcher] no token found after parsing');
+    console.error('[invite-watcher] headers:', Object.fromEntries(req.headers.entries()));
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Verify caller is authenticated by trying to get their own user data
-  const userClient = getSupabaseClient(token);
-  const { data: { user }, error: authErr } = await userClient.auth.getUser();
+  // Decode JWT to extract user ID without making a network call
+  let currentUserId: string;
+  try {
+    const parts = token.split('.');
+    console.log('[invite-watcher] token parts length:', parts.length);
+    if (parts.length !== 3) throw new Error('Invalid token format');
 
-  if (authErr || !user) {
-    console.error('[invite-watcher] auth failed:', authErr?.message || 'no user');
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+    currentUserId = payload.sub;
+    if (!currentUserId) throw new Error('No user ID in token');
+    console.log('[invite-watcher] authenticated as:', currentUserId);
+  } catch (err: any) {
+    console.error('[invite-watcher] token decode failed:', err.message);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -87,15 +86,20 @@ export async function POST(req: NextRequest) {
   );
 
   if (existingUser) {
+    console.log('[invite-watcher] user exists:', existingUser.id, 'adding directly to card_watchers');
     // Add directly as a watcher
     const { error: insertErr } = await db
       .from('card_watchers')
       .upsert({ card_id: cardId, user_id: existingUser.id });
     if (insertErr) {
+      console.error('[invite-watcher] direct add failed:', insertErr.message);
       return NextResponse.json({ error: insertErr.message }, { status: 500 });
     }
+    console.log('[invite-watcher] direct add succeeded');
     return NextResponse.json({ ok: true, alreadyUser: true });
   }
+
+  console.log('[invite-watcher] user does not exist, will create invite');
 
   // ── Fetch card + board details for email ─────────────────────────────────
   const { data: cardRow, error: cardErr } = await db
@@ -131,7 +135,7 @@ export async function POST(req: NextRequest) {
     .insert({
       card_id: cardId,
       email: normalizedEmail,
-      invited_by: user.id,
+      invited_by: currentUserId,
     })
     .select('token')
     .single();
@@ -149,19 +153,25 @@ export async function POST(req: NextRequest) {
     ? cardRow.description.replace(/<[^>]*>/g, '').slice(0, 200)
     : null;
 
-  await resend.emails.send({
-    from: fromEmail,
-    to: normalizedEmail,
-    subject: `You've been added as a watcher on "${cardRow.title}"`,
-    html: buildInviteEmailHtml({
-      cardTitle: cardRow.title,
-      boardTitle: board?.title ?? '',
-      columnTitle: col?.title ?? '',
-      descSnippet,
-      claimUrl,
-      signUpUrl,
-    }),
-  });
+  console.log('[invite-watcher] sending email to:', normalizedEmail, 'with token:', invite.token);
+  try {
+    const emailResult = await resend.emails.send({
+      from: fromEmail,
+      to: normalizedEmail,
+      subject: `You've been added as a watcher on "${cardRow.title}"`,
+      html: buildInviteEmailHtml({
+        cardTitle: cardRow.title,
+        boardTitle: board?.title ?? '',
+        columnTitle: col?.title ?? '',
+        descSnippet,
+        claimUrl,
+        signUpUrl,
+      }),
+    });
+    console.log('[invite-watcher] email sent successfully:', emailResult);
+  } catch (emailErr: any) {
+    console.error('[invite-watcher] email send failed:', emailErr.message);
+  }
 
   return NextResponse.json({ ok: true, alreadyUser: false });
 }

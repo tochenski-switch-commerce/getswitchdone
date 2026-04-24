@@ -197,6 +197,12 @@ AS $$
         OR is_public = true
         OR team_id IN (SELECT get_my_team_ids())
       )
+  )
+  OR EXISTS (
+    SELECT 1 FROM card_watchers cw
+    JOIN board_cards bc ON bc.id = cw.card_id
+    WHERE bc.board_id = board_uuid
+      AND cw.user_id = auth.uid()
   );
 $$;
 

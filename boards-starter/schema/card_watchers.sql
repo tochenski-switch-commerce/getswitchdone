@@ -26,3 +26,26 @@ CREATE POLICY "Board members read watchers" ON card_watchers
         )
     )
   );
+
+-- Board members can add watchers to their cards
+CREATE POLICY "Board members add watchers" ON card_watchers
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM board_cards bc
+      JOIN project_boards pb ON pb.id = bc.board_id
+      WHERE bc.id = card_id
+        AND pb.user_id = auth.uid()
+    )
+  );
+
+-- Board members can remove watchers from their cards; users can remove themselves
+CREATE POLICY "Board members/users remove watchers" ON card_watchers
+  FOR DELETE USING (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM board_cards bc
+      JOIN project_boards pb ON pb.id = bc.board_id
+      WHERE bc.id = card_id
+        AND pb.user_id = auth.uid()
+    )
+  );
