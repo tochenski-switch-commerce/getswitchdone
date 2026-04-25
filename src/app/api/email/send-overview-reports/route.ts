@@ -391,14 +391,8 @@ export async function GET(req: NextRequest) {
         timeLabel,
       });
 
-      await resend.emails.send({
-        from,
-        to: toEmail,
-        subject: `${board.title} — Overview Report`,
-        html,
-      });
-
-      // Advance next_send_at
+      // Advance next_send_at BEFORE sending to prevent duplicate emails if the
+      // send succeeds but the update never runs (timeout, throw, etc.)
       const next = computeNextSendAt(
         schedule.frequency,
         schedule.time_of_day,
@@ -406,10 +400,22 @@ export async function GET(req: NextRequest) {
         schedule.timezone,
       );
 
-      await db
+      const { error: updateErr } = await db
         .from('board_overview_schedules')
         .update({ next_send_at: next.toISOString(), updated_at: new Date().toISOString() })
         .eq('id', schedule.id);
+
+      if (updateErr) {
+        console.error('[send-overview-reports] Failed to advance next_send_at for schedule', schedule.id, updateErr);
+        continue;
+      }
+
+      await resend.emails.send({
+        from,
+        to: toEmail,
+        subject: `${board.title} — Overview Report`,
+        html,
+      });
 
       sent++;
     } catch (err) {

@@ -70,7 +70,9 @@ export default function AppFooter() {
         <div className="kb-footer-links">
           <a
             className="kb-footer-link"
-            href="mailto:hello@lumio.app?subject=Bug%20Report"
+            href="/f/bug-report-kcn9gg"
+            target="_blank"
+            rel="noopener noreferrer"
           >
             Report a bug
           </a>
