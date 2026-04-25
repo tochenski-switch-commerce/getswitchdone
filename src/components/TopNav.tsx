@@ -10,14 +10,15 @@ import { scheduleNonCriticalWork } from '@/lib/scheduleNonCritical';
 import { Bell, LogOut, Settings, Search, X } from '@/components/BoardIcons';
 import type { Notification } from '@/types/board-types';
 
-type SearchResult = {
-  id: string;
-  title: string;
-  boardId: string;
-  boardTitle: string;
-  columnTitle: string;
-};
+type CardResult  = { kind: 'card';  id: string; title: string; boardId: string; boardTitle: string; columnTitle: string; };
+type BoardResult = { kind: 'board'; id: string; title: string; };
+type FormResult  = { kind: 'form';  id: string; title: string; };
+type TeamResult  = { kind: 'team';  id: string; title: string; };
+type AnySearchResult = CardResult | BoardResult | FormResult | TeamResult;
+type SearchResults = { cards: CardResult[]; boards: BoardResult[]; forms: FormResult[]; teams: TeamResult[]; };
 import dynamic from 'next/dynamic';
+
+const EMPTY_RESULTS: SearchResults = { cards: [], boards: [], forms: [], teams: [] };
 
 const InboxPanel = dynamic(() => import('@/components/InboxPanel'), { ssr: false });
 
@@ -47,84 +48,111 @@ export default function TopNav() {
   const [showProfile, setShowProfile] = useState(false);
   const [showMore, setShowMore] = useState(false);
 
-  const [cardSearch, setCardSearch] = useState('');
-  const [cardSearchResults, setCardSearchResults] = useState<SearchResult[]>([]);
-  const [cardSearchIdx, setCardSearchIdx] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResults>(EMPTY_RESULTS);
+  const [searchIdx, setSearchIdx] = useState(0);
   const searchBarRef = useRef<HTMLDivElement>(null);
-  const cardSearchRef = useRef(cardSearch);
+  const searchQueryRef = useRef(searchQuery);
 
   // Detect if we're on a board page and extract the boardId
   const boardMatch = pathname.match(/^\/boards\/([a-f0-9-]{36})/);
   const currentBoardId = boardMatch?.[1] ?? null;
 
   // Keep ref in sync so the sync handler always has the latest value
-  useEffect(() => { cardSearchRef.current = cardSearch; }, [cardSearch]);
+  useEffect(() => { searchQueryRef.current = searchQuery; }, [searchQuery]);
 
   // When on a board page, fire a custom event so BoardDetailPage can filter columns live
   useEffect(() => {
     if (!currentBoardId) return;
-    window.dispatchEvent(new CustomEvent('lumio:board-search', { detail: cardSearch }));
-  }, [cardSearch, currentBoardId]);
+    window.dispatchEvent(new CustomEvent('lumio:board-search', { detail: searchQuery }));
+  }, [searchQuery, currentBoardId]);
 
-  // Clear board filter when leaving a board page
+  // Clear search box and board filter on any page navigation
   useEffect(() => {
+    setSearchQuery('');
+    setSearchResults(EMPTY_RESULTS);
     if (!currentBoardId) {
       window.dispatchEvent(new CustomEvent('lumio:board-search', { detail: '' }));
     }
-  }, [currentBoardId]);
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Respond to BoardDetailPage mount-time sync requests so it picks up an in-flight search
   useEffect(() => {
     function onSearchSync() {
-      window.dispatchEvent(new CustomEvent('lumio:board-search', { detail: cardSearchRef.current }));
+      window.dispatchEvent(new CustomEvent('lumio:board-search', { detail: searchQueryRef.current }));
     }
     window.addEventListener('lumio:search-sync', onSearchSync);
     return () => window.removeEventListener('lumio:search-sync', onSearchSync);
   }, []);
 
-  // Debounced global card search — always queries all boards; split in the UI when on a board page
+  // Debounced global search — cards, boards, forms, teams queried in parallel
   useEffect(() => {
-    if (!cardSearch.trim() || !user) { setCardSearchResults([]); return; }
+    const q = searchQuery.trim();
+    if (!q || !user) { setSearchResults(EMPTY_RESULTS); return; }
     const timer = setTimeout(async () => {
-      const { data, error } = await supabase
-        .from('board_cards')
-        .select('id, title, board_id, column_id, board_columns!column_id(title), project_boards!board_id(title)')
-        .ilike('title', `%${cardSearch.trim()}%`)
-        .eq('is_archived', false)
-        .limit(12);
-      if (error) {
-        console.error('[global search] query failed:', error);
-        setCardSearchResults([]);
-        return;
-      }
-      const results: SearchResult[] = (data || []).map((card: Record<string, unknown>) => ({
-        id: card.id as string,
-        title: card.title as string,
-        boardId: card.board_id as string,
-        boardTitle: (card.project_boards as { title?: string } | null)?.title ?? 'Unknown Board',
-        columnTitle: (card.board_columns as { title?: string } | null)?.title ?? 'Unknown Column',
-      }));
-      setCardSearchResults(results);
+      const [cardsRes, boardsRes, formsRes, teamsRes] = await Promise.all([
+        supabase
+          .from('board_cards')
+          .select('id, title, board_id, column_id, board_columns!column_id(title), project_boards!board_id(title)')
+          .ilike('title', `%${q}%`)
+          .eq('is_archived', false)
+          .limit(8),
+        supabase.from('project_boards').select('id, title').ilike('title', `%${q}%`).limit(4),
+        supabase.from('board_forms').select('id, title').ilike('title', `%${q}%`).limit(3),
+        supabase.from('teams').select('id, name').ilike('name', `%${q}%`).limit(3),
+      ]);
+      setSearchResults({
+        cards: cardsRes.error ? [] : (cardsRes.data || []).map((c: Record<string, unknown>) => ({
+          kind: 'card' as const,
+          id: c.id as string,
+          title: c.title as string,
+          boardId: c.board_id as string,
+          boardTitle: (c.project_boards as { title?: string } | null)?.title ?? 'Unknown Board',
+          columnTitle: (c.board_columns as { title?: string } | null)?.title ?? 'Unknown Column',
+        })),
+        boards: boardsRes.error ? [] : (boardsRes.data || []).map((b: Record<string, unknown>) => ({
+          kind: 'board' as const,
+          id: b.id as string,
+          title: b.title as string,
+        })),
+        forms: formsRes.error ? [] : (formsRes.data || []).map((f: Record<string, unknown>) => ({
+          kind: 'form' as const,
+          id: f.id as string,
+          title: f.title as string,
+        })),
+        teams: teamsRes.error ? [] : (teamsRes.data || []).map((t: Record<string, unknown>) => ({
+          kind: 'team' as const,
+          id: t.id as string,
+          title: t.name as string,
+        })),
+      });
     }, 300);
     return () => clearTimeout(timer);
-  }, [cardSearch, user]);
+  }, [searchQuery, user]);
 
   // Click-outside to dismiss search
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (searchBarRef.current && !searchBarRef.current.contains(e.target as Node)) {
-        setCardSearchResults([]);
+        setSearchResults(EMPTY_RESULTS);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  function handleSelectResult(result: SearchResult) {
-    setCardSearchResults([]);
-    // Keep search active on all navigations — same board filters live, different board
-    // will receive the term via lumio:search-sync once it mounts
-    router.push(`/boards/${result.boardId}?card=${result.id}`, { scroll: false });
+  function handleSelectResult(result: AnySearchResult) {
+    setSearchResults(EMPTY_RESULTS);
+    if (result.kind === 'card') {
+      // Keep search active — board filter stays live; different board will sync via lumio:search-sync
+      router.push(`/boards/${result.boardId}?card=${result.id}`, { scroll: false });
+    } else if (result.kind === 'board') {
+      router.push(`/boards/${result.id}`);
+    } else if (result.kind === 'form') {
+      router.push(`/forms/${result.id}/edit`);
+    } else {
+      router.push(`/teams/${result.id}`);
+    }
   }
 
   const fetchNotifications = useCallback(async () => {
@@ -195,6 +223,12 @@ export default function TopNav() {
       notifications.filter(n => !n.is_read && types.includes(n.type)).length,
     ])
   ) as Partial<Record<typeof tabs[number]['href'], number>>;
+
+  // Flattened ordered result list for keyboard navigation and dropdown rendering
+  const thisBoardCards = currentBoardId ? searchResults.cards.filter(r => r.boardId === currentBoardId) : [];
+  const otherCards = currentBoardId ? searchResults.cards.filter(r => r.boardId !== currentBoardId) : searchResults.cards;
+  const cardsCount = thisBoardCards.length + otherCards.length;
+  const allSearchOrdered: AnySearchResult[] = [...thisBoardCards, ...otherCards, ...searchResults.boards, ...searchResults.forms, ...searchResults.teams];
 
   return (
     <>
@@ -604,80 +638,131 @@ export default function TopNav() {
               <Search size={13} style={{ color: '#4b5563', flexShrink: 0 }} />
               <input
                 className="kb-global-search-input"
-                placeholder="Search cards…"
-                value={cardSearch}
+                placeholder="Search…"
+                value={searchQuery}
                 onChange={e => {
-                  setCardSearch(e.target.value);
-                  setCardSearchIdx(0);
+                  setSearchQuery(e.target.value);
+                  setSearchIdx(0);
                   setShowInbox(false);
                   setShowProfile(false);
                 }}
                 onKeyDown={e => {
-                  if (e.key === 'ArrowDown') { e.preventDefault(); setCardSearchIdx(i => Math.min(i + 1, cardSearchResults.length - 1)); }
-                  if (e.key === 'ArrowUp') { e.preventDefault(); setCardSearchIdx(i => Math.max(i - 1, 0)); }
-                  if (e.key === 'Enter' && cardSearchResults[cardSearchIdx]) handleSelectResult(cardSearchResults[cardSearchIdx]);
-                  if (e.key === 'Escape') { setCardSearch(''); setCardSearchResults([]); }
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setSearchIdx(i => Math.min(i + 1, allSearchOrdered.length - 1)); }
+                  if (e.key === 'ArrowUp') { e.preventDefault(); setSearchIdx(i => Math.max(i - 1, 0)); }
+                  if (e.key === 'Enter' && allSearchOrdered[searchIdx]) handleSelectResult(allSearchOrdered[searchIdx]);
+                  if (e.key === 'Escape') { setSearchQuery(''); setSearchResults(EMPTY_RESULTS); }
                 }}
               />
-              {cardSearch && (
-                <button className="kb-global-search-clear" onClick={() => { setCardSearch(''); setCardSearchResults([]); }}>
+              {searchQuery && (
+                <button className="kb-global-search-clear" onClick={() => { setSearchQuery(''); setSearchResults(EMPTY_RESULTS); }}>
                   <X size={12} />
                 </button>
               )}
             </div>
-            {cardSearchResults.length > 0 && (() => {
-              const thisBoardResults = currentBoardId
-                ? cardSearchResults.filter(r => r.boardId === currentBoardId)
-                : [];
-              const otherResults = currentBoardId
-                ? cardSearchResults.filter(r => r.boardId !== currentBoardId)
-                : cardSearchResults;
-              const allOrdered = [...thisBoardResults, ...otherResults];
-              return (
-                <div className="kb-global-search-dropdown">
-                  {thisBoardResults.length > 0 && (
-                    <>
-                      <div className="kb-global-search-label">This board</div>
-                      {thisBoardResults.map(result => {
-                        const i = allOrdered.indexOf(result);
-                        return (
-                          <div
-                            key={result.id}
-                            className={`kb-global-search-item${i === cardSearchIdx ? ' selected' : ''}`}
-                            onMouseEnter={() => setCardSearchIdx(i)}
-                            onClick={() => handleSelectResult(result)}
-                          >
-                            <div className="kb-global-search-item-title">{result.title}</div>
-                            <div className="kb-global-search-item-meta">{result.columnTitle}</div>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
-                  {otherResults.length > 0 && (
-                    <>
-                      <div className="kb-global-search-label" style={thisBoardResults.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
-                        {currentBoardId ? 'Other boards' : 'Cards'}
-                      </div>
-                      {otherResults.map(result => {
-                        const i = allOrdered.indexOf(result);
-                        return (
-                          <div
-                            key={result.id}
-                            className={`kb-global-search-item${i === cardSearchIdx ? ' selected' : ''}`}
-                            onMouseEnter={() => { setCardSearchIdx(i); prefetchBoard(result.boardId); }}
-                            onClick={() => handleSelectResult(result)}
-                          >
-                            <div className="kb-global-search-item-title">{result.title}</div>
-                            <div className="kb-global-search-item-meta">{result.boardTitle} · {result.columnTitle}</div>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
-                </div>
-              );
-            })()}
+            {allSearchOrdered.length > 0 && (
+              <div className="kb-global-search-dropdown">
+                {thisBoardCards.length > 0 && (
+                  <>
+                    <div className="kb-global-search-label">This board</div>
+                    {thisBoardCards.map(result => {
+                      const i = allSearchOrdered.indexOf(result);
+                      return (
+                        <div
+                          key={result.id}
+                          className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
+                          onMouseEnter={() => setSearchIdx(i)}
+                          onClick={() => handleSelectResult(result)}
+                        >
+                          <div className="kb-global-search-item-title">{result.title}</div>
+                          <div className="kb-global-search-item-meta">{result.columnTitle}</div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {otherCards.length > 0 && (
+                  <>
+                    <div className="kb-global-search-label" style={thisBoardCards.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
+                      {currentBoardId ? 'Other boards' : 'Cards'}
+                    </div>
+                    {otherCards.map(result => {
+                      const i = allSearchOrdered.indexOf(result);
+                      return (
+                        <div
+                          key={result.id}
+                          className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
+                          onMouseEnter={() => { setSearchIdx(i); prefetchBoard(result.boardId); }}
+                          onClick={() => handleSelectResult(result)}
+                        >
+                          <div className="kb-global-search-item-title">{result.title}</div>
+                          <div className="kb-global-search-item-meta">{result.boardTitle} · {result.columnTitle}</div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {searchResults.boards.length > 0 && (
+                  <>
+                    <div className="kb-global-search-label" style={cardsCount > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
+                      Boards
+                    </div>
+                    {searchResults.boards.map(result => {
+                      const i = allSearchOrdered.indexOf(result);
+                      return (
+                        <div
+                          key={result.id}
+                          className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
+                          onMouseEnter={() => setSearchIdx(i)}
+                          onClick={() => handleSelectResult(result)}
+                        >
+                          <div className="kb-global-search-item-title">{result.title}</div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {searchResults.forms.length > 0 && (
+                  <>
+                    <div className="kb-global-search-label" style={cardsCount > 0 || searchResults.boards.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
+                      Forms
+                    </div>
+                    {searchResults.forms.map(result => {
+                      const i = allSearchOrdered.indexOf(result);
+                      return (
+                        <div
+                          key={result.id}
+                          className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
+                          onMouseEnter={() => setSearchIdx(i)}
+                          onClick={() => handleSelectResult(result)}
+                        >
+                          <div className="kb-global-search-item-title">{result.title}</div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {searchResults.teams.length > 0 && (
+                  <>
+                    <div className="kb-global-search-label" style={cardsCount > 0 || searchResults.boards.length > 0 || searchResults.forms.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
+                      Teams
+                    </div>
+                    {searchResults.teams.map(result => {
+                      const i = allSearchOrdered.indexOf(result);
+                      return (
+                        <div
+                          key={result.id}
+                          className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
+                          onMouseEnter={() => setSearchIdx(i)}
+                          onClick={() => handleSelectResult(result)}
+                        >
+                          <div className="kb-global-search-item-title">{result.title}</div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Profile */}
