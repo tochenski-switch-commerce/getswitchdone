@@ -8,7 +8,7 @@ import {
   Plus, Trash2, Edit3,
   MessageSquare, CheckSquare, CalendarDays, Tag,
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, Pencil,
-  Check, Copy, LinkIcon, SlidersHorizontal, Repeat, ClipboardList,
+  Check, Copy, LinkIcon, SlidersHorizontal, Repeat, ClipboardList, Layers,
   Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered,
   ThumbsUp, ThumbsDown, Star, GripVertical, Sparkles, Archive, Mail, Eye,
 } from '@/components/BoardIcons';
@@ -757,13 +757,13 @@ export default function CardDetailModal({
             );
           })()}
           <button
-            className="kb-btn kb-btn-primary kb-btn-sm"
+            className="kb-btn kb-btn-ghost kb-btn-sm"
             onMouseDown={e => e.preventDefault()}
             onClick={handleClose}
-            disabled={saving || !editTitle.trim()}
+            disabled={saving}
             style={{ fontSize: 12, padding: '5px 12px', height: 30 }}
           >
-            {saving ? 'Saving…' : 'Save & Close'}
+            {saving ? 'Saving…' : 'Close'}
           </button>
           <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={handleClose}>
             <X size={18} />
@@ -1786,129 +1786,139 @@ export default function CardDetailModal({
             {/* DETAILS section */}
             <div className="kb-sidebar-section-header">Details</div>
 
-            {/* Assignee row */}
-            <div className="kb-sidebar-row">
-              <span className="kb-sidebar-row-icon"><User size={13} /></span>
-              <span className="kb-sidebar-row-label">Assignee</span>
+            {/* Assignee field */}
+            <div className="kb-sidebar-field">
+              <div className="kb-sidebar-field-label"><User size={11} /> Assignee</div>
               <button
                 ref={el => { sidebarPopoverBtnRefs.current['assignee'] = el; }}
-                className="kb-sidebar-row-value"
+                className="kb-sidebar-field-value"
                 onClick={() => openPopover('assignee', sidebarPopoverBtnRefs.current['assignee'])}
               >
                 {editAssignee
                   ? (() => { const p = userProfiles.find(u => u.id === editAssignee); return p?.name ? `@${p.name}` : 'Assigned'; })()
-                  : <span className="kb-sidebar-row-none">None</span>
+                  : <span className="kb-sidebar-field-none">None</span>
                 }
               </button>
             </div>
+            <hr className="kb-sidebar-item-divider" />
 
-            {/* Priority row */}
-            <div className="kb-sidebar-row">
-              <span className="kb-sidebar-row-icon"><Flag size={13} /></span>
-              <span className="kb-sidebar-row-label">Priority</span>
+            {/* Priority field */}
+            <div className="kb-sidebar-field">
+              <div className="kb-sidebar-field-label"><Flag size={11} /> Priority</div>
               <button
                 ref={el => { sidebarPopoverBtnRefs.current['priority'] = el; }}
-                className="kb-sidebar-row-value"
+                className="kb-sidebar-field-value"
                 onClick={() => openPopover('priority', sidebarPopoverBtnRefs.current['priority'])}
               >
                 {editPriority
                   ? <span style={{ color: PRIORITY_CONFIG[editPriority].color }}>{PRIORITY_CONFIG[editPriority].label}</span>
-                  : <span className="kb-sidebar-row-none">None</span>
+                  : <span className="kb-sidebar-field-none">None</span>
                 }
               </button>
             </div>
+            <hr className="kb-sidebar-item-divider" />
 
-            {/* Due Date row */}
-            <div className="kb-sidebar-row">
-              <span className="kb-sidebar-row-icon"><Clock size={13} /></span>
-              <span className="kb-sidebar-row-label">Due Date</span>
+            {/* Due Date field */}
+            <div className="kb-sidebar-field">
+              <div className="kb-sidebar-field-label"><Clock size={11} /> Due Date</div>
               <button
                 ref={el => { sidebarPopoverBtnRefs.current['dueDate'] = el; }}
-                className={`kb-sidebar-row-value${editDueDate && new Date(editDueDate + 'T23:59:59') < new Date() ? ' kb-card-meta-chip-overdue' : ''}`}
+                className={`kb-sidebar-field-value${editDueDate && new Date(editDueDate + 'T23:59:59') < new Date() ? ' kb-card-meta-chip-overdue' : ''}`}
                 onClick={() => openPopover('dueDate', sidebarPopoverBtnRefs.current['dueDate'])}
               >
                 {editDueDate
-                  ? new Date(editDueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                  : <span className="kb-sidebar-row-none">None</span>
+                  ? (() => {
+                      const dateStr = new Date(editDueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                      if (editDueTime) {
+                        const [h, m] = editDueTime.split(':').map(Number);
+                        const d = new Date(); d.setHours(h, m, 0);
+                        const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                        return `${dateStr}, ${timeStr}`;
+                      }
+                      return dateStr;
+                    })()
+                  : <span className="kb-sidebar-field-none">None</span>
                 }
               </button>
             </div>
+            <hr className="kb-sidebar-item-divider" />
 
-            {/* Start Date row */}
-            <div className="kb-sidebar-row">
-              <span className="kb-sidebar-row-icon"><CalendarDays size={13} /></span>
-              <span className="kb-sidebar-row-label">Start</span>
+            {/* Start Date field */}
+            <div className="kb-sidebar-field">
+              <div className="kb-sidebar-field-label"><CalendarDays size={11} /> Start Date</div>
               <button
                 ref={el => { sidebarPopoverBtnRefs.current['startDate'] = el; }}
-                className="kb-sidebar-row-value"
+                className="kb-sidebar-field-value"
                 onClick={() => openPopover('startDate', sidebarPopoverBtnRefs.current['startDate'])}
               >
                 {editStartDate
                   ? new Date(editStartDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                  : <span className="kb-sidebar-row-none">None</span>
+                  : <span className="kb-sidebar-field-none">None</span>
                 }
               </button>
             </div>
+            <hr className="kb-sidebar-item-divider" />
 
-            {/* Watchers row */}
-            {(onAddWatcher || onInviteWatcher) && (
-              <div className="kb-sidebar-row">
-                <span className="kb-sidebar-row-icon"><Eye size={13} /></span>
-                <span className="kb-sidebar-row-label">Watchers</span>
-                <button
-                  ref={watcherBtnRef}
-                  className="kb-sidebar-row-value"
-                  onClick={() => {
-                    if (!showWatcherPicker && watcherBtnRef.current) {
-                      const rect = watcherBtnRef.current.getBoundingClientRect();
-                      const left = Math.min(rect.left, window.innerWidth - 244);
-                      setWatcherPickerPos({ top: rect.bottom + 6, left });
-                    }
-                    setShowWatcherPicker(p => !p);
-                    setWatcherSearch('');
-                    setWatcherInviteFeedback(null);
-                  }}
-                >
-                  {watchers.length > 0
-                    ? `${watchers.length} watcher${watchers.length !== 1 ? 's' : ''}`
-                    : <span className="kb-sidebar-row-none">None</span>
-                  }
-                </button>
-              </div>
-            )}
-
-            {/* Repeat row */}
-            <div className="kb-sidebar-row">
-              <span className="kb-sidebar-row-icon"><Repeat size={13} /></span>
-              <span className="kb-sidebar-row-label">Repeat</span>
+            {/* Repeat field */}
+            <div className="kb-sidebar-field">
+              <div className="kb-sidebar-field-label"><Repeat size={11} /> Repeat</div>
               <button
                 ref={el => { sidebarPopoverBtnRefs.current['repeat'] = el; }}
-                className="kb-sidebar-row-value"
+                className="kb-sidebar-field-value"
                 onClick={() => openPopover('repeat', sidebarPopoverBtnRefs.current['repeat'])}
               >
                 {repeatEnabled
-                  ? <span style={{ fontSize: 11 }}>{formatRepeatSummary(
+                  ? <span style={{ fontSize: 12 }}>{formatRepeatSummary(
                       repeatMode === 'monthly-weekday'
                         ? { mode: 'monthly-weekday', every: 1, unit: 'months', nth: repeatNth, weekday: repeatWeekday }
                         : { every: repeatEvery, unit: repeatUnit }
                     )}</span>
-                  : <span className="kb-sidebar-row-none">Off</span>
+                  : <span className="kb-sidebar-field-none">Off</span>
                 }
               </button>
             </div>
+            <hr className="kb-sidebar-item-divider" />
 
-            {/* Move to List row */}
-            <div className="kb-sidebar-row">
-              <span className="kb-sidebar-row-icon"><ChevronDown size={13} /></span>
-              <span className="kb-sidebar-row-label">List</span>
+            {/* Move to List field */}
+            <div className="kb-sidebar-field">
+              <div className="kb-sidebar-field-label"><Layers size={11} /> List</div>
               <button
                 ref={el => { sidebarPopoverBtnRefs.current['moveList'] = el; }}
-                className="kb-sidebar-row-value"
+                className="kb-sidebar-field-value"
                 onClick={() => openPopover('moveList', sidebarPopoverBtnRefs.current['moveList'])}
               >
-                {column?.title ?? <span className="kb-sidebar-row-none">Unknown</span>}
+                {column?.title ?? <span className="kb-sidebar-field-none">Unknown</span>}
               </button>
             </div>
+            <hr className="kb-sidebar-item-divider" />
+
+            {/* Watchers field */}
+            {(onAddWatcher || onInviteWatcher) && (
+              <>
+                <div className="kb-sidebar-field">
+                  <div className="kb-sidebar-field-label"><Eye size={11} /> Watchers</div>
+                  <button
+                    ref={watcherBtnRef}
+                    className="kb-sidebar-field-value"
+                    onClick={() => {
+                      if (!showWatcherPicker && watcherBtnRef.current) {
+                        const rect = watcherBtnRef.current.getBoundingClientRect();
+                        const left = Math.min(rect.left, window.innerWidth - 244);
+                        setWatcherPickerPos({ top: rect.bottom + 6, left });
+                      }
+                      setShowWatcherPicker(p => !p);
+                      setWatcherSearch('');
+                      setWatcherInviteFeedback(null);
+                    }}
+                  >
+                    {watchers.length > 0
+                      ? `${watchers.length} watcher${watchers.length !== 1 ? 's' : ''}`
+                      : <span className="kb-sidebar-field-none">None</span>
+                    }
+                  </button>
+                </div>
+              </>
+            )}
 
             {/* Snooze status */}
             {card.snoozed_until && new Date(card.snoozed_until) > new Date() && (

@@ -3461,56 +3461,50 @@ export const kanbanStyles = `
     margin: 14px 0;
   }
 
-  /* ── Trello-style compact sidebar rows ── */
-  .kb-sidebar-row {
+  /* ── Stacked sidebar fields ── */
+  .kb-sidebar-field {
+    padding: 10px 0;
+  }
+  .kb-sidebar-field-label {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 3px;
-    min-height: 32px;
-  }
-  .kb-sidebar-row-icon {
+    gap: 5px;
+    font-size: 11px;
     color: #6b7280;
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    width: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
   }
-  .kb-sidebar-row-label {
-    font-size: 12px;
-    color: #9ca3af;
-    flex-shrink: 0;
-    width: 68px;
-  }
-  .kb-sidebar-row-value {
-    flex: 1;
-    min-width: 0;
+  .kb-sidebar-field-value {
+    width: 100%;
     background: rgba(255,255,255,0.04);
     border: 1px solid transparent;
     border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 12px;
+    padding: 7px 10px;
+    font-size: 13px;
     color: #e5e7eb;
     cursor: pointer;
     text-align: left;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     transition: background 0.12s, border-color 0.12s;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    box-sizing: border-box;
   }
-  .kb-sidebar-row-value:hover {
+  .kb-sidebar-field-value:hover {
     background: rgba(255,255,255,0.07);
     border-color: #374151;
   }
-  .kb-sidebar-row-none {
+  .kb-sidebar-field-none {
     color: #4b5563;
     font-style: italic;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  }
+  .kb-sidebar-item-divider {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin: 0;
   }
 
   /* ── Sidebar actions section ── */
