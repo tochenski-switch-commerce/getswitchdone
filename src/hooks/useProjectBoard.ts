@@ -952,10 +952,11 @@ export function useProjectBoard() {
       };
     });
     try {
-      const updates = cardIds.map((id, idx) =>
-        supabase.from('board_cards').update({ column_id: columnId, position: idx }).eq('id', id)
-      );
-      await Promise.all(updates);
+      const { error: rpcError } = await supabase.rpc('reorder_cards_in_column', {
+        p_column_id: columnId,
+        p_card_ids: cardIds,
+      });
+      if (rpcError) throw rpcError;
     } catch (err: any) {
       setError(err.message);
     }

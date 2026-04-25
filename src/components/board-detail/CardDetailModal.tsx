@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { BoardCard, BoardLabel, CardChecklistGroup, CardPriority, ChecklistTemplate, UserProfile, RepeatUnit, RepeatRule, RepeatMode, CommentReaction } from '@/types/board-types';
 import type { FullBoard } from '@/hooks/useProjectBoard';
 import {
@@ -159,6 +160,9 @@ export default function CardDetailModal({
   const [watcherSearch, setWatcherSearch] = useState('');
   const [watcherInviteLoading, setWatcherInviteLoading] = useState(false);
   const [watcherInviteFeedback, setWatcherInviteFeedback] = useState<string | null>(null);
+  const watcherBtnRef = useRef<HTMLButtonElement>(null);
+  const watcherPickerRef = useRef<HTMLDivElement>(null);
+  const [watcherPickerPos, setWatcherPickerPos] = useState({ top: 0, left: 0 });
 
   // AI description state
   const [aiDescGenerating, setAiDescGenerating] = useState(false);
@@ -357,6 +361,25 @@ export default function CardDetailModal({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [mentionActive]);
+
+  useEffect(() => {
+    if (!showWatcherPicker) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        watcherPickerRef.current && !watcherPickerRef.current.contains(target) &&
+        watcherBtnRef.current && !watcherBtnRef.current.contains(target)
+      ) {
+        setShowWatcherPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler as EventListener);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler as EventListener);
+    };
+  }, [showWatcherPicker]);
 
   useEffect(() => {
     if (editingDesc && descRef.current) {
@@ -1680,35 +1703,43 @@ export default function CardDetailModal({
 
               {/* Add watcher picker */}
               {(onAddWatcher || onInviteWatcher) && (
-                <div style={{ position: 'relative', marginTop: 6 }}>
+                <div style={{ marginTop: 6 }}>
                   <button
+                    ref={watcherBtnRef}
                     className="kb-btn kb-btn-sm kb-btn-ghost"
                     style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}
-                    onClick={() => { setShowWatcherPicker(p => !p); setWatcherSearch(''); setWatcherInviteFeedback(null); }}
+                    onClick={() => {
+                      if (!showWatcherPicker && watcherBtnRef.current) {
+                        const rect = watcherBtnRef.current.getBoundingClientRect();
+                        const left = Math.min(rect.left, window.innerWidth - 244);
+                        setWatcherPickerPos({ top: rect.bottom + 4, left });
+                      }
+                      setShowWatcherPicker(p => !p);
+                      setWatcherSearch('');
+                      setWatcherInviteFeedback(null);
+                    }}
                   >
                     <Plus size={11} />
                     Add watcher
                   </button>
+                </div>
+              )}
 
-                  {showWatcherPicker && (
-                    <>
-                      <div
-                        style={{ position: 'fixed', inset: 0, zIndex: 200 }}
-                        onClick={() => setShowWatcherPicker(false)}
-                      />
-                      <div style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        marginTop: 4,
-                        width: 240,
-                        background: '#1a2035',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: 8,
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                        zIndex: 201,
-                        overflow: 'hidden',
-                      }}>
+              {showWatcherPicker && (onAddWatcher || onInviteWatcher) && typeof document !== 'undefined' && createPortal(
+                <div
+                  ref={watcherPickerRef}
+                  style={{
+                    position: 'fixed',
+                    top: watcherPickerPos.top,
+                    left: watcherPickerPos.left,
+                    width: 240,
+                    background: '#1a2035',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 8,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    zIndex: 50201,
+                    overflow: 'hidden',
+                  }}>
                         <div style={{ padding: '8px 8px 6px' }}>
                           <input
                             autoFocus
@@ -1845,10 +1876,8 @@ export default function CardDetailModal({
                             No users found. Enter an email to invite.
                           </p>
                         )}
-                      </div>
-                    </>
-                  )}
-                </div>
+                </div>,
+                document.body
               )}
 
               {/* Watchers empty state */}
