@@ -50,6 +50,7 @@ export default function TopNav() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResults>(EMPTY_RESULTS);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [searchIdx, setSearchIdx] = useState(0);
   const searchBarRef = useRef<HTMLDivElement>(null);
   const searchQueryRef = useRef(searchQuery);
@@ -71,6 +72,7 @@ export default function TopNav() {
   useEffect(() => {
     setSearchQuery('');
     setSearchResults(EMPTY_RESULTS);
+    setSearchLoading(false);
     if (!currentBoardId) {
       window.dispatchEvent(new CustomEvent('lumio:board-search', { detail: '' }));
     }
@@ -88,7 +90,8 @@ export default function TopNav() {
   // Debounced global search — cards, boards, forms, teams queried in parallel
   useEffect(() => {
     const q = searchQuery.trim();
-    if (!q || !user) { setSearchResults(EMPTY_RESULTS); return; }
+    if (!q || !user) { setSearchResults(EMPTY_RESULTS); setSearchLoading(false); return; }
+    setSearchLoading(true);
     const timer = setTimeout(async () => {
       const [cardsRes, boardsRes, formsRes, teamsRes] = await Promise.all([
         supabase
@@ -126,6 +129,7 @@ export default function TopNav() {
           title: t.name as string,
         })),
       });
+      setSearchLoading(false);
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery, user]);
@@ -438,6 +442,18 @@ export default function TopNav() {
           overflow: hidden;
           text-overflow: ellipsis;
         }
+        .kb-global-search-status {
+          display: flex; align-items: center; gap: 8px;
+          padding: 12px 10px; color: #6b7280; font-size: 13px;
+        }
+        .kb-global-search-spinner {
+          width: 14px; height: 14px; border-radius: 50%;
+          border: 2px solid rgba(255,255,255,0.1);
+          border-top-color: #6366f1;
+          animation: kb-search-spin 0.7s linear infinite;
+          flex-shrink: 0;
+        }
+        @keyframes kb-search-spin { to { transform: rotate(360deg); } }
         /* Desktop: show all tabs, hide mobile row */
         .kb-tabs-all { display: flex; gap: 2px; }
         .kb-tabs-mobile { display: none; }
@@ -659,106 +675,117 @@ export default function TopNav() {
                 </button>
               )}
             </div>
-            {allSearchOrdered.length > 0 && (
+            {(searchLoading || (searchQuery.trim() && !searchLoading)) && (
               <div className="kb-global-search-dropdown">
-                {thisBoardCards.length > 0 && (
+                {searchLoading ? (
+                  <div className="kb-global-search-status">
+                    <div className="kb-global-search-spinner" />
+                    Searching…
+                  </div>
+                ) : allSearchOrdered.length === 0 ? (
+                  <div className="kb-global-search-status">No results found</div>
+                ) : (
                   <>
-                    <div className="kb-global-search-label">This board</div>
-                    {thisBoardCards.map(result => {
-                      const i = allSearchOrdered.indexOf(result);
-                      return (
-                        <div
-                          key={result.id}
-                          className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
-                          onMouseEnter={() => setSearchIdx(i)}
-                          onClick={() => handleSelectResult(result)}
-                        >
-                          <div className="kb-global-search-item-title">{result.title}</div>
-                          <div className="kb-global-search-item-meta">{result.columnTitle}</div>
+                    {thisBoardCards.length > 0 && (
+                      <>
+                        <div className="kb-global-search-label">This board</div>
+                        {thisBoardCards.map(result => {
+                          const i = allSearchOrdered.indexOf(result);
+                          return (
+                            <div
+                              key={result.id}
+                              className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
+                              onMouseEnter={() => setSearchIdx(i)}
+                              onClick={() => handleSelectResult(result)}
+                            >
+                              <div className="kb-global-search-item-title">{result.title}</div>
+                              <div className="kb-global-search-item-meta">{result.columnTitle}</div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                    {otherCards.length > 0 && (
+                      <>
+                        <div className="kb-global-search-label" style={thisBoardCards.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
+                          {currentBoardId ? 'Other boards' : 'Cards'}
                         </div>
-                      );
-                    })}
-                  </>
-                )}
-                {otherCards.length > 0 && (
-                  <>
-                    <div className="kb-global-search-label" style={thisBoardCards.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
-                      {currentBoardId ? 'Other boards' : 'Cards'}
-                    </div>
-                    {otherCards.map(result => {
-                      const i = allSearchOrdered.indexOf(result);
-                      return (
-                        <div
-                          key={result.id}
-                          className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
-                          onMouseEnter={() => { setSearchIdx(i); prefetchBoard(result.boardId); }}
-                          onClick={() => handleSelectResult(result)}
-                        >
-                          <div className="kb-global-search-item-title">{result.title}</div>
-                          <div className="kb-global-search-item-meta">{result.boardTitle} · {result.columnTitle}</div>
+                        {otherCards.map(result => {
+                          const i = allSearchOrdered.indexOf(result);
+                          return (
+                            <div
+                              key={result.id}
+                              className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
+                              onMouseEnter={() => { setSearchIdx(i); prefetchBoard(result.boardId); }}
+                              onClick={() => handleSelectResult(result)}
+                            >
+                              <div className="kb-global-search-item-title">{result.title}</div>
+                              <div className="kb-global-search-item-meta">{result.boardTitle} · {result.columnTitle}</div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                    {searchResults.boards.length > 0 && (
+                      <>
+                        <div className="kb-global-search-label" style={cardsCount > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
+                          Boards
                         </div>
-                      );
-                    })}
-                  </>
-                )}
-                {searchResults.boards.length > 0 && (
-                  <>
-                    <div className="kb-global-search-label" style={cardsCount > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
-                      Boards
-                    </div>
-                    {searchResults.boards.map(result => {
-                      const i = allSearchOrdered.indexOf(result);
-                      return (
-                        <div
-                          key={result.id}
-                          className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
-                          onMouseEnter={() => setSearchIdx(i)}
-                          onClick={() => handleSelectResult(result)}
-                        >
-                          <div className="kb-global-search-item-title">{result.title}</div>
+                        {searchResults.boards.map(result => {
+                          const i = allSearchOrdered.indexOf(result);
+                          return (
+                            <div
+                              key={result.id}
+                              className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
+                              onMouseEnter={() => setSearchIdx(i)}
+                              onClick={() => handleSelectResult(result)}
+                            >
+                              <div className="kb-global-search-item-title">{result.title}</div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                    {searchResults.forms.length > 0 && (
+                      <>
+                        <div className="kb-global-search-label" style={cardsCount > 0 || searchResults.boards.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
+                          Forms
                         </div>
-                      );
-                    })}
-                  </>
-                )}
-                {searchResults.forms.length > 0 && (
-                  <>
-                    <div className="kb-global-search-label" style={cardsCount > 0 || searchResults.boards.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
-                      Forms
-                    </div>
-                    {searchResults.forms.map(result => {
-                      const i = allSearchOrdered.indexOf(result);
-                      return (
-                        <div
-                          key={result.id}
-                          className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
-                          onMouseEnter={() => setSearchIdx(i)}
-                          onClick={() => handleSelectResult(result)}
-                        >
-                          <div className="kb-global-search-item-title">{result.title}</div>
+                        {searchResults.forms.map(result => {
+                          const i = allSearchOrdered.indexOf(result);
+                          return (
+                            <div
+                              key={result.id}
+                              className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
+                              onMouseEnter={() => setSearchIdx(i)}
+                              onClick={() => handleSelectResult(result)}
+                            >
+                              <div className="kb-global-search-item-title">{result.title}</div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                    {searchResults.teams.length > 0 && (
+                      <>
+                        <div className="kb-global-search-label" style={cardsCount > 0 || searchResults.boards.length > 0 || searchResults.forms.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
+                          Teams
                         </div>
-                      );
-                    })}
-                  </>
-                )}
-                {searchResults.teams.length > 0 && (
-                  <>
-                    <div className="kb-global-search-label" style={cardsCount > 0 || searchResults.boards.length > 0 || searchResults.forms.length > 0 ? { marginTop: 4, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' } : undefined}>
-                      Teams
-                    </div>
-                    {searchResults.teams.map(result => {
-                      const i = allSearchOrdered.indexOf(result);
-                      return (
-                        <div
-                          key={result.id}
-                          className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
-                          onMouseEnter={() => setSearchIdx(i)}
-                          onClick={() => handleSelectResult(result)}
-                        >
-                          <div className="kb-global-search-item-title">{result.title}</div>
-                        </div>
-                      );
-                    })}
+                        {searchResults.teams.map(result => {
+                          const i = allSearchOrdered.indexOf(result);
+                          return (
+                            <div
+                              key={result.id}
+                              className={`kb-global-search-item${i === searchIdx ? ' selected' : ''}`}
+                              onMouseEnter={() => setSearchIdx(i)}
+                              onClick={() => handleSelectResult(result)}
+                            >
+                              <div className="kb-global-search-item-title">{result.title}</div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
                   </>
                 )}
               </div>
