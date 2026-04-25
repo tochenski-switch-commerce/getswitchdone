@@ -127,7 +127,6 @@ export default function CardDetailModal({
   const [editingCommentText, setEditingCommentText] = useState('');
   const [checklistTexts, setChecklistTexts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [savingTemplateGroupId, setSavingTemplateGroupId] = useState<string | null>(null);
@@ -193,7 +192,7 @@ export default function CardDetailModal({
   const [mobileTab, setMobileTab] = useState<'details' | 'info'>('details');
 
   // Sidebar popover state
-  const [openSidebarPopover, setOpenSidebarPopover] = useState<'priority' | 'assignee' | 'dueDate' | 'startDate' | 'repeat' | 'moveList' | null>(null);
+  const [openSidebarPopover, setOpenSidebarPopover] = useState<'priority' | 'assignee' | 'dueDate' | 'startDate' | 'repeat' | 'moveList' | 'labels' | null>(null);
   const sidebarPopoverBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const sidebarPopoverRef = useRef<HTMLDivElement>(null);
   const [sidebarPopoverPos, setSidebarPopoverPos] = useState({ top: 0, left: 0 });
@@ -835,7 +834,7 @@ export default function CardDetailModal({
             )}
 
             {/* Metadata summary strip — shows set values as clickable chips */}
-            {(editAssignee || editPriority || editDueDate || watchers.length > 0) && (
+            {(editAssignee || editPriority || editDueDate || watchers.length > 0 || editLabels.length > 0) && (
               <div className="kb-card-meta-strip">
                 {editAssignee && (() => {
                   const p = userProfiles.find(u => u.id === editAssignee);
@@ -883,49 +882,22 @@ export default function CardDetailModal({
                     <Eye size={11} /> {watchers.length} watcher{watchers.length !== 1 ? 's' : ''}
                   </button>
                 )}
-              </div>
-            )}
-
-            {/* Labels */}
-            <div style={{ marginBottom: 16 }}>
-              <div className="kb-detail-section-label">
-                <Tag size={13} />
-                Labels
-                <button className="kb-btn-icon-sm" onClick={() => setShowLabelPicker(!showLabelPicker)}>
-                  {showLabelPicker ? <X size={12} /> : <Plus size={12} />}
-                </button>
-              </div>
-              <div className="kb-label-chips">
                 {editLabels.map(labelId => {
                   const l = board.labels.find(bl => bl.id === labelId);
                   if (!l) return null;
                   return (
-                    <span key={l.id} className="kb-label-chip" style={{ background: l.color + '22', color: l.color, borderColor: l.color + '44' }}>
+                    <span
+                      key={l.id}
+                      className="kb-label-chip"
+                      style={{ background: l.color + '22', color: l.color, borderColor: l.color + '44', cursor: 'pointer' }}
+                      onClick={() => { setMobileTab('info'); openPopover('labels', sidebarPopoverBtnRefs.current['labels']); }}
+                    >
                       {l.name}
-                      <button onClick={() => toggleLabel(l.id)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, marginLeft: 4 }}>
-                        <X size={10} />
-                      </button>
                     </span>
                   );
                 })}
               </div>
-              {showLabelPicker && (
-                <div className="kb-label-picker">
-                  {board.labels.map(l => (
-                    <button
-                      key={l.id}
-                      className={`kb-label-picker-item ${editLabels.includes(l.id) ? 'selected' : ''}`}
-                      onClick={() => toggleLabel(l.id)}
-                      style={{ '--label-color': l.color } as any}
-                    >
-                      <span className="kb-label-dot" style={{ background: l.color }} />
-                      {l.name}
-                      {editLabels.includes(l.id) && <Check size={12} style={{ marginLeft: 'auto', color: l.color }} />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Description */}
             <div style={{ marginBottom: 16 }}>
@@ -1818,6 +1790,45 @@ export default function CardDetailModal({
             </div>
             <hr className="kb-sidebar-item-divider" />
 
+            {/* Labels field */}
+            <div className="kb-sidebar-field">
+              <div className="kb-sidebar-field-label">
+                <Tag size={11} /> Labels
+                <button
+                  ref={el => { sidebarPopoverBtnRefs.current['labels'] = el; }}
+                  onClick={() => openPopover('labels', sidebarPopoverBtnRefs.current['labels'])}
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', borderRadius: 4 }}
+                  title="Add label"
+                >
+                  <Plus size={11} />
+                </button>
+              </div>
+              {editLabels.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {editLabels.map(labelId => {
+                    const l = board.labels.find(bl => bl.id === labelId);
+                    if (!l) return null;
+                    return (
+                      <span key={l.id} className="kb-label-chip" style={{ background: l.color + '22', color: l.color, borderColor: l.color + '44' }}>
+                        {l.name}
+                        <button onClick={() => toggleLabel(l.id)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, marginLeft: 2, display: 'flex', alignItems: 'center' }}>
+                          <X size={9} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : (
+                <button
+                  className="kb-sidebar-field-value"
+                  onClick={() => openPopover('labels', sidebarPopoverBtnRefs.current['labels'])}
+                >
+                  <span className="kb-sidebar-field-none">None</span>
+                </button>
+              )}
+            </div>
+            <hr className="kb-sidebar-item-divider" />
+
             {/* Due Date field */}
             <div className="kb-sidebar-field">
               <div className="kb-sidebar-field-label"><Clock size={11} /> Due Date</div>
@@ -2353,6 +2364,30 @@ export default function CardDetailModal({
                         {col.id === card.column_id && <Check size={11} style={{ color: '#818cf8', flexShrink: 0 }} />}
                         {col.id !== card.column_id && <span style={{ width: 11, flexShrink: 0 }} />}
                         {col.title}
+                      </button>
+                    ))}
+                  </div>,
+                  document.body
+                )}
+
+                {/* Labels popover */}
+                {openSidebarPopover === 'labels' && createPortal(
+                  <div ref={sidebarPopoverRef} style={{ position: 'fixed', top: sidebarPopoverPos.top, left: sidebarPopoverPos.left, width: 220, background: '#1a2035', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50201, overflow: 'hidden', padding: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '6px 8px 8px' }}>Labels</div>
+                    {board.labels.length === 0 && (
+                      <div style={{ fontSize: 12, color: '#4b5563', padding: '6px 10px', fontStyle: 'italic' }}>No labels on this board yet</div>
+                    )}
+                    {board.labels.map(l => (
+                      <button
+                        key={l.id}
+                        onClick={() => toggleLabel(l.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', background: editLabels.includes(l.id) ? 'rgba(255,255,255,0.06)' : 'transparent', border: 'none', color: '#e5e7eb', fontSize: 13, borderRadius: 6, cursor: 'pointer', marginBottom: 2, textAlign: 'left' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = editLabels.includes(l.id) ? 'rgba(255,255,255,0.06)' : 'transparent'; }}
+                      >
+                        <span style={{ width: 12, height: 12, borderRadius: 3, background: l.color, flexShrink: 0 }} />
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
+                        {editLabels.includes(l.id) && <Check size={11} style={{ color: l.color, flexShrink: 0 }} />}
                       </button>
                     ))}
                   </div>,
