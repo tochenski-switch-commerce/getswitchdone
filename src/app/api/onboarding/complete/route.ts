@@ -136,6 +136,7 @@ export async function POST(req: NextRequest) {
       description: automationDescription,
       position: 1,
       created_by: user.id,
+      assignees: [user.id],
     })
     .select('id')
     .single();
@@ -164,6 +165,7 @@ export async function POST(req: NextRequest) {
       description: teamsDescription,
       position: 2,
       created_by: user.id,
+      assignees: [user.id],
     })
     .select('id')
     .single();
@@ -192,6 +194,7 @@ export async function POST(req: NextRequest) {
       description: formsDescription,
       position: 3,
       created_by: user.id,
+      assignees: [user.id],
     })
     .select('id')
     .single();
