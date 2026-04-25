@@ -3524,6 +3524,32 @@ export const kanbanStyles = `
     margin: 0;
   }
 
+  /* Sidebar-mode input/select — matches field-value look but for actual form elements */
+  .kb-sidebar-field-input {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 13px;
+    color: #e5e7eb;
+    outline: none;
+    box-sizing: border-box;
+    transition: background 0.12s, border-color 0.12s;
+    font-family: inherit;
+    -webkit-appearance: none;
+  }
+  .kb-sidebar-field-input:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: #374151;
+  }
+  .kb-sidebar-field-input:focus {
+    background: rgba(255,255,255,0.07);
+    border-color: #4f46e5;
+  }
+  .kb-sidebar-field-input::placeholder { color: #4b5563; font-style: italic; }
+  .kb-sidebar-field-input option { background: #1a2035; color: #e5e7eb; }
+
   /* ── Sidebar actions section ── */
   .kb-sidebar-actions {
     display: flex;

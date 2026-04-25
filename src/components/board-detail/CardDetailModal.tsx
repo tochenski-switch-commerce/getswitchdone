@@ -2110,20 +2110,24 @@ export default function CardDetailModal({
               <>
                 <hr className="kb-sidebar-divider" />
                 <div className="kb-sidebar-section-header">Custom Fields</div>
-                <div className="kb-cf-section" style={{ border: 'none', padding: 0 }}>
-                  {board.customFields.map(f => (
-                    <div key={f.id} className="kb-cf-field">
-                      {f.field_type !== 'checkbox' && <label className="kb-cf-label">{f.title}</label>}
+                {board.customFields.map((f, i) => (
+                  <React.Fragment key={f.id}>
+                    <div className="kb-sidebar-field">
+                      <div className="kb-sidebar-field-label">
+                        <SlidersHorizontal size={11} /> {f.title}
+                      </div>
                       <CustomFieldInput
                         field={f}
                         card={card}
+                        sidebarMode
                         onSetValue={async (fieldId, value, multiValue) => {
                           await onSetCustomFieldValue(card.id, fieldId, value, multiValue);
                         }}
                       />
                     </div>
-                  ))}
-                </div>
+                    {i < board.customFields.length - 1 && <hr className="kb-sidebar-item-divider" />}
+                  </React.Fragment>
+                ))}
               </>
             )}
 

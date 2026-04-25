@@ -8,10 +8,12 @@ export default function CustomFieldInput({
   field,
   card,
   onSetValue,
+  sidebarMode = false,
 }: {
   field: BoardCustomField;
   card: BoardCard;
   onSetValue: (fieldId: string, value?: string, multiValue?: string[]) => Promise<void>;
+  sidebarMode?: boolean;
 }) {
   const existing = (card.custom_field_values || []).find(v => v.field_id === field.id);
   const [localVal, setLocalVal] = useState(existing?.value || '');
@@ -26,16 +28,18 @@ export default function CustomFieldInput({
     timerRef.current = setTimeout(() => { onSetValue(field.id, v); }, 500);
   };
 
+  const inputClass = sidebarMode ? 'kb-sidebar-field-input' : 'kb-input';
+
   if (field.field_type === 'checkbox') {
     const checked = existing?.value === 'true';
     return (
-      <div className="kb-cf-checkbox-row">
+      <div className="kb-cf-checkbox-row" style={sidebarMode ? { paddingTop: 2 } : {}}>
         <input
           type="checkbox"
           checked={checked}
           onChange={() => onSetValue(field.id, checked ? 'false' : 'true')}
         />
-        <span>{field.title}</span>
+        {!sidebarMode && <span>{field.title}</span>}
       </div>
     );
   }
@@ -43,9 +47,10 @@ export default function CustomFieldInput({
   if (field.field_type === 'dropdown') {
     return (
       <select
-        className="kb-input"
+        className={inputClass}
         value={existing?.value || ''}
         onChange={e => onSetValue(field.id, e.target.value)}
+        style={sidebarMode ? { cursor: 'pointer' } : {}}
       >
         <option value="">Select…</option>
         {((field.options as string[]) || []).map(opt => (
@@ -69,7 +74,7 @@ export default function CustomFieldInput({
       onSetValue(field.id, undefined, next);
     };
     return (
-      <div className="kb-cf-multi-options">
+      <div className="kb-cf-multi-options" style={sidebarMode ? { marginTop: 2 } : {}}>
         {options.map(opt => (
           <button
             key={opt}
@@ -86,7 +91,7 @@ export default function CustomFieldInput({
   if (field.field_type === 'date') {
     return (
       <DatePickerInput
-        className="kb-input"
+        className={inputClass}
         value={existing?.value || ''}
         onChange={v => onSetValue(field.id, v)}
         placeholder="Select date…"
@@ -97,7 +102,7 @@ export default function CustomFieldInput({
   if (field.field_type === 'number') {
     return (
       <input
-        className="kb-input"
+        className={inputClass}
         type="number"
         value={localVal}
         onChange={e => { setLocalVal(e.target.value); debouncedSave(e.target.value); }}
@@ -109,7 +114,7 @@ export default function CustomFieldInput({
   // Default: text
   return (
     <input
-      className="kb-input"
+      className={inputClass}
       type="text"
       value={localVal}
       onChange={e => { setLocalVal(e.target.value); debouncedSave(e.target.value); }}
