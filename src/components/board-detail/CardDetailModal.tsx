@@ -1794,38 +1794,31 @@ export default function CardDetailModal({
             <div className="kb-sidebar-field">
               <div className="kb-sidebar-field-label">
                 <Tag size={11} /> Labels
-                <button
-                  ref={el => { sidebarPopoverBtnRefs.current['labels'] = el; }}
-                  onClick={() => openPopover('labels', sidebarPopoverBtnRefs.current['labels'])}
-                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', borderRadius: 4 }}
-                  title="Add label"
-                >
-                  <Plus size={11} />
-                </button>
               </div>
-              {editLabels.length > 0 ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {editLabels.map(labelId => {
-                    const l = board.labels.find(bl => bl.id === labelId);
-                    if (!l) return null;
-                    return (
-                      <span key={l.id} className="kb-label-chip" style={{ background: l.color + '22', color: l.color, borderColor: l.color + '44' }}>
-                        {l.name}
-                        <button onClick={() => toggleLabel(l.id)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, marginLeft: 2, display: 'flex', alignItems: 'center' }}>
-                          <X size={9} />
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-              ) : (
-                <button
-                  className="kb-sidebar-field-value"
-                  onClick={() => openPopover('labels', sidebarPopoverBtnRefs.current['labels'])}
-                >
-                  <span className="kb-sidebar-field-none">None</span>
-                </button>
-              )}
+              <div
+                ref={el => { sidebarPopoverBtnRefs.current['labels'] = el as unknown as HTMLButtonElement; }}
+                className="kb-sidebar-field-value"
+                style={{ flexWrap: 'wrap', height: 'auto', minHeight: 34, cursor: 'pointer', gap: 4 }}
+                onClick={() => openPopover('labels', sidebarPopoverBtnRefs.current['labels'])}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openPopover('labels', sidebarPopoverBtnRefs.current['labels']); }}
+              >
+                {editLabels.length > 0 ? editLabels.map(labelId => {
+                  const l = board.labels.find(bl => bl.id === labelId);
+                  if (!l) return null;
+                  return (
+                    <span key={l.id} className="kb-label-chip" style={{ background: l.color + '22', color: l.color, borderColor: l.color + '44' }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {l.name}
+                      <button onClick={e => { e.stopPropagation(); toggleLabel(l.id); }} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, marginLeft: 2, display: 'flex', alignItems: 'center' }}>
+                        <X size={9} />
+                      </button>
+                    </span>
+                  );
+                }) : <span className="kb-sidebar-field-none">None</span>}
+              </div>
             </div>
             <hr className="kb-sidebar-item-divider" />
 
