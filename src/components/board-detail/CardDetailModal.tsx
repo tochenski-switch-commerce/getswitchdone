@@ -204,6 +204,21 @@ export default function CardDetailModal({
   const commentEditRef = useRef<HTMLDivElement>(null);
   const savingRef = useRef(false);
 
+  // Auto-save & undo state
+  type CardSnapshot = {
+    title: string; desc: string; priority: CardPriority | null; assignee: string;
+    dueDate: string; dueTime: string; startDate: string; labels: string[];
+    repeatEnabled: boolean; repeatEvery: number; repeatUnit: RepeatUnit;
+    repeatMode: RepeatMode; repeatNth: number; repeatWeekday: number; repeatEndDate: string;
+  };
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [undoSnapshot, setUndoSnapshot] = useState<CardSnapshot | null>(null);
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef<CardSnapshot | null>(null);
+  const handleSaveRef = useRef<() => Promise<void>>(async () => {});
+  const isFirstRenderRef = useRef(true);
+
   // @mention state
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionActive, setMentionActive] = useState(false);
@@ -438,6 +453,24 @@ export default function CardDetailModal({
     }
   }, [editingCommentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Capture initial card state for undo baseline
+  useEffect(() => {
+    lastSavedRef.current = {
+      title: editTitle, desc: editDesc, priority: editPriority, assignee: editAssignee,
+      dueDate: editDueDate, dueTime: editDueTime, startDate: editStartDate, labels: [...editLabels],
+      repeatEnabled, repeatEvery, repeatUnit, repeatMode, repeatNth, repeatWeekday, repeatEndDate,
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save debounce — fires 1.5s after any metadata field change
+  useEffect(() => {
+    if (isFirstRenderRef.current) { isFirstRenderRef.current = false; return; }
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => { handleSaveRef.current(); }, 1500);
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+  }, [editTitle, editPriority, editAssignee, editDueDate, editDueTime, editStartDate, editLabels, // eslint-disable-line react-hooks/exhaustive-deps
+      repeatEnabled, repeatEvery, repeatUnit, repeatMode, repeatNth, repeatWeekday, repeatEndDate]);
+
   const execCmd = useCallback((ref: React.RefObject<HTMLDivElement | null>, cmd: string, value?: string) => {
     document.execCommand(cmd, false, value);
     ref.current?.focus();
@@ -472,6 +505,11 @@ export default function CardDetailModal({
     if (savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
+    setSaveStatus('saving');
+
+    // Capture undo target = what was last successfully saved (revert to this on undo)
+    const undoTarget = lastSavedRef.current;
+
     const pendingComment = commentAddRef.current?.innerHTML || '';
     if (pendingComment && pendingComment !== '<br>') {
       setCommentText('');
@@ -541,9 +579,69 @@ export default function CardDetailModal({
       repeat_rule,
       repeat_series_id: repeat_rule ? repeat_series_id : null,
     });
+
+    // Record what we just saved so next save knows what to undo to
+    lastSavedRef.current = {
+      title: finalTitle, desc: descHtml, priority: editPriority, assignee: editAssignee,
+      dueDate: editDueDate, dueTime: editDueTime, startDate: editStartDate, labels: finalLabelIds,
+      repeatEnabled, repeatEvery, repeatUnit, repeatMode, repeatNth, repeatWeekday, repeatEndDate,
+    };
+
     setSaving(false);
     savingRef.current = false;
+    setSaveStatus('saved');
+    if (undoTarget) setUndoSnapshot(undoTarget);
+    if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
+    saveStatusTimerRef.current = setTimeout(() => {
+      setSaveStatus('idle');
+      setUndoSnapshot(null);
+    }, 5000);
   };
+
+  // Keep ref in sync so the auto-save debounce always calls the latest closure
+  handleSaveRef.current = handleSave;
+
+  const handleUndo = useCallback(async () => {
+    if (!undoSnapshot) return;
+    const snap = undoSnapshot;
+    setUndoSnapshot(null);
+    setSaveStatus('idle');
+    if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
+
+    // Restore edit state
+    setEditTitle(snap.title);
+    setEditDesc(snap.desc);
+    if (descRef.current) descRef.current.innerHTML = snap.desc;
+    setEditPriority(snap.priority);
+    setEditAssignee(snap.assignee);
+    setEditDueDate(snap.dueDate);
+    setEditDueTime(snap.dueTime);
+    setEditStartDate(snap.startDate);
+    setEditLabels(snap.labels);
+    setRepeatEnabled(snap.repeatEnabled);
+    setRepeatEvery(snap.repeatEvery);
+    setRepeatUnit(snap.repeatUnit);
+    setRepeatMode(snap.repeatMode);
+    setRepeatNth(snap.repeatNth);
+    setRepeatWeekday(snap.repeatWeekday);
+    setRepeatEndDate(snap.repeatEndDate);
+
+    // Rebuild repeat_rule from snapshot
+    let repeat_rule: RepeatRule | null = null;
+    if (snap.repeatEnabled) {
+      repeat_rule = snap.repeatMode === 'monthly-weekday'
+        ? { mode: 'monthly-weekday', every: 1, unit: 'months', nth: snap.repeatNth, weekday: snap.repeatWeekday, ...(snap.repeatEndDate ? { endDate: snap.repeatEndDate } : {}) }
+        : { mode: 'interval', every: snap.repeatEvery, unit: snap.repeatUnit, ...(snap.repeatEndDate ? { endDate: snap.repeatEndDate } : {}) };
+    }
+    lastSavedRef.current = snap;
+    await onUpdate({
+      title: snap.title, description: snap.desc, priority: snap.priority || null,
+      start_date: snap.startDate || null, due_date: snap.dueDate || null,
+      due_time: snap.dueTime || null, assignee: snap.assignee || null,
+      label_ids: snap.labels, repeat_rule,
+      repeat_series_id: repeat_rule ? card.repeat_series_id : null,
+    });
+  }, [undoSnapshot, onUpdate, card.repeat_series_id]);
 
   const handleClose = async () => {
     if (!savingRef.current && editTitle.trim()) {
@@ -755,15 +853,30 @@ export default function CardDetailModal({
               </button>
             );
           })()}
-          <button
-            className="kb-btn kb-btn-ghost kb-btn-sm"
-            onMouseDown={e => e.preventDefault()}
-            onClick={handleClose}
-            disabled={saving}
-            style={{ fontSize: 12, padding: '5px 12px', height: 30 }}
-          >
-            {saving ? 'Saving…' : 'Close'}
-          </button>
+          {/* Save status indicator */}
+          {saveStatus !== 'idle' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginLeft: 'auto' }}>
+              {saveStatus === 'saving' ? (
+                <span style={{ color: '#6b7280', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span className="kb-save-spinner" />
+                  Saving…
+                </span>
+              ) : (
+                <span style={{ color: '#22c55e', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Check size={12} />
+                  Saved
+                  {undoSnapshot && (
+                    <button
+                      onClick={handleUndo}
+                      style={{ background: 'none', border: 'none', color: '#818cf8', cursor: 'pointer', padding: '0 2px', fontSize: 12, fontWeight: 600 }}
+                    >
+                      · Undo
+                    </button>
+                  )}
+                </span>
+              )}
+            </div>
+          )}
           <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={handleClose}>
             <X size={18} />
           </button>

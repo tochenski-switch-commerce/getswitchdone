@@ -1372,6 +1372,23 @@ export const kanbanStyles = `
     border-color: #4f46e5;
     color: #fff;
   }
+
+  /* ── Auto-save spinner ── */
+  @keyframes kb-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .kb-save-spinner {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    border: 2px solid rgba(107,114,128,0.3);
+    border-top-color: #6b7280;
+    border-radius: 50%;
+    animation: kb-spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
   .kb-detail-close {
     position: static;
     background: none !important;
