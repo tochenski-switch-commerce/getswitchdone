@@ -10,7 +10,7 @@ import {
   X, ChevronDown, ChevronLeft, ChevronRight, Clock, User, Flag, Pencil,
   Check, Copy, LinkIcon, SlidersHorizontal, Repeat, ClipboardList,
   Bold, Italic, Underline, Strikethrough, Heading, ListBullet, ListOrdered,
-  ThumbsUp, ThumbsDown, Star, GripVertical, Sparkles, Archive, Mail,
+  ThumbsUp, ThumbsDown, Star, GripVertical, Sparkles, Archive, Mail, Eye,
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import CustomFieldInput from './CustomFieldInput';
@@ -188,6 +188,15 @@ export default function CardDetailModal({
   const [showSnoozePicker, setShowSnoozePicker] = useState(false);
   const [snoozeDate, setSnoozeDate] = useState('');
   const [snoozeTime, setSnoozeTime] = useState('08:00');
+
+  // Mobile tab state
+  const [mobileTab, setMobileTab] = useState<'details' | 'info'>('details');
+
+  // Sidebar popover state
+  const [openSidebarPopover, setOpenSidebarPopover] = useState<'priority' | 'assignee' | 'dueDate' | 'startDate' | 'repeat' | 'moveList' | null>(null);
+  const sidebarPopoverBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const sidebarPopoverRef = useRef<HTMLDivElement>(null);
+  const [sidebarPopoverPos, setSidebarPopoverPos] = useState({ top: 0, left: 0 });
 
   const titleRef = useRef<HTMLInputElement>(null);
   const descRef = useRef<HTMLDivElement>(null);
@@ -381,6 +390,27 @@ export default function CardDetailModal({
     };
   }, [showWatcherPicker]);
 
+  // Click-outside handler for sidebar popovers
+  useEffect(() => {
+    if (!openSidebarPopover) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      const btnRef = sidebarPopoverBtnRefs.current[openSidebarPopover];
+      if (
+        sidebarPopoverRef.current && !sidebarPopoverRef.current.contains(target) &&
+        (!btnRef || !btnRef.contains(target))
+      ) {
+        setOpenSidebarPopover(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler as EventListener);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler as EventListener);
+    };
+  }, [openSidebarPopover]);
+
   useEffect(() => {
     if (editingDesc && descRef.current) {
       const html = editDesc;
@@ -413,6 +443,16 @@ export default function CardDetailModal({
     document.execCommand(cmd, false, value);
     ref.current?.focus();
   }, []);
+
+  const openPopover = useCallback((key: typeof openSidebarPopover, btnEl: HTMLButtonElement | null) => {
+    if (openSidebarPopover === key) { setOpenSidebarPopover(null); return; }
+    if (btnEl) {
+      const rect = btnEl.getBoundingClientRect();
+      const left = Math.min(rect.left, window.innerWidth - 260);
+      setSidebarPopoverPos({ top: rect.bottom + 6, left });
+    }
+    setOpenSidebarPopover(key);
+  }, [openSidebarPopover]);
 
   const insertLink = useCallback((ref: React.RefObject<HTMLDivElement | null>) => {
     const url = prompt('Enter URL:');
@@ -716,12 +756,39 @@ export default function CardDetailModal({
               </button>
             );
           })()}
-          <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={handleClose}><X size={18} /></button>
+          <button
+            className="kb-btn kb-btn-primary kb-btn-sm"
+            onMouseDown={e => e.preventDefault()}
+            onClick={handleClose}
+            disabled={saving || !editTitle.trim()}
+            style={{ fontSize: 12, padding: '5px 12px', height: 30 }}
+          >
+            {saving ? 'Saving…' : 'Save & Close'}
+          </button>
+          <button className="kb-detail-close" onMouseDown={e => e.preventDefault()} onClick={handleClose}>
+            <X size={18} />
+          </button>
         </div>
 
         <div className="kb-detail-body">
+          {/* Mobile tab strip — hidden on desktop via CSS */}
+          <div className="kb-mobile-tabs">
+            <button
+              className={`kb-mobile-tab${mobileTab === 'details' ? ' kb-mobile-tab-active' : ''}`}
+              onClick={() => setMobileTab('details')}
+            >
+              Details
+            </button>
+            <button
+              className={`kb-mobile-tab${mobileTab === 'info' ? ' kb-mobile-tab-active' : ''}`}
+              onClick={() => setMobileTab('info')}
+            >
+              Info
+            </button>
+          </div>
+          <div className="kb-detail-columns">
           {/* Left: Main content */}
-          <div className="kb-detail-main">
+          <div className={`kb-detail-main${mobileTab !== 'details' ? ' kb-mobile-hidden' : ''}`}>
             {/* Title */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <button
@@ -764,6 +831,58 @@ export default function CardDetailModal({
             {column && (
               <div className="kb-detail-column-badge" style={{ borderColor: column.color, color: column.color }}>
                 {column.title}
+              </div>
+            )}
+
+            {/* Metadata summary strip — shows set values as clickable chips */}
+            {(editAssignee || editPriority || editDueDate || watchers.length > 0) && (
+              <div className="kb-card-meta-strip">
+                {editAssignee && (() => {
+                  const p = userProfiles.find(u => u.id === editAssignee);
+                  return p?.name ? (
+                    <button
+                      ref={el => { sidebarPopoverBtnRefs.current['assignee'] = el; }}
+                      className="kb-card-meta-chip"
+                      onClick={() => { setMobileTab('info'); openPopover('assignee', sidebarPopoverBtnRefs.current['assignee']); }}
+                    >
+                      <User size={11} /> @{p.name}
+                    </button>
+                  ) : null;
+                })()}
+                {editPriority && (
+                  <button
+                    ref={el => { sidebarPopoverBtnRefs.current['priority'] = el; }}
+                    className="kb-card-meta-chip"
+                    onClick={() => { setMobileTab('info'); openPopover('priority', sidebarPopoverBtnRefs.current['priority']); }}
+                    style={{ color: PRIORITY_CONFIG[editPriority].color, borderColor: `${PRIORITY_CONFIG[editPriority].color}40` }}
+                  >
+                    <Flag size={11} /> {PRIORITY_CONFIG[editPriority].label}
+                  </button>
+                )}
+                {editDueDate && (
+                  <button
+                    ref={el => { sidebarPopoverBtnRefs.current['dueDate'] = el; }}
+                    className={`kb-card-meta-chip${new Date(editDueDate + 'T23:59:59') < new Date() ? ' kb-card-meta-chip-overdue' : ''}`}
+                    onClick={() => { setMobileTab('info'); openPopover('dueDate', sidebarPopoverBtnRefs.current['dueDate']); }}
+                  >
+                    <Clock size={11} /> {new Date(editDueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </button>
+                )}
+                {watchers.length > 0 && (
+                  <button
+                    className="kb-card-meta-chip"
+                    onClick={() => {
+                      setMobileTab('info');
+                      if (watcherBtnRef.current) {
+                        const rect = watcherBtnRef.current.getBoundingClientRect();
+                        setWatcherPickerPos({ top: rect.bottom + 6, left: Math.min(rect.left, window.innerWidth - 244) });
+                      }
+                      setShowWatcherPicker(p => !p);
+                    }}
+                  >
+                    <Eye size={11} /> {watchers.length} watcher{watchers.length !== 1 ? 's' : ''}
+                  </button>
+                )}
               </div>
             )}
 
@@ -1663,334 +1782,137 @@ export default function CardDetailModal({
           </div>
 
           {/* Right: Sidebar */}
-          <div className="kb-detail-sidebar">
-            {/* Priority */}
-            <div className="kb-form-group">
-              <div className="kb-detail-section-label"><Flag size={13} /> Priority</div>
-              <select
-                className="kb-input"
-                value={editPriority || ''}
-                onChange={e => setEditPriority((e.target.value || null) as CardPriority | null)}
+          <div className={`kb-detail-sidebar${mobileTab !== 'info' ? ' kb-mobile-sidebar-hidden' : ''}`}>
+            {/* DETAILS section */}
+            <div className="kb-sidebar-section-header">Details</div>
+
+            {/* Assignee row */}
+            <div className="kb-sidebar-row">
+              <span className="kb-sidebar-row-icon"><User size={13} /></span>
+              <span className="kb-sidebar-row-label">Assignee</span>
+              <button
+                ref={el => { sidebarPopoverBtnRefs.current['assignee'] = el; }}
+                className="kb-sidebar-row-value"
+                onClick={() => openPopover('assignee', sidebarPopoverBtnRefs.current['assignee'])}
               >
-                <option value="">None</option>
-                {(Object.keys(PRIORITY_CONFIG) as CardPriority[]).map(p => (
-                  <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
-                ))}
-              </select>
+                {editAssignee
+                  ? (() => { const p = userProfiles.find(u => u.id === editAssignee); return p?.name ? `@${p.name}` : 'Assigned'; })()
+                  : <span className="kb-sidebar-row-none">None</span>
+                }
+              </button>
             </div>
 
-            {/* Assignee */}
-            <div className="kb-form-group">
-              <div className="kb-detail-section-label"><User size={13} /> Assignee</div>
-              <select
-                className="kb-input"
-                value={editAssignee}
-                onChange={e => setEditAssignee(e.target.value)}
+            {/* Priority row */}
+            <div className="kb-sidebar-row">
+              <span className="kb-sidebar-row-icon"><Flag size={13} /></span>
+              <span className="kb-sidebar-row-label">Priority</span>
+              <button
+                ref={el => { sidebarPopoverBtnRefs.current['priority'] = el; }}
+                className="kb-sidebar-row-value"
+                onClick={() => openPopover('priority', sidebarPopoverBtnRefs.current['priority'])}
               >
-                <option value="">Unassigned</option>
-                {userProfiles.filter(p => p.name).map(p => (
-                  <option key={p.id} value={p.id}>@{p.name}</option>
-                ))}
-              </select>
+                {editPriority
+                  ? <span style={{ color: PRIORITY_CONFIG[editPriority].color }}>{PRIORITY_CONFIG[editPriority].label}</span>
+                  : <span className="kb-sidebar-row-none">None</span>
+                }
+              </button>
             </div>
 
-            {/* Watchers */}
-            <div className="kb-form-group">
-              <div className="kb-detail-section-label">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                Watchers {watchers.length > 0 && <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: 4 }}>({watchers.length})</span>}
+            {/* Due Date row */}
+            <div className="kb-sidebar-row">
+              <span className="kb-sidebar-row-icon"><Clock size={13} /></span>
+              <span className="kb-sidebar-row-label">Due Date</span>
+              <button
+                ref={el => { sidebarPopoverBtnRefs.current['dueDate'] = el; }}
+                className={`kb-sidebar-row-value${editDueDate && new Date(editDueDate + 'T23:59:59') < new Date() ? ' kb-card-meta-chip-overdue' : ''}`}
+                onClick={() => openPopover('dueDate', sidebarPopoverBtnRefs.current['dueDate'])}
+              >
+                {editDueDate
+                  ? new Date(editDueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  : <span className="kb-sidebar-row-none">None</span>
+                }
+              </button>
+            </div>
+
+            {/* Start Date row */}
+            <div className="kb-sidebar-row">
+              <span className="kb-sidebar-row-icon"><CalendarDays size={13} /></span>
+              <span className="kb-sidebar-row-label">Start</span>
+              <button
+                ref={el => { sidebarPopoverBtnRefs.current['startDate'] = el; }}
+                className="kb-sidebar-row-value"
+                onClick={() => openPopover('startDate', sidebarPopoverBtnRefs.current['startDate'])}
+              >
+                {editStartDate
+                  ? new Date(editStartDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  : <span className="kb-sidebar-row-none">None</span>
+                }
+              </button>
+            </div>
+
+            {/* Watchers row */}
+            {(onAddWatcher || onInviteWatcher) && (
+              <div className="kb-sidebar-row">
+                <span className="kb-sidebar-row-icon"><Eye size={13} /></span>
+                <span className="kb-sidebar-row-label">Watchers</span>
+                <button
+                  ref={watcherBtnRef}
+                  className="kb-sidebar-row-value"
+                  onClick={() => {
+                    if (!showWatcherPicker && watcherBtnRef.current) {
+                      const rect = watcherBtnRef.current.getBoundingClientRect();
+                      const left = Math.min(rect.left, window.innerWidth - 244);
+                      setWatcherPickerPos({ top: rect.bottom + 6, left });
+                    }
+                    setShowWatcherPicker(p => !p);
+                    setWatcherSearch('');
+                    setWatcherInviteFeedback(null);
+                  }}
+                >
+                  {watchers.length > 0
+                    ? `${watchers.length} watcher${watchers.length !== 1 ? 's' : ''}`
+                    : <span className="kb-sidebar-row-none">None</span>
+                  }
+                </button>
               </div>
+            )}
 
-              {/* Add watcher picker */}
-              {(onAddWatcher || onInviteWatcher) && (
-                <div style={{ marginTop: 6 }}>
-                  <button
-                    ref={watcherBtnRef}
-                    className="kb-btn kb-btn-sm kb-btn-ghost"
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}
-                    onClick={() => {
-                      if (!showWatcherPicker && watcherBtnRef.current) {
-                        const rect = watcherBtnRef.current.getBoundingClientRect();
-                        const left = Math.min(rect.left, window.innerWidth - 244);
-                        setWatcherPickerPos({ top: rect.bottom + 4, left });
-                      }
-                      setShowWatcherPicker(p => !p);
-                      setWatcherSearch('');
-                      setWatcherInviteFeedback(null);
-                    }}
-                  >
-                    <Plus size={11} />
-                    Add watcher
-                  </button>
-                </div>
-              )}
+            {/* Repeat row */}
+            <div className="kb-sidebar-row">
+              <span className="kb-sidebar-row-icon"><Repeat size={13} /></span>
+              <span className="kb-sidebar-row-label">Repeat</span>
+              <button
+                ref={el => { sidebarPopoverBtnRefs.current['repeat'] = el; }}
+                className="kb-sidebar-row-value"
+                onClick={() => openPopover('repeat', sidebarPopoverBtnRefs.current['repeat'])}
+              >
+                {repeatEnabled
+                  ? <span style={{ fontSize: 11 }}>{formatRepeatSummary(
+                      repeatMode === 'monthly-weekday'
+                        ? { mode: 'monthly-weekday', every: 1, unit: 'months', nth: repeatNth, weekday: repeatWeekday }
+                        : { every: repeatEvery, unit: repeatUnit }
+                    )}</span>
+                  : <span className="kb-sidebar-row-none">Off</span>
+                }
+              </button>
+            </div>
 
-              {showWatcherPicker && (onAddWatcher || onInviteWatcher) && typeof document !== 'undefined' && createPortal(
-                <div
-                  ref={watcherPickerRef}
-                  style={{
-                    position: 'fixed',
-                    top: watcherPickerPos.top,
-                    left: watcherPickerPos.left,
-                    width: 240,
-                    background: '#1a2035',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 8,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    zIndex: 50201,
-                    overflow: 'hidden',
-                  }}>
-                        <div style={{ padding: '8px 8px 6px' }}>
-                          <input
-                            autoFocus
-                            type="text"
-                            placeholder="Search by name or enter email…"
-                            value={watcherSearch}
-                            onChange={e => { setWatcherSearch(e.target.value); setWatcherInviteFeedback(null); }}
-                            className="kb-input"
-                            style={{ width: '100%', fontSize: 12, padding: '6px 8px', boxSizing: 'border-box' }}
-                          />
-                        </div>
-
-                        {/* Matching users */}
-                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
-                          {/* Self — shown at top when not already watching */}
-                          {currentUserId && !isWatching && (!watcherSearch || 'me'.includes(watcherSearch.toLowerCase()) || userProfiles.find(p => p.id === currentUserId)?.name?.toLowerCase().includes(watcherSearch.toLowerCase())) && (
-                            <button
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: 7,
-                                width: '100%', padding: '7px 12px',
-                                background: 'rgba(99,102,241,0.06)',
-                                borderBottom: '1px solid rgba(255,255,255,0.06)',
-                                border: 'none', color: '#818cf8', fontSize: 13,
-                                cursor: 'pointer', textAlign: 'left',
-                              }}
-                              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.12)')}
-                              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.06)')}
-                              onClick={async () => {
-                                setWatchLoading(true);
-                                await onWatchCard();
-                                setIsWatching(true);
-                                if (currentUserId) setWatchers(prev => [...prev, currentUserId]);
-                                setWatchLoading(false);
-                                setShowWatcherPicker(false);
-                                if (onFetchWatcherProfiles) {
-                                  onFetchWatcherProfiles(card.id).then(setWatcherProfiles);
-                                }
-                              }}
-                            >
-                              <User size={11} />
-                              Add me as a watcher
-                            </button>
-                          )}
-                          {userProfiles
-                            .filter(p => p.name && !watchers.includes(p.id) && p.id !== currentUserId &&
-                              p.name.toLowerCase().includes(watcherSearch.toLowerCase()))
-                            .map(p => (
-                              <button
-                                key={p.id}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 7,
-                                  width: '100%',
-                                  padding: '7px 12px',
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: '#d1d5db',
-                                  fontSize: 13,
-                                  cursor: 'pointer',
-                                  textAlign: 'left',
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                                onClick={async () => {
-                                  if (onAddWatcher) await onAddWatcher(p.id);
-                                  setWatchers(prev => [...prev, p.id]);
-                                  setShowWatcherPicker(false);
-                                }}
-                              >
-                                <User size={11} style={{ color: '#6b7280' }} />
-                                @{p.name}
-                              </button>
-                            ))}
-                        </div>
-
-                        {/* Email invite fallback */}
-                        {onInviteWatcher && watcherSearch.includes('@') && !watcherSearch.endsWith('@') && (
-                          <div style={{
-                            borderTop: '1px solid rgba(255,255,255,0.06)',
-                            padding: '6px 8px',
-                          }}>
-                            <button
-                              disabled={watcherInviteLoading}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                width: '100%',
-                                padding: '7px 8px',
-                                background: 'rgba(99,102,241,0.1)',
-                                border: '1px solid rgba(99,102,241,0.2)',
-                                borderRadius: 6,
-                                color: '#818cf8',
-                                fontSize: 12,
-                                cursor: watcherInviteLoading ? 'not-allowed' : 'pointer',
-                                textAlign: 'left',
-                                opacity: watcherInviteLoading ? 0.6 : 1,
-                              }}
-                              onClick={async () => {
-                                setWatcherInviteLoading(true);
-                                const result = await onInviteWatcher!(watcherSearch.trim(), card.id);
-                                setWatcherInviteLoading(false);
-                                if (result.ok) {
-                                  setWatcherInviteFeedback(result.alreadyUser
-                                    ? 'Added as watcher!'
-                                    : 'Invite sent!'
-                                  );
-                                  // Refresh watchers and pending invites
-                                  onFetchWatchers().then(setWatchers);
-                                  if (onFetchPendingWatcherInvites) {
-                                    onFetchPendingWatcherInvites(card.id).then(setPendingInvites);
-                                  }
-                                  setTimeout(() => { setShowWatcherPicker(false); setWatcherInviteFeedback(null); }, 1500);
-                                } else {
-                                  setWatcherInviteFeedback('Failed to invite. Try again.');
-                                }
-                              }}
-                            >
-                              {watcherInviteLoading ? 'Sending…' : `Invite ${watcherSearch.trim()}`}
-                            </button>
-                            {watcherInviteFeedback && (
-                              <p style={{ margin: '5px 0 0', fontSize: 11, color: watcherInviteFeedback.startsWith('Failed') ? '#ef4444' : '#22c55e' }}>
-                                {watcherInviteFeedback}
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {/* No matches hint */}
-                        {userProfiles.filter(p => p.name && !watchers.includes(p.id) && p.id !== currentUserId && p.name.toLowerCase().includes(watcherSearch.toLowerCase())).length === 0 &&
-                          !watcherSearch.includes('@') && watcherSearch.length > 0 && (
-                          <p style={{ margin: 0, padding: '8px 12px', fontSize: 12, color: '#6b7280' }}>
-                            No users found. Enter an email to invite.
-                          </p>
-                        )}
-                </div>,
-                document.body
-              )}
-
-              {/* Watchers empty state */}
-              {watchers.length === 0 && pendingInvites.length === 0 && (
-                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#4b5563', lineHeight: 1.55 }}>
-                  No one is watching yet. Add watchers to keep people in the loop when this card changes.
-                </p>
-              )}
-
-              {/* Current watcher list (table) */}
-              {(watchers.length > 0 || pendingInvites.length > 0) && (
-                <div style={{
-                  marginTop: 8,
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: 6,
-                  overflow: 'hidden',
-                }}>
-                  {watchers.map((uid, idx) => {
-                    const profile = userProfiles.find(p => p.id === uid) || watcherProfiles.find(p => p.id === uid);
-                    const name = profile?.name?.trim() || null;
-                    const isCurrentUser = uid === currentUserId;
-                    const isLast = idx === watchers.length - 1 && pendingInvites.length === 0;
-                    return (
-                      <div key={uid} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '6px 10px',
-                        fontSize: 12,
-                        borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.06)',
-                        background: isCurrentUser ? 'rgba(99,102,241,0.06)' : 'transparent',
-                        minWidth: 0,
-                      }}>
-                        <User size={11} style={{ color: '#6b7280', flexShrink: 0 }} />
-                        <span style={{
-                          flex: 1,
-                          minWidth: 0,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          color: isCurrentUser ? '#818cf8' : '#d1d5db',
-                        }}>
-                          {name ? `@${name}` : uid}
-                          {isCurrentUser && <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 4 }}>(you)</span>}
-                        </span>
-                        <button
-                          style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: '#6b7280', display: 'flex', flexShrink: 0 }}
-                          onClick={async () => {
-                            if (isCurrentUser) {
-                              setWatchLoading(true);
-                              await onUnwatchCard();
-                              setIsWatching(false);
-                              setWatchers(prev => prev.filter(id => id !== uid));
-                              setWatchLoading(false);
-                            } else if (onRemoveWatcher) {
-                              await onRemoveWatcher(uid);
-                              setWatchers(prev => prev.filter(id => id !== uid));
-                            }
-                          }}
-                          title={isCurrentUser ? 'Stop watching' : 'Remove watcher'}
-                        >
-                          <X size={11} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {pendingInvites.map((inv, idx) => {
-                    const isLast = idx === pendingInvites.length - 1;
-                    return (
-                      <div key={inv.id} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '6px 10px',
-                        fontSize: 12,
-                        borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.06)',
-                        background: 'rgba(255,255,255,0.015)',
-                        minWidth: 0,
-                      }}>
-                        <Mail size={11} style={{ color: '#6b7280', flexShrink: 0 }} />
-                        <span style={{
-                          flex: 1,
-                          minWidth: 0,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          color: '#9ca3af',
-                        }} title={inv.email}>
-                          {inv.email}
-                        </span>
-                        <span style={{ fontSize: 10, color: '#6b7280', fontStyle: 'italic', flexShrink: 0 }}>pending</span>
-                        {onCancelWatcherInvite && (
-                          <button
-                            style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: '#6b7280', display: 'flex', flexShrink: 0 }}
-                            onClick={async () => {
-                              await onCancelWatcherInvite(inv.id);
-                              setPendingInvites(prev => prev.filter(p => p.id !== inv.id));
-                            }}
-                            title={`Cancel invite for ${inv.email}`}
-                          >
-                            <X size={11} />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+            {/* Move to List row */}
+            <div className="kb-sidebar-row">
+              <span className="kb-sidebar-row-icon"><ChevronDown size={13} /></span>
+              <span className="kb-sidebar-row-label">List</span>
+              <button
+                ref={el => { sidebarPopoverBtnRefs.current['moveList'] = el; }}
+                className="kb-sidebar-row-value"
+                onClick={() => openPopover('moveList', sidebarPopoverBtnRefs.current['moveList'])}
+              >
+                {column?.title ?? <span className="kb-sidebar-row-none">Unknown</span>}
+              </button>
             </div>
 
             {/* Snooze status */}
             {card.snoozed_until && new Date(card.snoozed_until) > new Date() && (
-              <div style={{ background: 'rgba(156,163,175,0.08)', border: '1px solid rgba(156,163,175,0.2)', borderRadius: 6, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
+              <div style={{ background: 'rgba(156,163,175,0.08)', border: '1px solid rgba(156,163,175,0.2)', borderRadius: 6, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af', marginTop: 8 }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <path d="M18 8h1a4 4 0 0 1 0 8h-1" /><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" />
                 </svg>
@@ -1998,260 +1920,98 @@ export default function CardDetailModal({
               </div>
             )}
 
-            {/* Dates */}
-            <div className="kb-form-group">
-              <div className="kb-detail-section-label"><CalendarDays size={13} /> Start Date</div>
-              <DatePickerInput
-                className="kb-input"
-                value={editStartDate}
-                onChange={setEditStartDate}
-                placeholder="Select start date…"
-              />
-            </div>
-            <div className="kb-form-group">
-              <div className="kb-detail-section-label"><Clock size={13} /> Due Date</div>
-              <DatePickerInput
-                className="kb-input"
-                value={editDueDate}
-                onChange={setEditDueDate}
-                placeholder="Select due date…"
-              />
-              {editDueDate && (() => {
-                // Parse existing time
-                const parseTime12 = (t: string) => {
-                  const [h24, m] = t.split(':').map(Number);
-                  const period = h24 >= 12 ? 'PM' : 'AM';
-                  const h = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
-                  return { hour: h, minute: m, period };
-                };
-                const formatTime24 = (h: number, m: number, period: string) => {
-                  let h24 = h;
-                  if (period === 'AM' && h === 12) h24 = 0;
-                  else if (period === 'PM' && h !== 12) h24 = h + 12;
-                  return `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                };
-                if (!editDueTime) {
+            {/* Current watcher list */}
+            {(watchers.length > 0 || pendingInvites.length > 0) && (
+              <div style={{ marginTop: 8, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, overflow: 'hidden' }}>
+                {watchers.map((uid, idx) => {
+                  const profile = userProfiles.find(p => p.id === uid) || watcherProfiles.find(p => p.id === uid);
+                  const name = profile?.name?.trim() || null;
+                  const isCurrentUser = uid === currentUserId;
+                  const isLast = idx === watchers.length - 1 && pendingInvites.length === 0;
                   return (
-                    <button className="kb-due-time-add" onClick={() => setEditDueTime('09:00')}>
-                      <Clock size={12} /> Add time
-                    </button>
+                    <div key={uid} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', fontSize: 12, borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.06)', background: isCurrentUser ? 'rgba(99,102,241,0.06)' : 'transparent', minWidth: 0 }}>
+                      <User size={11} style={{ color: '#6b7280', flexShrink: 0 }} />
+                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isCurrentUser ? '#818cf8' : '#d1d5db' }}>
+                        {name ? `@${name}` : uid}
+                        {isCurrentUser && <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 4 }}>(you)</span>}
+                      </span>
+                      <button
+                        style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: '#6b7280', display: 'flex', flexShrink: 0 }}
+                        onClick={async () => {
+                          if (isCurrentUser) {
+                            setWatchLoading(true);
+                            await onUnwatchCard();
+                            setIsWatching(false);
+                            setWatchers(prev => prev.filter(id => id !== uid));
+                            setWatchLoading(false);
+                          } else if (onRemoveWatcher) {
+                            await onRemoveWatcher(uid);
+                            setWatchers(prev => prev.filter(id => id !== uid));
+                          }
+                        }}
+                        title={isCurrentUser ? 'Stop watching' : 'Remove watcher'}
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
                   );
-                }
-                const parsed = parseTime12(editDueTime);
-                return (
-                  <div className="kb-due-time-row">
-                    <select className="kb-due-time-select" value={parsed.hour}
-                      onChange={e => setEditDueTime(formatTime24(Number(e.target.value), parsed.minute, parsed.period))}>
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                    <span className="kb-due-time-colon">:</span>
-                    <select className="kb-due-time-select" value={parsed.minute}
-                      onChange={e => setEditDueTime(formatTime24(parsed.hour, Number(e.target.value), parsed.period))}>
-                      {Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{String(m).padStart(2, '0')}</option>)}
-                    </select>
-                    <select className="kb-due-time-period kb-due-time-select" value={parsed.period}
-                      onChange={e => setEditDueTime(formatTime24(parsed.hour, parsed.minute, e.target.value))}>
-                      <option value="AM">AM</option>
-                      <option value="PM">PM</option>
-                    </select>
-                    <button className="kb-due-time-clear" onClick={() => setEditDueTime('')}><X size={12} /></button>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Repeat */}
-            <div className="kb-form-group">
-              <div className="kb-detail-section-label"><Repeat size={13} /> Repeat</div>
-              <label className="kb-repeat-toggle">
-                <input
-                  type="checkbox"
-                  checked={repeatEnabled}
-                  onChange={e => {
-                    setRepeatEnabled(e.target.checked);
-                    if (e.target.checked && !editStartDate) {
-                      setEditStartDate(new Date().toISOString().slice(0, 10));
-                    }
-                  }}
-                />
-                <span>Enable repeat</span>
-              </label>
-
-              {repeatEnabled && (
-                <>
-                  {/* Mode toggle */}
-                  <div className="kb-repeat-row">
-                    <select
-                      className="kb-input"
-                      value={repeatMode}
-                      onChange={e => setRepeatMode(e.target.value as RepeatMode)}
-                    >
-                      <option value="interval">Every N days/weeks/months</option>
-                      <option value="monthly-weekday">Monthly on a specific day</option>
-                    </select>
-                  </div>
-
-                  {repeatMode === 'interval' ? (
-                    <div className="kb-repeat-row">
-                      <span className="kb-repeat-label">Every</span>
-                      <select
-                        className="kb-input"
-                        value={repeatEvery}
-                        onChange={e => setRepeatEvery(parseInt(e.target.value))}
-                        style={{ width: 60 }}
-                      >
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
-                          <option key={n} value={n}>{n}</option>
-                        ))}
-                      </select>
-                      <select
-                        className="kb-input"
-                        value={repeatUnit}
-                        onChange={e => setRepeatUnit(e.target.value as RepeatUnit)}
-                      >
-                        <option value="days">Days</option>
-                        <option value="weeks">Weeks</option>
-                        <option value="months">Months</option>
-                      </select>
+                })}
+                {pendingInvites.map((inv, idx) => {
+                  const isLast = idx === pendingInvites.length - 1;
+                  return (
+                    <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', fontSize: 12, borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.015)', minWidth: 0 }}>
+                      <Mail size={11} style={{ color: '#6b7280', flexShrink: 0 }} />
+                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#9ca3af' }} title={inv.email}>{inv.email}</span>
+                      <span style={{ fontSize: 10, color: '#6b7280', fontStyle: 'italic', flexShrink: 0 }}>pending</span>
+                      {onCancelWatcherInvite && (
+                        <button
+                          style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: '#6b7280', display: 'flex', flexShrink: 0 }}
+                          onClick={async () => { await onCancelWatcherInvite(inv.id); setPendingInvites(prev => prev.filter(p => p.id !== inv.id)); }}
+                          title={`Cancel invite for ${inv.email}`}
+                        >
+                          <X size={11} />
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <div className="kb-repeat-row">
-                      <span className="kb-repeat-label">The</span>
-                      <select
-                        className="kb-input"
-                        value={repeatNth}
-                        onChange={e => setRepeatNth(parseInt(e.target.value))}
-                        style={{ width: 64 }}
-                      >
-                        <option value={1}>1st</option>
-                        <option value={2}>2nd</option>
-                        <option value={3}>3rd</option>
-                        <option value={4}>4th</option>
-                        <option value={5}>5th</option>
-                      </select>
-                      <select
-                        className="kb-input"
-                        value={repeatWeekday}
-                        onChange={e => setRepeatWeekday(parseInt(e.target.value))}
-                      >
-                        <option value={0}>Sunday</option>
-                        <option value={1}>Monday</option>
-                        <option value={2}>Tuesday</option>
-                        <option value={3}>Wednesday</option>
-                        <option value={4}>Thursday</option>
-                        <option value={5}>Friday</option>
-                        <option value={6}>Saturday</option>
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Start date warning (interval mode only) */}
-                  {repeatMode === 'interval' && !editStartDate && (
-                    <div className="kb-repeat-warn">A start date is required to anchor the repeat schedule.</div>
-                  )}
-
-                  {/* Summary & next date preview */}
-                  {(repeatMode === 'monthly-weekday' || editStartDate) && (
-                    <div className="kb-repeat-summary">
-                      <span className="kb-repeat-summary-text">
-                        {formatRepeatSummary(
-                          repeatMode === 'monthly-weekday'
-                            ? { mode: 'monthly-weekday', every: 1, unit: 'months', nth: repeatNth, weekday: repeatWeekday }
-                            : { every: repeatEvery, unit: repeatUnit }
-                        )}
-                      </span>
-                      <span className="kb-repeat-next">
-                        Next: {formatNextDate(
-                          repeatMode === 'monthly-weekday'
-                            ? { mode: 'monthly-weekday', every: 1, unit: 'months', nth: repeatNth, weekday: repeatWeekday, ...(repeatEndDate ? { endDate: repeatEndDate } : {}) }
-                            : { every: repeatEvery, unit: repeatUnit, ...(repeatEndDate ? { endDate: repeatEndDate } : {}) },
-                          editStartDate
-                        )}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Optional end date */}
-                  <div className="kb-repeat-end">
-                    <DatePickerInput
-                      className="kb-input"
-                      value={repeatEndDate}
-                      onChange={setRepeatEndDate}
-                      placeholder="End date (optional)…"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Move to column */}
-            <div className="kb-form-group">
-              <div className="kb-detail-section-label"><ChevronDown size={13} /> Move to List</div>
-              <select
-                className="kb-input"
-                value={card.column_id}
-                onChange={async (e) => {
-                  const newColId = e.target.value;
-                  if (newColId !== card.column_id) {
-                    await onMoveCard(newColId);
-                    onClose();
-                  }
-                }}
-              >
-                {board.columns.map(col => (
-                  <option key={col.id} value={col.id}>{col.title}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Custom Fields */}
-            {(board.customFields || []).length > 0 && (
-              <div className="kb-cf-section">
-                <div className="kb-detail-section-label"><SlidersHorizontal size={13} /> Custom Fields</div>
-                {board.customFields.map(f => (
-                  <div key={f.id} className="kb-cf-field">
-                    {f.field_type !== 'checkbox' && (
-                      <label className="kb-cf-label">{f.title}</label>
-                    )}
-                    <CustomFieldInput
-                      field={f}
-                      card={card}
-                      onSetValue={async (fieldId, value, multiValue) => {
-                        await onSetCustomFieldValue(card.id, fieldId, value, multiValue);
-                      }}
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
-            {/* Actions */}
-            <div style={{ borderTop: '1px solid #2a2d3a', paddingTop: 16, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button className="kb-btn kb-btn-primary" onMouseDown={e => e.preventDefault()} onClick={handleClose} disabled={saving || !editTitle.trim()} style={{ width: '100%', justifyContent: 'center' }}>
-                {saving ? 'Saving...' : 'Save & Close'}
+            {/* Custom Fields */}
+            {(board.customFields || []).length > 0 && (
+              <>
+                <hr className="kb-sidebar-divider" />
+                <div className="kb-sidebar-section-header">Custom Fields</div>
+                <div className="kb-cf-section" style={{ border: 'none', padding: 0 }}>
+                  {board.customFields.map(f => (
+                    <div key={f.id} className="kb-cf-field">
+                      {f.field_type !== 'checkbox' && <label className="kb-cf-label">{f.title}</label>}
+                      <CustomFieldInput
+                        field={f}
+                        card={card}
+                        onSetValue={async (fieldId, value, multiValue) => {
+                          await onSetCustomFieldValue(card.id, fieldId, value, multiValue);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <hr className="kb-sidebar-divider" />
+            <div className="kb-sidebar-section-header">Actions</div>
+            <div className="kb-sidebar-actions">
+              <button className="kb-btn kb-btn-ghost" onClick={async () => { await onDuplicate(); onClose(); }} style={{ width: '100%', justifyContent: 'center' }}>
+                <Copy size={13} /> Duplicate Card
               </button>
               <button
                 className="kb-btn kb-btn-ghost"
-                onClick={async () => {
-                  await onDuplicate();
-                  onClose();
-                }}
+                onClick={() => { const url = new URL(window.location.href); url.searchParams.set('card', card.id); navigator.clipboard.writeText(url.toString()); }}
                 style={{ width: '100%', justifyContent: 'center' }}
               >
-                <Copy size={13} />
-                Duplicate Card
-              </button>
-              <button
-                className="kb-btn kb-btn-ghost"
-                onClick={() => {
-                  const url = new URL(window.location.href);
-                  url.searchParams.set('card', card.id);
-                  navigator.clipboard.writeText(url.toString());
-                }}
-                style={{ width: '100%', justifyContent: 'center' }}
-              >
-                <LinkIcon size={13} />
-                Copy Link
+                <LinkIcon size={13} /> Copy Link
               </button>
               <button
                 className="kb-btn kb-btn-ghost"
@@ -2295,8 +2055,7 @@ export default function CardDetailModal({
                 }}
                 style={{ width: '100%', justifyContent: 'center' }}
               >
-                <ClipboardList size={13} />
-                Copy Content
+                <ClipboardList size={13} /> Copy Content
               </button>
               {(() => {
                 const isFocused = (card.focused_by ?? []).includes(currentUserId ?? '');
@@ -2305,30 +2064,18 @@ export default function CardDetailModal({
                     className="kb-btn kb-btn-ghost"
                     onClick={async () => {
                       const prev = card.focused_by ?? [];
-                      const next = isFocused
-                        ? prev.filter(id => id !== currentUserId)
-                        : [...prev, currentUserId!];
+                      const next = isFocused ? prev.filter(id => id !== currentUserId) : [...prev, currentUserId!];
                       await onUpdate({ focused_by: next });
                     }}
-                    style={{
-                      width: '100%',
-                      justifyContent: 'center',
-                      ...(isFocused ? {
-                        color: '#fa420f',
-                        borderColor: 'rgba(250,66,15,0.35)',
-                        background: 'rgba(250,66,15,0.08)',
-                      } : {}),
-                    }}
+                    style={{ width: '100%', justifyContent: 'center', ...(isFocused ? { color: '#fa420f', borderColor: 'rgba(250,66,15,0.35)', background: 'rgba(250,66,15,0.08)' } : {}) }}
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill={isFocused ? 'currentColor' : 'none'}
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill={isFocused ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                     </svg>
                     {isFocused ? 'Remove Focus' : 'Focus on Today'}
                   </button>
                 );
               })()}
-              {/* Snooze */}
               {card.snoozed_until && new Date(card.snoozed_until) > new Date() ? (
                 <button
                   className="kb-btn kb-btn-ghost"
@@ -2352,22 +2099,16 @@ export default function CardDetailModal({
                   Snooze Card
                 </button>
               )}
-
               {showSnoozePicker && !(card.snoozed_until && new Date(card.snoozed_until) > new Date()) && (
                 <div style={{ background: '#1a1d2a', border: '1px solid #2a2d3a', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Snooze until…</div>
-                  {/* Quick options */}
                   {(() => {
                     const now = new Date();
                     const laterToday = new Date(now.getTime() + 3 * 60 * 60 * 1000);
                     const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(8, 0, 0, 0);
                     const nextWeek = new Date(now); nextWeek.setDate(nextWeek.getDate() + (8 - nextWeek.getDay()) % 7 || 7); nextWeek.setHours(8, 0, 0, 0);
                     const fmt = (d: Date) => d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-                    const snooze = async (d: Date) => {
-                      await onUpdate({ snoozed_until: d.toISOString() });
-                      setShowSnoozePicker(false);
-                      onClose();
-                    };
+                    const snooze = async (d: Date) => { await onUpdate({ snoozed_until: d.toISOString() }); setShowSnoozePicker(false); onClose(); };
                     return (
                       <>
                         <button className="kb-btn kb-btn-ghost" onClick={() => snooze(laterToday)} style={{ width: '100%', justifyContent: 'space-between', fontSize: 13 }}>
@@ -2382,24 +2123,11 @@ export default function CardDetailModal({
                       </>
                     );
                   })()}
-                  {/* Custom date + time */}
                   <div style={{ borderTop: '1px solid #2a2d3a', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ fontSize: 11, color: '#6b7280' }}>Custom</div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <input
-                        type="date"
-                        className="kb-input"
-                        value={snoozeDate}
-                        onChange={e => setSnoozeDate(e.target.value)}
-                        style={{ flex: 1, fontSize: 12 }}
-                      />
-                      <input
-                        type="time"
-                        className="kb-input"
-                        value={snoozeTime}
-                        onChange={e => setSnoozeTime(e.target.value)}
-                        style={{ width: 90, fontSize: 12 }}
-                      />
+                      <input type="date" className="kb-input" value={snoozeDate} onChange={e => setSnoozeDate(e.target.value)} style={{ flex: 1, fontSize: 12 }} />
+                      <input type="time" className="kb-input" value={snoozeTime} onChange={e => setSnoozeTime(e.target.value)} style={{ width: 90, fontSize: 12 }} />
                     </div>
                     <button
                       className="kb-btn kb-btn-primary"
@@ -2418,35 +2146,281 @@ export default function CardDetailModal({
                   </div>
                 </div>
               )}
-
               <button
                 className="kb-btn kb-btn-ghost"
-                onClick={async () => {
-                  await onArchive();
-                  onClose();
-                }}
+                onClick={async () => { await onArchive(); onClose(); }}
                 style={{ width: '100%', justifyContent: 'center' }}
                 title="Archive this card (A)"
               >
-                <Archive size={13} />
-                Archive Card
+                <Archive size={13} /> Archive Card
               </button>
-
               <button
                 className="kb-btn kb-btn-danger"
-                onClick={async () => {
-                  if (confirm('Delete this card?')) {
-                    await onDelete();
-                    onClose();
-                  }
-                }}
+                onClick={async () => { if (confirm('Delete this card?')) { await onDelete(); onClose(); } }}
                 style={{ width: '100%', justifyContent: 'center' }}
               >
-                <Trash2 size={13} />
-                Delete Card
+                <Trash2 size={13} /> Delete Card
               </button>
             </div>
+
+            {/* Sidebar popovers — portaled to body */}
+            {typeof document !== 'undefined' && (
+              <>
+                {/* Assignee popover */}
+                {openSidebarPopover === 'assignee' && createPortal(
+                  <div ref={sidebarPopoverRef} style={{ position: 'fixed', top: sidebarPopoverPos.top, left: sidebarPopoverPos.left, width: 240, background: '#1a2035', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50201, overflow: 'hidden' }}>
+                    <div style={{ padding: '8px 8px 6px' }}>
+                      <input autoFocus type="text" placeholder="Search members…" className="kb-input" style={{ width: '100%', fontSize: 12, padding: '6px 8px', boxSizing: 'border-box' }} />
+                    </div>
+                    <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                      <button
+                        style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '7px 12px', background: !editAssignee ? 'rgba(99,102,241,0.1)' : 'transparent', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = !editAssignee ? 'rgba(99,102,241,0.1)' : 'transparent')}
+                        onClick={() => { setEditAssignee(''); setOpenSidebarPopover(null); }}
+                      >
+                        <User size={11} style={{ color: '#6b7280' }} /> Unassigned
+                      </button>
+                      {userProfiles.filter(p => p.name).map(p => (
+                        <button
+                          key={p.id}
+                          style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '7px 12px', background: editAssignee === p.id ? 'rgba(99,102,241,0.1)' : 'transparent', border: 'none', color: editAssignee === p.id ? '#818cf8' : '#d1d5db', fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = editAssignee === p.id ? 'rgba(99,102,241,0.1)' : 'transparent')}
+                          onClick={() => { setEditAssignee(p.id); setOpenSidebarPopover(null); }}
+                        >
+                          <User size={11} style={{ color: '#6b7280' }} /> @{p.name}
+                          {editAssignee === p.id && <Check size={11} style={{ marginLeft: 'auto', color: '#818cf8' }} />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>,
+                  document.body
+                )}
+
+                {/* Priority popover */}
+                {openSidebarPopover === 'priority' && createPortal(
+                  <div ref={sidebarPopoverRef} style={{ position: 'fixed', top: sidebarPopoverPos.top, left: sidebarPopoverPos.left, width: 200, background: '#1a2035', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50201, overflow: 'hidden', padding: 6 }}>
+                    <button
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', background: !editPriority ? 'rgba(255,255,255,0.06)' : 'transparent', border: 'none', color: '#9ca3af', fontSize: 13, borderRadius: 6, cursor: 'pointer', marginBottom: 2 }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.07)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = !editPriority ? 'rgba(255,255,255,0.06)' : 'transparent')}
+                      onClick={() => { setEditPriority(null); setOpenSidebarPopover(null); }}
+                    >
+                      None {!editPriority && <Check size={11} style={{ marginLeft: 'auto' }} />}
+                    </button>
+                    {(Object.keys(PRIORITY_CONFIG) as CardPriority[]).map(p => (
+                      <button
+                        key={p}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', background: editPriority === p ? 'rgba(255,255,255,0.06)' : 'transparent', border: 'none', color: PRIORITY_CONFIG[p].color, fontSize: 13, borderRadius: 6, cursor: 'pointer', marginBottom: 2 }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.07)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = editPriority === p ? 'rgba(255,255,255,0.06)' : 'transparent')}
+                        onClick={() => { setEditPriority(p); setOpenSidebarPopover(null); }}
+                      >
+                        <Flag size={12} /> {PRIORITY_CONFIG[p].label}
+                        {editPriority === p && <Check size={11} style={{ marginLeft: 'auto' }} />}
+                      </button>
+                    ))}
+                  </div>,
+                  document.body
+                )}
+
+                {/* Due Date popover */}
+                {openSidebarPopover === 'dueDate' && createPortal(
+                  <div ref={sidebarPopoverRef} style={{ position: 'fixed', top: sidebarPopoverPos.top, left: sidebarPopoverPos.left, width: 300, background: '#1a2035', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50201, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Due Date</div>
+                    <DatePickerInput className="kb-input" value={editDueDate} onChange={setEditDueDate} placeholder="Select due date…" />
+                    {editDueDate && (() => {
+                      const parseTime12 = (t: string) => { const [h24, m] = t.split(':').map(Number); const period = h24 >= 12 ? 'PM' : 'AM'; const h = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24; return { hour: h, minute: m, period }; };
+                      const formatTime24 = (h: number, m: number, period: string) => { let h24 = h; if (period === 'AM' && h === 12) h24 = 0; else if (period === 'PM' && h !== 12) h24 = h + 12; return `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`; };
+                      if (!editDueTime) {
+                        return <button className="kb-due-time-add" onClick={() => setEditDueTime('09:00')}><Clock size={12} /> Add time</button>;
+                      }
+                      const parsed = parseTime12(editDueTime);
+                      return (
+                        <div className="kb-due-time-row">
+                          <select className="kb-due-time-select" value={parsed.hour} onChange={e => setEditDueTime(formatTime24(Number(e.target.value), parsed.minute, parsed.period))}>
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(h => <option key={h} value={h}>{h}</option>)}
+                          </select>
+                          <span className="kb-due-time-colon">:</span>
+                          <select className="kb-due-time-select" value={parsed.minute} onChange={e => setEditDueTime(formatTime24(parsed.hour, Number(e.target.value), parsed.period))}>
+                            {Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{String(m).padStart(2, '0')}</option>)}
+                          </select>
+                          <select className="kb-due-time-period kb-due-time-select" value={parsed.period} onChange={e => setEditDueTime(formatTime24(parsed.hour, parsed.minute, e.target.value))}>
+                            <option value="AM">AM</option><option value="PM">PM</option>
+                          </select>
+                          <button className="kb-due-time-clear" onClick={() => setEditDueTime('')}><X size={12} /></button>
+                        </div>
+                      );
+                    })()}
+                    {editDueDate && <button className="kb-btn kb-btn-sm kb-btn-ghost" style={{ fontSize: 11, color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }} onClick={() => { setEditDueDate(''); setEditDueTime(''); }}>Clear</button>}
+                    <button className="kb-btn kb-btn-sm kb-btn-primary" style={{ alignSelf: 'flex-end' }} onClick={() => setOpenSidebarPopover(null)}>Done</button>
+                  </div>,
+                  document.body
+                )}
+
+                {/* Start Date popover */}
+                {openSidebarPopover === 'startDate' && createPortal(
+                  <div ref={sidebarPopoverRef} style={{ position: 'fixed', top: sidebarPopoverPos.top, left: sidebarPopoverPos.left, width: 260, background: '#1a2035', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50201, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Start Date</div>
+                    <DatePickerInput className="kb-input" value={editStartDate} onChange={setEditStartDate} placeholder="Select start date…" />
+                    {editStartDate && <button className="kb-btn kb-btn-sm kb-btn-ghost" style={{ fontSize: 11, color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }} onClick={() => setEditStartDate('')}>Clear</button>}
+                    <button className="kb-btn kb-btn-sm kb-btn-primary" style={{ alignSelf: 'flex-end' }} onClick={() => setOpenSidebarPopover(null)}>Done</button>
+                  </div>,
+                  document.body
+                )}
+
+                {/* Repeat popover */}
+                {openSidebarPopover === 'repeat' && createPortal(
+                  <div ref={sidebarPopoverRef} style={{ position: 'fixed', top: sidebarPopoverPos.top, left: sidebarPopoverPos.left, width: 300, background: '#1a2035', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50201, padding: 14, display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '70vh', overflowY: 'auto' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Repeat</div>
+                    <label className="kb-repeat-toggle">
+                      <input type="checkbox" checked={repeatEnabled} onChange={e => { setRepeatEnabled(e.target.checked); if (e.target.checked && !editStartDate) setEditStartDate(new Date().toISOString().slice(0, 10)); }} />
+                      <span>Enable repeat</span>
+                    </label>
+                    {repeatEnabled && (
+                      <>
+                        <div className="kb-repeat-row">
+                          <select className="kb-input" value={repeatMode} onChange={e => setRepeatMode(e.target.value as RepeatMode)}>
+                            <option value="interval">Every N days/weeks/months</option>
+                            <option value="monthly-weekday">Monthly on a specific day</option>
+                          </select>
+                        </div>
+                        {repeatMode === 'interval' ? (
+                          <div className="kb-repeat-row">
+                            <span className="kb-repeat-label">Every</span>
+                            <select className="kb-input" value={repeatEvery} onChange={e => setRepeatEvery(parseInt(e.target.value))} style={{ width: 60 }}>
+                              {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                            <select className="kb-input" value={repeatUnit} onChange={e => setRepeatUnit(e.target.value as RepeatUnit)}>
+                              <option value="days">Days</option><option value="weeks">Weeks</option><option value="months">Months</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <div className="kb-repeat-row">
+                            <span className="kb-repeat-label">The</span>
+                            <select className="kb-input" value={repeatNth} onChange={e => setRepeatNth(parseInt(e.target.value))} style={{ width: 64 }}>
+                              <option value={1}>1st</option><option value={2}>2nd</option><option value={3}>3rd</option><option value={4}>4th</option><option value={5}>5th</option>
+                            </select>
+                            <select className="kb-input" value={repeatWeekday} onChange={e => setRepeatWeekday(parseInt(e.target.value))}>
+                              <option value={0}>Sunday</option><option value={1}>Monday</option><option value={2}>Tuesday</option><option value={3}>Wednesday</option><option value={4}>Thursday</option><option value={5}>Friday</option><option value={6}>Saturday</option>
+                            </select>
+                          </div>
+                        )}
+                        {repeatMode === 'interval' && !editStartDate && <div className="kb-repeat-warn">A start date is required to anchor the repeat schedule.</div>}
+                        {(repeatMode === 'monthly-weekday' || editStartDate) && (
+                          <div className="kb-repeat-summary">
+                            <span className="kb-repeat-summary-text">
+                              {formatRepeatSummary(repeatMode === 'monthly-weekday' ? { mode: 'monthly-weekday', every: 1, unit: 'months', nth: repeatNth, weekday: repeatWeekday } : { every: repeatEvery, unit: repeatUnit })}
+                            </span>
+                            <span className="kb-repeat-next">
+                              Next: {formatNextDate(repeatMode === 'monthly-weekday' ? { mode: 'monthly-weekday', every: 1, unit: 'months', nth: repeatNth, weekday: repeatWeekday, ...(repeatEndDate ? { endDate: repeatEndDate } : {}) } : { every: repeatEvery, unit: repeatUnit, ...(repeatEndDate ? { endDate: repeatEndDate } : {}) }, editStartDate)}
+                            </span>
+                          </div>
+                        )}
+                        <div className="kb-repeat-end">
+                          <DatePickerInput className="kb-input" value={repeatEndDate} onChange={setRepeatEndDate} placeholder="End date (optional)…" />
+                        </div>
+                      </>
+                    )}
+                    <button className="kb-btn kb-btn-sm kb-btn-primary" style={{ alignSelf: 'flex-end' }} onClick={() => setOpenSidebarPopover(null)}>Done</button>
+                  </div>,
+                  document.body
+                )}
+
+                {/* Move to List popover */}
+                {openSidebarPopover === 'moveList' && createPortal(
+                  <div ref={sidebarPopoverRef} style={{ position: 'fixed', top: sidebarPopoverPos.top, left: sidebarPopoverPos.left, width: 220, background: '#1a2035', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50201, overflow: 'hidden', padding: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '6px 8px 8px' }}>Move to List</div>
+                    {board.columns.map(col => (
+                      <button
+                        key={col.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', background: col.id === card.column_id ? 'rgba(255,255,255,0.06)' : 'transparent', border: 'none', color: col.id === card.column_id ? '#e5e7eb' : '#9ca3af', fontSize: 13, borderRadius: 6, cursor: col.id === card.column_id ? 'default' : 'pointer', marginBottom: 2, textAlign: 'left' }}
+                        onMouseEnter={e => { if (col.id !== card.column_id) e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = col.id === card.column_id ? 'rgba(255,255,255,0.06)' : 'transparent'; }}
+                        onClick={async () => { if (col.id !== card.column_id) { await onMoveCard(col.id); onClose(); } }}
+                      >
+                        {col.id === card.column_id && <Check size={11} style={{ color: '#818cf8', flexShrink: 0 }} />}
+                        {col.id !== card.column_id && <span style={{ width: 11, flexShrink: 0 }} />}
+                        {col.title}
+                      </button>
+                    ))}
+                  </div>,
+                  document.body
+                )}
+
+                {/* Watcher picker portal */}
+                {showWatcherPicker && (onAddWatcher || onInviteWatcher) && createPortal(
+                  <div ref={watcherPickerRef} style={{ position: 'fixed', top: watcherPickerPos.top, left: watcherPickerPos.left, width: 240, background: '#1a2035', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50201, overflow: 'hidden' }}>
+                    <div style={{ padding: '8px 8px 6px' }}>
+                      <input autoFocus type="text" placeholder="Search by name or enter email…" value={watcherSearch} onChange={e => { setWatcherSearch(e.target.value); setWatcherInviteFeedback(null); }} className="kb-input" style={{ width: '100%', fontSize: 12, padding: '6px 8px', boxSizing: 'border-box' }} />
+                    </div>
+                    <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                      {currentUserId && !isWatching && (!watcherSearch || 'me'.includes(watcherSearch.toLowerCase()) || userProfiles.find(p => p.id === currentUserId)?.name?.toLowerCase().includes(watcherSearch.toLowerCase())) && (
+                        <button
+                          style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '7px 12px', background: 'rgba(99,102,241,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)', border: 'none', color: '#818cf8', fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.12)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.06)')}
+                          onClick={async () => {
+                            setWatchLoading(true);
+                            await onWatchCard();
+                            setIsWatching(true);
+                            if (currentUserId) setWatchers(prev => [...prev, currentUserId]);
+                            setWatchLoading(false);
+                            setShowWatcherPicker(false);
+                            if (onFetchWatcherProfiles) onFetchWatcherProfiles(card.id).then(setWatcherProfiles);
+                          }}
+                        >
+                          <User size={11} /> Add me as a watcher
+                        </button>
+                      )}
+                      {userProfiles.filter(p => p.name && !watchers.includes(p.id) && p.id !== currentUserId && p.name.toLowerCase().includes(watcherSearch.toLowerCase())).map(p => (
+                        <button
+                          key={p.id}
+                          style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '7px 12px', background: 'transparent', border: 'none', color: '#d1d5db', fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                          onClick={async () => { if (onAddWatcher) await onAddWatcher(p.id); setWatchers(prev => [...prev, p.id]); setShowWatcherPicker(false); }}
+                        >
+                          <User size={11} style={{ color: '#6b7280' }} /> @{p.name}
+                        </button>
+                      ))}
+                    </div>
+                    {onInviteWatcher && watcherSearch.includes('@') && !watcherSearch.endsWith('@') && (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '6px 8px' }}>
+                        <button
+                          disabled={watcherInviteLoading}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '7px 8px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 6, color: '#818cf8', fontSize: 12, cursor: watcherInviteLoading ? 'not-allowed' : 'pointer', textAlign: 'left', opacity: watcherInviteLoading ? 0.6 : 1 }}
+                          onClick={async () => {
+                            setWatcherInviteLoading(true);
+                            const result = await onInviteWatcher!(watcherSearch.trim(), card.id);
+                            setWatcherInviteLoading(false);
+                            if (result.ok) {
+                              setWatcherInviteFeedback(result.alreadyUser ? 'Added as watcher!' : 'Invite sent!');
+                              onFetchWatchers().then(setWatchers);
+                              if (onFetchPendingWatcherInvites) onFetchPendingWatcherInvites(card.id).then(setPendingInvites);
+                              setTimeout(() => { setShowWatcherPicker(false); setWatcherInviteFeedback(null); }, 1500);
+                            } else {
+                              setWatcherInviteFeedback('Failed to invite. Try again.');
+                            }
+                          }}
+                        >
+                          {watcherInviteLoading ? 'Sending…' : `Invite ${watcherSearch.trim()}`}
+                        </button>
+                        {watcherInviteFeedback && <p style={{ margin: '5px 0 0', fontSize: 11, color: watcherInviteFeedback.startsWith('Failed') ? '#ef4444' : '#22c55e' }}>{watcherInviteFeedback}</p>}
+                      </div>
+                    )}
+                    {userProfiles.filter(p => p.name && !watchers.includes(p.id) && p.id !== currentUserId && p.name.toLowerCase().includes(watcherSearch.toLowerCase())).length === 0 && !watcherSearch.includes('@') && watcherSearch.length > 0 && (
+                      <p style={{ margin: 0, padding: '8px 12px', fontSize: 12, color: '#6b7280' }}>No users found. Enter an email to invite.</p>
+                    )}
+                  </div>,
+                  document.body
+                )}
+              </>
+            )}
+
           </div>
+          </div>{/* end kb-detail-columns */}
         </div>
       </div>
     </div>

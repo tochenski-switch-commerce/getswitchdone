@@ -844,6 +844,7 @@ export const kanbanStyles = `
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px 0;
+    gap: 8px;
   }
   .kb-detail-nav {
     display: flex;
@@ -1386,7 +1387,15 @@ export const kanbanStyles = `
   .kb-detail-close:hover { background: #252836 !important; color: #e5e7eb; }
   .kb-detail-body {
     display: flex;
+    flex-direction: column;
     gap: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .kb-detail-columns {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
     min-width: 0;
     overflow: hidden;
   }
@@ -3009,8 +3018,9 @@ export const kanbanStyles = `
     .kb-search-input { width: 100% !important; font-size: 16px !important; }
     .kb-column { width: 280px; min-width: 280px; }
     .kb-add-column { width: 280px; min-width: 280px; }
-    .kb-detail-body { flex-direction: column; overflow-x: hidden; }
-    .kb-detail-sidebar { width: 100%; border-top: 1px solid #2a2d3a; overflow: hidden; }
+    .kb-detail-body { overflow-x: hidden; }
+    .kb-detail-columns { flex-direction: column; overflow-x: hidden; }
+    .kb-detail-sidebar { width: 100%; border-top: none; overflow-y: auto; overflow-x: hidden; }
     .kb-detail-main { border-right: none; padding: 20px 16px; overflow: hidden; }
     .kb-note-panel { width: 100%; }
     .kb-email-panel { width: 100%; }
@@ -3433,6 +3443,142 @@ export const kanbanStyles = `
     display: flex;
     flex-direction: column;
     gap: 4px;
+  }
+
+  /* ── Sidebar section headers ── */
+  .kb-sidebar-section-header {
+    font-size: 11px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0 0 6px;
+    padding: 0;
+  }
+  .kb-sidebar-divider {
+    border: none;
+    border-top: 1px solid #2a2d3a;
+    margin: 14px 0;
+  }
+
+  /* ── Trello-style compact sidebar rows ── */
+  .kb-sidebar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 3px;
+    min-height: 32px;
+  }
+  .kb-sidebar-row-icon {
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    width: 16px;
+  }
+  .kb-sidebar-row-label {
+    font-size: 12px;
+    color: #9ca3af;
+    flex-shrink: 0;
+    width: 68px;
+  }
+  .kb-sidebar-row-value {
+    flex: 1;
+    min-width: 0;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #e5e7eb;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 0.12s, border-color 0.12s;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kb-sidebar-row-value:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: #374151;
+  }
+  .kb-sidebar-row-none {
+    color: #4b5563;
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Sidebar actions section ── */
+  .kb-sidebar-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* ── Card metadata summary strip ── */
+  .kb-card-meta-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .kb-card-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 3px 10px 3px 8px;
+    font-size: 12px;
+    color: #e5e7eb;
+    cursor: pointer;
+    transition: background 0.12s;
+    white-space: nowrap;
+  }
+  .kb-card-meta-chip:hover { background: rgba(255,255,255,0.1); }
+  .kb-card-meta-chip-overdue {
+    border-color: rgba(239,68,68,0.5);
+    color: #f87171;
+  }
+
+  /* ── Mobile tabs ── */
+  .kb-mobile-tabs { display: none; }
+  .kb-mobile-tab {
+    flex: 1;
+    padding: 10px 0;
+    background: none;
+    border: none;
+    border-bottom: 2px solid #2a2d3a;
+    color: #6b7280;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .kb-mobile-tab:hover { color: #e5e7eb; }
+  .kb-mobile-tab-active {
+    color: #818cf8;
+    border-bottom-color: #6366f1;
+  }
+
+  @media (max-width: 768px) {
+    .kb-mobile-tabs {
+      display: flex;
+      border-bottom: 1px solid #2a2d3a;
+      flex-shrink: 0;
+      background: #1a1d27;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .kb-mobile-hidden { display: none !important; }
+    .kb-mobile-sidebar-hidden { display: none !important; }
   }
 `;
 
