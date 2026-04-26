@@ -1,6 +1,6 @@
 export default async () => {
   const baseUrl = process.env.URL || "http://localhost:3000";
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env.CRON_SECRET || process.env.PUSH_WEBHOOK_SECRET;
 
   if (!cronSecret) {
     console.error("CRON_SECRET not set");

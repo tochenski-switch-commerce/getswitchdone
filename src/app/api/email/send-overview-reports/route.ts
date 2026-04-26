@@ -321,24 +321,57 @@ export async function GET(req: NextRequest) {
   const from = process.env.NOTIFICATION_FROM_EMAIL || 'Lumio <notifications@mail.switchcommerce.team>';
   let sent = 0;
 
+  // Advance all next_send_at timestamps before sending to prevent duplicates on timeout
+  const nextSendMap = new Map<string, string>();
   for (const schedule of schedules) {
+    const next = computeNextSendAt(
+      schedule.frequency,
+      schedule.time_of_day,
+      schedule.day_of_week ?? null,
+      schedule.timezone,
+    );
+    nextSendMap.set(schedule.id, next.toISOString());
+  }
+
+  const updateResults = await Promise.allSettled(
+    schedules.map(schedule =>
+      db
+        .from('board_overview_schedules')
+        .update({ next_send_at: nextSendMap.get(schedule.id), updated_at: new Date().toISOString() })
+        .eq('id', schedule.id)
+    )
+  );
+
+  // Only process schedules where the timestamp update succeeded
+  const processable = schedules.filter((_, i) => {
+    const result = updateResults[i];
+    if (result.status === 'rejected' || result.value?.error) {
+      console.error('[send-overview-reports] Failed to advance next_send_at for schedule', schedules[i].id);
+      return false;
+    }
+    return true;
+  });
+
+  const SCHEDULE_CONCURRENCY = 3;
+
+  const processSchedule = async (schedule: typeof schedules[0]) => {
     try {
-      // Fetch board data
-      const [boardRes, colsRes, cardsRes] = await Promise.all([
+      // Fetch board data and user info in parallel
+      const [boardRes, colsRes, cardsRes, userResult, userProfileRes] = await Promise.all([
         db.from('project_boards').select('*').eq('id', schedule.board_id).single(),
         db.from('board_columns').select('*').eq('board_id', schedule.board_id).order('position'),
         db.from('board_cards').select('*').eq('board_id', schedule.board_id).eq('is_archived', false).order('position'),
+        db.auth.admin.getUserById(schedule.user_id),
+        db.from('user_profiles').select('name').eq('id', schedule.user_id).maybeSingle(),
       ]);
 
-      if (boardRes.error || !boardRes.data) continue;
+      if (boardRes.error || !boardRes.data) return;
+      if (userResult.error || !userResult.data?.user?.email) return;
 
-      // Fetch user email
-      const { data: userResult, error: userErr } = await db.auth.admin.getUserById(schedule.user_id);
-      if (userErr || !userResult?.user?.email) continue;
-      const toEmail = userResult.user.email;
-
-      // Fetch profiles for assignees in this board
+      const toEmail = userResult.data.user.email;
       const cards = cardsRes.data ?? [];
+
+      // Fetch assignee profiles
       const assigneeIds = new Set<string>();
       for (const card of cards) {
         if (card.assignee) assigneeIds.add(card.assignee);
@@ -355,15 +388,8 @@ export async function GET(req: NextRequest) {
         updated_at: new Date().toISOString(),
       }));
 
-      // Get user display name
-      const { data: userProfile } = await db
-        .from('user_profiles')
-        .select('name')
-        .eq('id', schedule.user_id)
-        .maybeSingle();
-      const displayName = userProfile?.name || userResult.user.user_metadata?.name || 'there';
+      const displayName = userProfileRes.data?.name || userResult.data.user.user_metadata?.name || 'there';
 
-      // Build the FullBoard-compatible object
       const board: FullBoard = {
         ...boardRes.data,
         columns: colsRes.data ?? [],
@@ -375,8 +401,6 @@ export async function GET(req: NextRequest) {
       };
 
       const todayStr = getTodayStrInTimezone(schedule.timezone);
-
-      // Build time label for the email
       const timeLabel = schedule.frequency === 'weekly'
         ? `${DAY_NAMES[schedule.day_of_week ?? 1]}s at ${fmt12(schedule.time_of_day)}`
         : fmt12(schedule.time_of_day);
@@ -391,25 +415,6 @@ export async function GET(req: NextRequest) {
         timeLabel,
       });
 
-      // Advance next_send_at BEFORE sending to prevent duplicate emails if the
-      // send succeeds but the update never runs (timeout, throw, etc.)
-      const next = computeNextSendAt(
-        schedule.frequency,
-        schedule.time_of_day,
-        schedule.day_of_week ?? null,
-        schedule.timezone,
-      );
-
-      const { error: updateErr } = await db
-        .from('board_overview_schedules')
-        .update({ next_send_at: next.toISOString(), updated_at: new Date().toISOString() })
-        .eq('id', schedule.id);
-
-      if (updateErr) {
-        console.error('[send-overview-reports] Failed to advance next_send_at for schedule', schedule.id, updateErr);
-        continue;
-      }
-
       await resend.emails.send({
         from,
         to: toEmail,
@@ -421,6 +426,10 @@ export async function GET(req: NextRequest) {
     } catch (err) {
       console.error('[send-overview-reports] Error for schedule', schedule.id, err);
     }
+  };
+
+  for (let i = 0; i < processable.length; i += SCHEDULE_CONCURRENCY) {
+    await Promise.allSettled(processable.slice(i, i + SCHEDULE_CONCURRENCY).map(processSchedule));
   }
 
   return NextResponse.json({ sent });
