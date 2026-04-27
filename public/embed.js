@@ -58,6 +58,8 @@
   var target = targetSel ? document.querySelector(targetSel) : script.parentElement;
   if (!target) return;
 
+  var hideTitle = script.hasAttribute('data-hide-title');
+
   // ── Helpers ────────────────────────────────────────────────────────────────
   function esc(str) {
     return String(str || '')
@@ -122,7 +124,7 @@
     return '<input class="' + cls + '" type="' + type + '" ' + name + req + ' placeholder="' + ph + '">';
   }
 
-  function renderForm(el, form) {
+  function renderForm(el, form, noTitle) {
     var fieldsHtml = '';
     (form.fields || []).forEach(function (field) {
       // Skip hidden assignees (server applies the default)
@@ -140,10 +142,10 @@
     });
 
     el.innerHTML = '<div class="' + P + '-wrap">'
-      + '<div class="' + P + '-header">'
-      + '<h2 class="' + P + '-title">' + esc(form.title) + '</h2>'
-      + (form.description ? '<p class="' + P + '-desc">' + esc(form.description) + '</p>' : '')
-      + '</div>'
+      + (noTitle ? '' : '<div class="' + P + '-header">'
+        + '<h2 class="' + P + '-title">' + esc(form.title) + '</h2>'
+        + (form.description ? '<p class="' + P + '-desc">' + esc(form.description) + '</p>' : '')
+        + '</div>')
       + '<form class="' + P + '-form" novalidate>'
       + fieldsHtml
       + '<div class="' + P + '-submit-err"></div>'
@@ -237,7 +239,7 @@
           + '</div>';
 
         wrap.querySelector('.' + P + '-btn-sec').addEventListener('click', function () {
-          renderForm(el, form);
+          renderForm(el, form, hideTitle);
         });
       })
       .catch(function () {
@@ -260,7 +262,7 @@
     })
     .then(function (form) {
       if (!form || !form.id) throw new Error('invalid response');
-      renderForm(target, form);
+      renderForm(target, form, hideTitle);
     })
     .catch(function () {
       target.innerHTML = '<p class="' + P + '-not-found">This form is not available.</p>';
