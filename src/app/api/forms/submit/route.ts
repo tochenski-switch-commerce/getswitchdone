@@ -5,13 +5,23 @@ import type { FormField } from '@/types/board-types';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { formId, data } = body as { formId: string; data: Record<string, string> };
 
     if (!formId || !data) {
-      return NextResponse.json({ error: 'Missing formId or data' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing formId or data' }, { status: 400, headers: corsHeaders });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -25,7 +35,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (formErr || !form) {
-      return NextResponse.json({ error: 'Form not found or inactive' }, { status: 404 });
+      return NextResponse.json({ error: 'Form not found or inactive' }, { status: 404, headers: corsHeaders });
     }
 
     const fields = form.fields as FormField[];
@@ -33,7 +43,7 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     for (const field of fields) {
       if (field.required && !data[field.id]?.trim()) {
-        return NextResponse.json({ error: `${field.label} is required` }, { status: 400 });
+        return NextResponse.json({ error: `${field.label} is required` }, { status: 400, headers: corsHeaders });
       }
     }
 
@@ -117,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     if (cardErr) {
       console.error('[form-submit] Failed to create card:', cardErr);
-      return NextResponse.json({ error: 'Failed to create card' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to create card' }, { status: 500, headers: corsHeaders });
     }
 
     // Write custom field values
@@ -162,8 +172,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, cardId: card.id, boardId: form.board_id });
+    return NextResponse.json({ success: true, cardId: card.id, boardId: form.board_id }, { headers: corsHeaders });
   } catch {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400, headers: corsHeaders });
   }
 }

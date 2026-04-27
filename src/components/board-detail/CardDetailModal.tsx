@@ -2148,7 +2148,7 @@ export default function CardDetailModal({
                 className="kb-btn kb-btn-ghost"
                 onClick={() => {
                   const lines: string[] = [];
-                  lines.push(`Title: ${card.title}`);
+                  lines.push(`Title: ${editTitle}`);
                   if (column) lines.push(`Column: ${column.title}`);
                   if (card.priority) lines.push(`Priority: ${PRIORITY_CONFIG[card.priority].label}`);
                   if (card.assignee) {
@@ -2158,8 +2158,9 @@ export default function CardDetailModal({
                   if (card.start_date) lines.push(`Start Date: ${card.start_date}`);
                   if (card.due_date) lines.push(`Due Date: ${card.due_date}${card.due_time ? ` ${card.due_time}` : ''}`);
                   if (card.labels && card.labels.length > 0) lines.push(`Labels: ${card.labels.map(l => l.name).join(', ')}`);
-                  if (card.description) {
-                    const plain = card.description.replace(/<[^>]+>/g, '').trim();
+                  const currentDescHtml = descRef.current !== null ? descRef.current.innerHTML : editDesc;
+                  if (currentDescHtml) {
+                    const plain = currentDescHtml.replace(/<[^>]+>/g, '').trim();
                     if (plain) lines.push(`Description: ${plain}`);
                   }
                   if (card.checklists && card.checklists.length > 0) {
