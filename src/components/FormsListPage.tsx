@@ -8,6 +8,7 @@ import type { BoardForm, ProjectBoard, BoardCustomField, CustomFieldType } from 
 import {
   FileText, Plus, Trash2, Edit3, Calendar, ExternalLink,
   Eye, ToggleLeft, ToggleRight, FolderKanban, ArrowLeft, ListBullet,
+  Code, Copy,
 } from '@/components/BoardIcons';
 import FlameLoader from '@/components/FlameLoader';
 
@@ -28,6 +29,8 @@ export default function FormsListPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterBoardId, setFilterBoardId] = useState<string>(searchParams.get('board') || '');
   const overlayMouseDown = useRef<EventTarget | null>(null);
+  const [embedForm, setEmbedForm] = useState<(BoardForm & { board_title?: string }) | null>(null);
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/auth?returnTo=%2Fforms');
@@ -225,6 +228,15 @@ export default function FormsListPage() {
     }
   };
 
+  const embedSnippet = (slug: string) =>
+    `<div id="lumio-form"></div>\n<script\n  src="https://lumioboards.netlify.app/embed.js"\n  data-form="${slug}"\n  data-target="#lumio-form"\n></script>`;
+
+  const handleCopyEmbed = (slug: string) => {
+    navigator.clipboard.writeText(embedSnippet(slug));
+    setCopiedEmbed(true);
+    setTimeout(() => setCopiedEmbed(false), 2000);
+  };
+
   const publicUrl = (slug: string) => {
     if (typeof window !== 'undefined') {
       return `${window.location.origin}/f/${slug}`;
@@ -348,6 +360,33 @@ export default function FormsListPage() {
           </div>
         )}
 
+        {/* Embed modal */}
+        {embedForm && (
+          <div
+            className="kb-modal-overlay"
+            onMouseDown={e => { overlayMouseDown.current = e.target; }}
+            onClick={e => { if (e.target === e.currentTarget && overlayMouseDown.current === e.currentTarget) setEmbedForm(null); }}
+          >
+            <div className="kb-modal">
+              <h2 className="kb-modal-title">Embed Form</h2>
+              <p style={{ fontSize: 13, color: '#9ca3af', margin: '0 0 16px' }}>
+                Drop this snippet anywhere on your site to render <strong style={{ color: '#e5e7eb' }}>{embedForm.title}</strong> inline — no iframe needed.
+              </p>
+              <pre className="kb-embed-pre">{embedSnippet(embedForm.slug)}</pre>
+              <div className="kb-modal-actions">
+                <button className="kb-btn kb-btn-ghost" onClick={() => setEmbedForm(null)}>Close</button>
+                <button
+                  className="kb-btn kb-btn-primary"
+                  onClick={() => handleCopyEmbed(embedForm.slug)}
+                >
+                  <Copy size={14} />
+                  {copiedEmbed ? 'Copied!' : 'Copy Snippet'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Filters */}
         {!loading && forms.length > 0 && (
           <div className="kb-filter-bar">
@@ -424,6 +463,13 @@ export default function FormsListPage() {
                     {new Date(form.created_at).toLocaleDateString()}
                   </span>
                   <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      className="kb-btn-icon"
+                      onClick={() => { setEmbedForm(form); setCopiedEmbed(false); }}
+                      title="Get embed snippet"
+                    >
+                      <Code size={14} />
+                    </button>
                     <button
                       className="kb-btn-icon"
                       onClick={() => {
@@ -726,6 +772,21 @@ const formsListStyles = `
     justify-content: flex-end;
     gap: 10px;
     margin-top: 20px;
+  }
+
+  .kb-embed-pre {
+    background: #0a0c12;
+    border: 1px solid #2a2d3a;
+    border-radius: 10px;
+    padding: 16px;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
+    font-size: 12px;
+    color: #a5b4fc;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0 0 4px;
+    line-height: 1.6;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* ── Responsive ── */

@@ -38,9 +38,18 @@
     document.head.appendChild(style);
   }
 
+  var LUMIO = 'https://lumioboards.netlify.app';
+
   // ── Locate this script tag ─────────────────────────────────────────────────
+  // document.currentScript is null when the script runs async, deferred, or
+  // inside a tag manager. Fall back to finding the first uninitialized embed.
   var script = document.currentScript;
+  if (!script) {
+    var candidates = document.querySelectorAll('script[data-form]:not([data-lumio-init])');
+    script = candidates.length ? candidates[0] : null;
+  }
   if (!script) return;
+  script.setAttribute('data-lumio-init', '1'); // mark so multi-embed pages work
 
   var slug = script.getAttribute('data-form');
   if (!slug) return;
@@ -48,9 +57,6 @@
   var targetSel = script.getAttribute('data-target');
   var target = targetSel ? document.querySelector(targetSel) : script.parentElement;
   if (!target) return;
-
-  // Derive base URL from the script's own src (strips /embed.js)
-  var baseUrl = script.src.replace(/\/[^/]*$/, '');
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function esc(str) {
@@ -202,7 +208,7 @@
     btn.textContent = 'Submitting…';
     hide(submitErrEl);
 
-    fetch(baseUrl + '/api/forms/submit', {
+    fetch(LUMIO + '/api/forms/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ formId: form.id, data: data }),
@@ -247,12 +253,13 @@
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   target.innerHTML = '<p class="' + P + '-loading">Loading…</p>';
 
-  fetch(baseUrl + '/api/forms/public/' + encodeURIComponent(slug))
+  fetch(LUMIO + '/api/forms/public/' + encodeURIComponent(slug), { cache: 'no-store' })
     .then(function (r) {
       if (!r.ok) throw new Error('not found');
       return r.json();
     })
     .then(function (form) {
+      if (!form || !form.id) throw new Error('invalid response');
       renderForm(target, form);
     })
     .catch(function () {
