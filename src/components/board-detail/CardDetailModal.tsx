@@ -412,7 +412,8 @@ export default function CardDetailModal({
       const btnRef = sidebarPopoverBtnRefs.current[openSidebarPopover];
       if (
         sidebarPopoverRef.current && !sidebarPopoverRef.current.contains(target) &&
-        (!btnRef || !btnRef.contains(target))
+        (!btnRef || !btnRef.contains(target)) &&
+        !(target as Element).closest?.('.dp-dropdown')
       ) {
         setOpenSidebarPopover(null);
       }
