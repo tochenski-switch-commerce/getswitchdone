@@ -358,9 +358,9 @@ export async function GET(req: NextRequest) {
     try {
       // Fetch board data and user info in parallel
       const [boardRes, colsRes, cardsRes, userResult, userProfileRes] = await Promise.all([
-        db.from('project_boards').select('*').eq('id', schedule.board_id).single(),
-        db.from('board_columns').select('*').eq('board_id', schedule.board_id).order('position'),
-        db.from('board_cards').select('*').eq('board_id', schedule.board_id).eq('is_archived', false).order('position'),
+        db.from('project_boards').select('id, user_id, title, description, icon, icon_color, is_archived, is_public, timezone, team_id, is_starred, automations, created_at, updated_at').eq('id', schedule.board_id).single(),
+        db.from('board_columns').select('id, board_id, title, position, color, column_type, automations, card_limit, created_at').eq('board_id', schedule.board_id).order('position'),
+        db.from('board_cards').select('id, board_id, column_id, title, position, priority, start_date, due_date, due_time, assignee, assignees, is_archived, is_complete, created_at, updated_at').eq('board_id', schedule.board_id).eq('is_archived', false).order('position'),
         db.auth.admin.getUserById(schedule.user_id),
         db.from('user_profiles').select('name').eq('id', schedule.user_id).maybeSingle(),
       ]);

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 function addUnits(date: Date, every: number, unit: string): Date {
   const d = new Date(date);
@@ -55,6 +55,11 @@ function isRepeatDueToday(startDate: string, every: number, unit: string): boole
  *   Authorization: Bearer <CRON_SECRET>
  */
 export async function GET(request: Request) {
+  if (!supabaseServiceKey) {
+    console.error('[cards/repeat] SUPABASE_SERVICE_ROLE_KEY is not configured');
+    return NextResponse.json({ error: 'Server misconfiguration: missing service role key' }, { status: 500 });
+  }
+
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
     const auth = request.headers.get('authorization');

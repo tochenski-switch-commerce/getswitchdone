@@ -1,6 +1,12 @@
 [
   {
     "date": "2026-05-01",
+    "description": "Backend performance and reliability improvements: form submissions now enforce rate limiting (10 per 5 minutes per IP) to prevent spam, the AI chat assistant loads faster by fetching only the data it needs, board hover prefetch cache now expires in 60 seconds instead of 5 minutes, and startup logging now flags missing environment variables on deploy.",
+    "page": null,
+    "type": "improvement"
+  },
+  {
+    "date": "2026-05-01",
     "description": "Enhanced sorting on both the boards list and inside each kanban board. The boards list now supports Newest First, A→Z, Last Updated, and a Custom drag-to-reorder mode — all persisted between sessions. Inside a board, you can now sort any column by priority (Urgent → Low) and use the new Sort toolbar control to apply a sort across all columns at once. Column headers show a small badge indicating the active sort.",
     "page": "/boards",
     "type": "feature"

@@ -234,7 +234,7 @@ export function prefetchBoard(boardId: string): void {
   const p = _fetchBoardData(boardId);
   _prefetchPromises.set(boardId, p);
   // Auto-expire after 60 s so stale prefetches don't linger in memory
-  p.finally(() => setTimeout(() => _prefetchPromises.delete(boardId), 300_000));
+  p.finally(() => setTimeout(() => _prefetchPromises.delete(boardId), 60_000));
 }
 
 const BOARDS_CACHE_KEY = 'lumio:boards:v1';

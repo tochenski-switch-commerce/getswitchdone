@@ -25,13 +25,13 @@ async function verifyAuth(req: NextRequest) {
 /* ── Build board context for the system prompt ── */
 async function buildBoardContext(boardId: string) {
   // Phase 1: fetch board to get team_id for targeted profile lookup
-  const boardRes = await supabaseAdmin.from('project_boards').select('*').eq('id', boardId).single();
+  const boardRes = await supabaseAdmin.from('project_boards').select('id, title, description, notes, team_id, user_id, timezone').eq('id', boardId).single();
   const board = boardRes.data;
   if (!board) return { board: null, columns: [], cards: [], labels: [], fields: [], profiles: [], systemContext: '' };
 
   // Phase 2: fetch everything else in parallel, with targeted profile lookup
   const [colsRes, cardsRes, labelsRes, fieldsRes, profilesRes] = await Promise.all([
-    supabaseAdmin.from('board_columns').select('*').eq('board_id', boardId).order('position'),
+    supabaseAdmin.from('board_columns').select('id, title, position, color').eq('board_id', boardId).order('position'),
     supabaseAdmin.from('board_cards').select('id, title, column_id, position, priority, due_date, assignees, is_archived, created_at, updated_at').eq('board_id', boardId).eq('is_archived', false),
     supabaseAdmin.from('board_labels').select('id, name, color').eq('board_id', boardId),
     supabaseAdmin.from('board_custom_fields').select('id, title, field_type').eq('board_id', boardId),
@@ -95,6 +95,7 @@ Lumio Feature Guide:
 `;
 
 export async function POST(req: NextRequest) {
+  const requestId = req.headers.get('x-request-id') || crypto.randomUUID();
   try {
     const user = await verifyAuth(req);
     if (!user) return new Response('Unauthorized', { status: 401 });
@@ -404,6 +405,7 @@ GUIDELINES:
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return new Response(`AI Chat Error: ${msg}`, { status: 500 });
+    console.error(`[ai/chat] requestId=${requestId}`, err);
+    return new Response(`AI Chat Error: ${msg} (requestId: ${requestId})`, { status: 500 });
   }
 }
