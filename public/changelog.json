@@ -1,0 +1,38 @@
+[
+  {
+    "date": "2026-05-01",
+    "description": "Enhanced sorting on both the boards list and inside each kanban board. The boards list now supports Newest First, A→Z, Last Updated, and a Custom drag-to-reorder mode — all persisted between sessions. Inside a board, you can now sort any column by priority (Urgent → Low) and use the new Sort toolbar control to apply a sort across all columns at once. Column headers show a small badge indicating the active sort.",
+    "page": "/boards",
+    "type": "feature"
+  },
+  {
+    "date": "2026-05-01",
+    "description": "Added an /update-log page so you can see what's changed in Lumio over time.",
+    "page": "/update-log",
+    "type": "feature"
+  },
+  {
+    "date": "2026-04-30",
+    "description": "Fixed an issue where tapping the date picker inside the card sidebar would accidentally close the sidebar.",
+    "page": null,
+    "type": "fix"
+  },
+  {
+    "date": "2026-04-29",
+    "description": "You can now embed a form on any external website and copy a ready-to-use code snippet directly from the Forms page.",
+    "page": "/forms",
+    "type": "feature"
+  },
+  {
+    "date": "2026-04-28",
+    "description": "Public forms can now be fetched and submitted from any domain — CORS support added for embedded form use cases.",
+    "page": "/forms",
+    "type": "improvement"
+  },
+  {
+    "date": "2026-04-27",
+    "description": "Overdue card notifications now check reliably every 15 minutes so you never miss a deadline alert.",
+    "page": null,
+    "type": "improvement"
+  }
+]

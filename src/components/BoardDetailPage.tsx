@@ -46,6 +46,12 @@ const RepeatSeriesDrawer = dynamic(() => import('./board-detail/RepeatSeriesDraw
 import { kanbanStyles } from './board-detail/kanban-styles';
 import { hapticLight, hapticMedium, hapticHeavy, hapticSelection } from '@/lib/haptics';
 
+type SortDirection = 'asc' | 'desc' | 'due_asc' | 'due_desc' | 'priority_asc' | 'priority_desc';
+const SORT_LABEL: Record<SortDirection, string> = {
+  asc: 'A→Z', desc: 'Z→A', due_asc: 'Due↑', due_desc: 'Due↓',
+  priority_asc: 'Pri↑', priority_desc: 'Pri↓',
+};
+
 function BoardPage() {
   const params = useParams();
   const router = useRouter();
@@ -196,6 +202,14 @@ function BoardPage() {
   const noteRef = useRef<HTMLDivElement>(null);
   const noteSaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // ── Sort state ────────────────────────────────────────────────────────────
+  const [colSortDirs, setColSortDirs] = useState<Record<string, SortDirection>>({});
+  const [boardSortDir, setBoardSortDir] = useState<SortDirection | ''>(() => {
+    if (typeof window === 'undefined') return '';
+    try { return (localStorage.getItem(`board-sort-dir:${params.id}`) as SortDirection | null) ?? ''; }
+    catch { return ''; }
+  });
+
   const newCardRef = useRef<HTMLInputElement>(null);
   const newColRef = useRef<HTMLInputElement>(null);
   const [mobileAddOpen, setMobileAddOpen] = useState(false);
@@ -218,6 +232,43 @@ function BoardPage() {
     const id = setInterval(() => setSnoozeNow(new Date()), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  // Persist board sort preference
+  useEffect(() => {
+    if (!boardSortDir) return;
+    try { localStorage.setItem(`board-sort-dir:${boardId}`, boardSortDir); } catch { /* */ }
+  }, [boardSortDir, boardId]);
+
+  // Reset per-column sort indicators when navigating to a different board
+  useEffect(() => { setColSortDirs({}); }, [boardId]);
+
+  // Sort all cards in a single column and update their positions
+  const applySortToColumn = useCallback(async (columnId: string, direction: SortDirection) => {
+    if (!board) return;
+    const colCards = [...board.cards.filter(c => c.column_id === columnId && !c.is_archived)];
+    colCards.sort((a, b) => {
+      if (direction === 'asc') return a.title.localeCompare(b.title);
+      if (direction === 'desc') return b.title.localeCompare(a.title);
+      if (direction === 'due_asc') return (a.due_date ?? '9999') < (b.due_date ?? '9999') ? -1 : 1;
+      if (direction === 'due_desc') return (a.due_date ?? '') > (b.due_date ?? '') ? -1 : 1;
+      if (direction === 'priority_asc') return PRIORITY_WEIGHT[a.priority ?? 'none'] - PRIORITY_WEIGHT[b.priority ?? 'none'];
+      if (direction === 'priority_desc') return PRIORITY_WEIGHT[b.priority ?? 'none'] - PRIORITY_WEIGHT[a.priority ?? 'none'];
+      return 0;
+    });
+    for (let i = 0; i < colCards.length; i++) {
+      await updateCard(boardId, colCards[i].id, { position: i });
+    }
+    setColSortDirs(prev => ({ ...prev, [columnId]: direction }));
+  }, [board, boardId, updateCard]);
+
+  // Apply sort to all columns at once
+  const applyBoardSort = useCallback(async (direction: SortDirection) => {
+    if (!board) return;
+    setBoardSortDir(direction);
+    for (const col of board.columns) {
+      await applySortToColumn(col.id, direction);
+    }
+  }, [board, applySortToColumn]);
 
   // Realtime: re-fetch board in background when another user makes changes
   const handleRemoteChange = useCallback(() => {
@@ -1249,6 +1300,25 @@ function BoardPage() {
                 ))}
               </select>
             )}
+
+            <select
+              className="kb-filter-select"
+              value={boardSortDir}
+              onChange={async e => {
+                const dir = e.target.value as SortDirection | '';
+                if (!dir) { setBoardSortDir(''); return; }
+                await applyBoardSort(dir);
+              }}
+              title="Sort all columns"
+            >
+              <option value="">Sort…</option>
+              <option value="asc">Title A→Z</option>
+              <option value="desc">Title Z→A</option>
+              <option value="due_asc">Due Date ↑</option>
+              <option value="due_desc">Due Date ↓</option>
+              <option value="priority_asc">Priority ↑</option>
+              <option value="priority_desc">Priority ↓</option>
+            </select>
           </div>
 
           {snoozedCards.length > 0 && (
@@ -1548,6 +1618,26 @@ function BoardPage() {
               Clear All Filters
             </button>
           )}
+          <div className="kb-mobile-filter-row">
+            <label className="kb-mobile-filter-label">Sort All Columns</label>
+            <select
+              className="kb-filter-select"
+              value={boardSortDir}
+              onChange={async e => {
+                const dir = e.target.value as SortDirection | '';
+                if (!dir) { setBoardSortDir(''); return; }
+                await applyBoardSort(dir);
+              }}
+            >
+              <option value="">No sort</option>
+              <option value="asc">Title A→Z</option>
+              <option value="desc">Title Z→A</option>
+              <option value="due_asc">Due Date ↑</option>
+              <option value="due_desc">Due Date ↓</option>
+              <option value="priority_asc">Priority ↑</option>
+              <option value="priority_desc">Priority ↓</option>
+            </select>
+          </div>
         </div>
       )}
 
@@ -1737,6 +1827,19 @@ function BoardPage() {
                     <span className={`kb-column-count ${!isLinkCol && col.card_limit != null && colCards.length >= col.card_limit ? 'kb-count-over-limit' : ''}`}>
                       {isLinkCol ? colLinks.length : colCards.length}{!isLinkCol && col.card_limit != null ? `/${col.card_limit}` : ''}
                     </span>
+                    {colSortDirs[col.id] && (
+                      <span
+                        style={{
+                          fontSize: 10, fontWeight: 700, color: '#818cf8',
+                          background: 'rgba(99,102,241,0.12)',
+                          border: '1px solid rgba(99,102,241,0.2)',
+                          borderRadius: 4, padding: '1px 4px', flexShrink: 0,
+                        }}
+                        title={`Sorted: ${SORT_LABEL[colSortDirs[col.id]]}`}
+                      >
+                        {SORT_LABEL[colSortDirs[col.id]]}
+                      </span>
+                    )}
                   </div>
                   <div className="kb-column-actions" onDoubleClick={e => e.stopPropagation()}>
                     {columns.indexOf(col) > 0 && (
@@ -2604,17 +2707,7 @@ function BoardPage() {
             checklistTemplates={checklistTemplates}
             onApplyTemplate={async (cardId, templateId) => { await applyChecklistTemplate(boardId, cardId, templateId); }}
             onSortCards={async (columnId, direction) => {
-              const colCards = [...board.cards.filter(c => c.column_id === columnId && !c.is_archived)];
-              colCards.sort((a, b) => {
-                if (direction === 'asc') return a.title.localeCompare(b.title);
-                if (direction === 'desc') return b.title.localeCompare(a.title);
-                if (direction === 'due_asc') return (a.due_date ?? '9999') < (b.due_date ?? '9999') ? -1 : 1;
-                if (direction === 'due_desc') return (a.due_date ?? '') > (b.due_date ?? '') ? -1 : 1;
-                return 0;
-              });
-              for (let i = 0; i < colCards.length; i++) {
-                await updateCard(boardId, colCards[i].id, { position: i });
-              }
+              await applySortToColumn(columnId, direction);
             }}
             onUpdateColumn={async (updates) => { await updateColumn(boardId, col.id, updates as any); }}
             onMoveToBoardCards={async (targetBoardId, targetColumnId) => {

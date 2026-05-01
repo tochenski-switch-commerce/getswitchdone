@@ -38,7 +38,7 @@ export default function ListActionsModal({
   onAddChecklistItem: (cardId: string, title: string) => Promise<void>;
   checklistTemplates: ChecklistTemplate[];
   onApplyTemplate: (cardId: string, templateId: string) => Promise<void>;
-  onSortCards: (columnId: string, direction: 'asc' | 'desc' | 'due_asc' | 'due_desc') => Promise<void>;
+  onSortCards: (columnId: string, direction: 'asc' | 'desc' | 'due_asc' | 'due_desc' | 'priority_asc' | 'priority_desc') => Promise<void>;
   onUpdateColumn: (updates: { card_limit?: number | null; color?: string }) => Promise<void>;
   onArchiveCards: (cardIds: string[]) => Promise<void>;
   onMoveToBoardCards: (targetBoardId: string, targetColumnId: string) => Promise<void>;
@@ -366,6 +366,20 @@ export default function ListActionsModal({
                     onClick={() => apply('Sort Due ↓', async () => { await onSortCards(column.id, 'due_desc'); })}
                   >
                     Due ↓
+                  </button>
+                  <button
+                    className="kb-btn kb-btn-primary kb-btn-sm"
+                    disabled={applying}
+                    onClick={() => apply('Sort Priority ↑', async () => { await onSortCards(column.id, 'priority_asc'); })}
+                  >
+                    Priority ↑
+                  </button>
+                  <button
+                    className="kb-btn kb-btn-primary kb-btn-sm"
+                    disabled={applying}
+                    onClick={() => apply('Sort Priority ↓', async () => { await onSortCards(column.id, 'priority_desc'); })}
+                  >
+                    Priority ↓
                   </button>
                 </div>
               </div>

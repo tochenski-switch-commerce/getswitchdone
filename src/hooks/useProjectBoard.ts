@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { setBadgeCount, clearBadge } from '@/lib/badge';
 import { extractMentions } from '@/lib/mention-parser';
@@ -256,7 +256,7 @@ function writeBoardsCache(boards: ProjectBoard[]): void {
 
 // ── Hook ──
 export function useProjectBoard() {
-  const [boards, setBoards] = useState<ProjectBoard[]>(readBoardsCache);
+  const [boards, setBoards] = useState<ProjectBoard[]>([]);
   const [board, setBoard] = useState<FullBoard | null>(null);
   const [checklistTemplates, setChecklistTemplates] = useState<ChecklistTemplate[]>([]);
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
@@ -266,6 +266,12 @@ export function useProjectBoard() {
   const [unroutedEmails, setUnroutedEmails] = useState<BoardEmail[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Hydrate from localStorage after mount — keeps server/client initial state in sync
+  useEffect(() => {
+    const cached = readBoardsCache();
+    if (cached.length > 0) setBoards(cached);
+  }, []);
 
   const fetchUserProfiles = useCallback(async () => {
     const { data } = await supabase

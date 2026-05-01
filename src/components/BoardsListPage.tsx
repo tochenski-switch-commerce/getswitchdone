@@ -40,6 +40,8 @@ import type { TemplateData } from '@/types/board-types';
 import { supabase } from '@/lib/supabase';
 
 // ── Types ────────────────────────────────────────────────────────────────────
+type SortMode = 'new-old' | 'a-z' | 'last-updated' | 'custom';
+
 type CardRow = {
   id: string;
   board_id: string;
@@ -96,6 +98,18 @@ function BoardsListPage() {
   const [showWizard, setShowWizard] = useState(false);
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
   const [assigneeProfiles, setAssigneeProfiles] = useState<Map<string, string>>(new Map());
+
+  // ── Sort state ────────────────────────────────────────────────────────────
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    try { return (localStorage.getItem('boards-sort-mode') ?? 'new-old') as SortMode; }
+    catch { return 'new-old'; }
+  });
+  const [customOrder, setCustomOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('boards-custom-order') ?? '[]') as string[]; }
+    catch { return []; }
+  });
+  const [dragBoardId, setDragBoardId] = useState<string | null>(null);
+  const [dragOverBoardId, setDragOverBoardId] = useState<string | null>(null);
 
   // ── Stats flag (set to true when ready to ship) ───────────────────────────
   const STATS_ENABLED = true;
@@ -313,6 +327,69 @@ function BoardsListPage() {
     return boards.filter(b => matchingBoardIds.has(b.id));
   }, [boards, rawCards, assigneeFilter]);
 
+  // ── Persist sort preferences ───────────────────────────────────────────────
+  useEffect(() => {
+    try { localStorage.setItem('boards-sort-mode', sortMode); } catch { /* */ }
+  }, [sortMode]);
+
+  useEffect(() => {
+    try { localStorage.setItem('boards-custom-order', JSON.stringify(customOrder)); } catch { /* */ }
+  }, [customOrder]);
+
+  // ── Sorted boards (apply selected sort mode) ───────────────────────────────
+  const sortedBoards = useMemo(() => {
+    const base = filteredBoards;
+    if (sortMode === 'a-z') return [...base].sort((a, b) => a.title.localeCompare(b.title));
+    if (sortMode === 'last-updated') {
+      return [...base].sort((a, b) => {
+        const aAct = boardStatsMap.get(a.id)?.lastActivity ?? a.updated_at;
+        const bAct = boardStatsMap.get(b.id)?.lastActivity ?? b.updated_at;
+        return bAct > aAct ? -1 : 1;
+      });
+    }
+    if (sortMode === 'custom') {
+      return [...base].sort((a, b) => {
+        const ai = customOrder.indexOf(a.id);
+        const bi = customOrder.indexOf(b.id);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
+    }
+    // new-old: newest first
+    return [...base].sort((a, b) => a.created_at > b.created_at ? -1 : 1);
+  }, [filteredBoards, sortMode, customOrder, boardStatsMap]);
+
+  // ── Drag reorder handlers (custom sort mode) ───────────────────────────────
+  const handleBoardDragOver = useCallback((e: React.DragEvent, boardId: string) => {
+    e.preventDefault();
+    setDragOverBoardId(boardId);
+  }, []);
+
+  const handleBoardDrop = useCallback((targetId: string) => {
+    if (!dragBoardId || dragBoardId === targetId) {
+      setDragBoardId(null);
+      setDragOverBoardId(null);
+      return;
+    }
+    const src = dragBoardId;
+    setDragBoardId(null);
+    setDragOverBoardId(null);
+    setCustomOrder(prev => {
+      const allIds = sortedBoards.map(b => b.id);
+      const current = prev.length > 0 ? prev : allIds;
+      const full = [...new Set([...current, ...allIds])];
+      const fromIdx = full.indexOf(src);
+      const toIdx = full.indexOf(targetId);
+      if (fromIdx === -1 || toIdx === -1) return full;
+      const next = [...full];
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, src);
+      return next;
+    });
+  }, [dragBoardId, sortedBoards]);
+
   // ── Toggle expand (global — all cards together) ────────────────────────────
   const toggleStats = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -350,7 +427,12 @@ function BoardsListPage() {
     return (
       <div
         key={board.id}
-        className="kb-board-card"
+        className={`kb-board-card${sortMode === 'custom' && dragBoardId === board.id ? ' kb-board-card-dragging' : ''}${sortMode === 'custom' && dragOverBoardId === board.id && dragBoardId !== board.id ? ' kb-board-card-drag-over' : ''}`}
+        draggable={sortMode === 'custom'}
+        onDragStart={sortMode === 'custom' ? () => setDragBoardId(board.id) : undefined}
+        onDragOver={sortMode === 'custom' ? e => handleBoardDragOver(e, board.id) : undefined}
+        onDrop={sortMode === 'custom' ? () => handleBoardDrop(board.id) : undefined}
+        onDragEnd={sortMode === 'custom' ? () => { setDragBoardId(null); setDragOverBoardId(null); } : undefined}
         onClick={() => { hapticLight(); router.push(`/boards/${board.id}`); }}
       >
         <div className="kb-board-card-header">
@@ -475,7 +557,7 @@ function BoardsListPage() {
         )}
 
         <div className="kb-board-card-footer">
-          <span className="kb-board-card-date">
+          <span className="kb-board-card-date" suppressHydrationWarning>
             <Clock size={12} />
             {STATS_ENABLED && stats ? relativeTime(stats.lastActivity) : new Date(board.created_at).toLocaleDateString()}
           </span>
@@ -600,9 +682,28 @@ function BoardsListPage() {
             )}
             */}
 
-            {/* ── Assignee filter ──────────────────────────────────────────── */}
-            {uniqueAssigneeIds.length > 0 && (
-              <div className="kb-filter-bar">
+            {/* ── Sort + Filter bar ─────────────────────────────────────── */}
+            <div className="kb-filter-bar">
+              <select
+                className="kb-filter-select"
+                value={sortMode}
+                onChange={e => {
+                  const mode = e.target.value as SortMode;
+                  setSortMode(mode);
+                  if (mode === 'custom' && customOrder.length === 0) {
+                    setCustomOrder(filteredBoards.map(b => b.id));
+                  }
+                }}
+              >
+                <option value="new-old">Newest First</option>
+                <option value="a-z">A → Z</option>
+                <option value="last-updated">Last Updated</option>
+                <option value="custom">Custom Order</option>
+              </select>
+              {sortMode === 'custom' && (
+                <span style={{ fontSize: 11, color: '#6b7280' }}>Drag to reorder</span>
+              )}
+              {uniqueAssigneeIds.length > 0 && (
                 <select
                   className="kb-filter-select"
                   value={assigneeFilter}
@@ -616,17 +717,35 @@ function BoardsListPage() {
                     </option>
                   ))}
                 </select>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* My Boards */}
             {(() => {
               const knownTeamIds = new Set(teams.map(t => t.id));
-              const myBoards = filteredBoards.filter(b => !b.team_id);
-              const teamGroups = teams.map(t => ({ team: t, boards: filteredBoards.filter(b => b.team_id === t.id) })).filter(g => g.boards.length > 0);
-              // Boards belonging to teams I'm not in (e.g. public)
-              const otherTeamBoards = filteredBoards.filter(b => b.team_id && !knownTeamIds.has(b.team_id));
-              const noResults = filteredBoards.length === 0 && assigneeFilter;
+              const noResults = sortedBoards.length === 0 && assigneeFilter;
+
+              if (sortMode === 'custom') {
+                return (
+                  <>
+                    {noResults && (
+                      <div style={{ color: '#6b7280', fontSize: 14, padding: '32px 0' }}>
+                        No boards match this filter.
+                      </div>
+                    )}
+                    <div className="kb-board-grid">
+                      {sortedBoards.map(board => {
+                        const teamName = board.team_id ? teams.find(t => t.id === board.team_id)?.name : undefined;
+                        return renderBoardCard(board, teamName);
+                      })}
+                    </div>
+                  </>
+                );
+              }
+
+              const myBoards = sortedBoards.filter(b => !b.team_id);
+              const teamGroups = teams.map(t => ({ team: t, boards: sortedBoards.filter(b => b.team_id === t.id) })).filter(g => g.boards.length > 0);
+              const otherTeamBoards = sortedBoards.filter(b => b.team_id && !knownTeamIds.has(b.team_id));
               return (
                 <>
                   {noResults && (
@@ -798,6 +917,15 @@ const boardsListStyles = `
     border-color: #6366f1;
     box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3), 0 8px 24px rgba(0,0,0,0.3);
     transform: translateY(-2px);
+  }
+  .kb-board-card-dragging {
+    opacity: 0.45;
+    cursor: grabbing;
+  }
+  .kb-board-card-drag-over {
+    border-color: #6366f1 !important;
+    background: rgba(99,102,241,0.07) !important;
+    box-shadow: 0 0 0 2px rgba(99,102,241,0.35);
   }
   .kb-board-card-header {
     display: flex;

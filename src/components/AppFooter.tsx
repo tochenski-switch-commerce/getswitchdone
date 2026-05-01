@@ -76,6 +76,9 @@ export default function AppFooter() {
           >
             Report a bug
           </a>
+          <a className="kb-footer-link" href="/update-log">
+            What&apos;s new
+          </a>
           <a className="kb-footer-link" href="/privacy">
             Privacy
           </a>

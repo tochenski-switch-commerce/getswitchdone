@@ -162,10 +162,25 @@ PUSH_WEBHOOK_SECRET
 
 ---
 
+## Changelog Discipline
+
+Every user-facing change must be logged in `public/changelog.json` **before committing** — no exceptions.
+
+- Add a new entry at the **top** of the array
+- Use today's date in `YYYY-MM-DD` format
+- Write the description from the user's perspective — what changed and why it matters
+- Include `page` (the app route where the change lives, or `null`) and `type` (`"feature"`, `"improvement"`, or `"fix"`)
+- One entry per distinct change; batch only if tightly related
+- `public/changelog.json` must always be staged in the commit
+
+The page at `/update-log` reads this file directly — no API, no rebuild required.
+
+---
+
 ## Git Workflow
 
 After any meaningful commit:
-1. `git add [specific files]`
+1. `git add [specific files]` (always include `public/changelog.json` if user-facing)
 2. `git commit -m "[clear message]"`
 3. `git push`
 4. Trigger a Netlify redeploy if the change affects production behavior
