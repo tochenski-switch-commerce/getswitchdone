@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
 
     if (newPairs.length > 0) {
       // Mark sent FIRST to prevent duplicate sends if we time out mid-loop
-      await db.from('due_date_notifications_sent').upsert(
+      const { error: upsertError } = await db.from('due_date_notifications_sent').upsert(
         newPairs.map(({ userId, card }) => ({
           user_id: userId,
           card_id: card.id,
@@ -148,6 +148,10 @@ export async function GET(req: NextRequest) {
           notification_type: 'overdue',
         }))
       );
+      if (upsertError) {
+        console.error('[check-overdue] Failed to mark overdue notifications sent:', upsertError.message);
+        return NextResponse.json({ error: upsertError.message }, { status: 500 });
+      }
 
       // Bulk insert inbox notifications
       await db.from('notifications').insert(
@@ -245,7 +249,7 @@ export async function GET(req: NextRequest) {
 
     if (newChecklistPairs.length > 0) {
       // Mark sent FIRST
-      await db.from('due_date_notifications_sent').upsert(
+      const { error: checklistUpsertError } = await db.from('due_date_notifications_sent').upsert(
         newChecklistPairs.map(({ userId, item }) => ({
           user_id: userId,
           card_id: item.card_id,
@@ -253,6 +257,10 @@ export async function GET(req: NextRequest) {
           notification_type: 'checklist_overdue',
         }))
       );
+      if (checklistUpsertError) {
+        console.error('[check-overdue] Failed to mark checklist overdue notifications sent:', checklistUpsertError.message);
+        return NextResponse.json({ error: checklistUpsertError.message }, { status: 500 });
+      }
 
       // Bulk insert inbox notifications
       await db.from('notifications').insert(

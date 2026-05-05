@@ -1,5 +1,11 @@
 [
   {
+    "date": "2026-05-05",
+    "description": "Fixed a bug where overdue card notifications were sent repeatedly (up to 18 times per day) instead of once. The overdue check now runs once daily at 9 AM ET instead of every 15 minutes.",
+    "page": null,
+    "type": "fix"
+  },
+  {
     "date": "2026-05-01",
     "description": "Backend performance and reliability improvements: form submissions now enforce rate limiting (10 per 5 minutes per IP) to prevent spam, the AI chat assistant loads faster by fetching only the data it needs, board hover prefetch cache now expires in 60 seconds instead of 5 minutes, and startup logging now flags missing environment variables on deploy.",
     "page": null,
