@@ -1,6 +1,12 @@
 [
   {
     "date": "2026-05-15",
+    "description": "Cards created from a public form now notify the assignee — both via the in-app inbox and an assignment email — matching how assignments work elsewhere in the app.",
+    "page": "/forms",
+    "type": "feature"
+  },
+  {
+    "date": "2026-05-15",
     "description": "Fixed a bug where forms with a required hidden Auto Assignee field could not be submitted — the submit button appeared to do nothing. The default assignee is now applied automatically without blocking submission.",
     "page": "/forms",
     "type": "fix"

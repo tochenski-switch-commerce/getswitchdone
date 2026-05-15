@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import type { FormField } from '@/types/board-types';
+import { maybeSendNotificationEmail } from '@/lib/notification-email';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -179,6 +180,36 @@ export async function POST(request: NextRequest) {
         data,
         card_id: card.id,
       }]);
+
+    // ── Assignment notification (inbox + email) ──
+    if (cardAssignee) {
+      try {
+        const assignmentTitle = `🎯 Assigned`;
+        const assignmentBody = `You were assigned to: ${cardTitle}`;
+
+        await supabase.from('notifications').insert({
+          user_id: cardAssignee,
+          board_id: form.board_id,
+          card_id: card.id,
+          type: 'assignment',
+          title: assignmentTitle,
+          body: assignmentBody,
+          is_read: false,
+        });
+
+        await maybeSendNotificationEmail({
+          supabaseAdmin: supabase,
+          userId: cardAssignee,
+          type: 'assignment',
+          title: assignmentTitle,
+          body: assignmentBody,
+          boardId: form.board_id,
+          cardId: card.id,
+        });
+      } catch (err) {
+        console.error('[form-submit] Assignment notification failed (non-critical):', err);
+      }
+    }
 
     // ── AI auto-triage: classify priority if not explicitly mapped ──
     if (!priorityExplicitlyMapped) {
