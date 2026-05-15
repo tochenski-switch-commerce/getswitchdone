@@ -187,7 +187,9 @@ export async function POST(request: NextRequest) {
         const assignmentTitle = `🎯 Assigned`;
         const assignmentBody = `You were assigned to: ${cardTitle}`;
 
-        await supabase.from('notifications').insert({
+        console.log('[form-submit] sending assignment notification', { assignee: cardAssignee, card: card.id });
+
+        const { error: notifErr } = await supabase.from('notifications').insert({
           user_id: cardAssignee,
           board_id: form.board_id,
           card_id: card.id,
@@ -196,8 +198,24 @@ export async function POST(request: NextRequest) {
           body: assignmentBody,
           is_read: false,
         });
+        if (notifErr) console.error('[form-submit] inbox notification insert failed:', notifErr);
 
-        await maybeSendNotificationEmail({
+        // Pre-flight checks so we can see *why* an email might not send
+        const { data: assigneeAuth, error: authErr } = await supabase.auth.admin.getUserById(cardAssignee);
+        const { data: assigneeProfile, error: profErr } = await supabase
+          .from('user_profiles')
+          .select('id, name, email_notifications_enabled, assignment_notifications_enabled')
+          .eq('id', cardAssignee)
+          .maybeSingle();
+        console.log('[form-submit] assignee lookup:', {
+          authEmail: assigneeAuth?.user?.email ?? null,
+          authErr: authErr?.message ?? null,
+          profile: assigneeProfile,
+          profErr: profErr?.message ?? null,
+          resendKeySet: !!process.env.RESEND_API_KEY,
+        });
+
+        const emailSent = await maybeSendNotificationEmail({
           supabaseAdmin: supabase,
           userId: cardAssignee,
           type: 'assignment',
@@ -206,6 +224,7 @@ export async function POST(request: NextRequest) {
           boardId: form.board_id,
           cardId: card.id,
         });
+        console.log('[form-submit] maybeSendNotificationEmail returned:', emailSent);
       } catch (err) {
         console.error('[form-submit] Assignment notification failed (non-critical):', err);
       }
