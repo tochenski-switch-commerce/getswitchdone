@@ -1,5 +1,17 @@
 [
   {
+    "date": "2026-05-15",
+    "description": "Fixed a bug where forms with a required hidden Auto Assignee field could not be submitted. The default assignee is now applied server-side without blocking submission.",
+    "page": "/forms",
+    "type": "fix"
+  },
+  {
+    "date": "2026-05-09",
+    "description": "Improved the board top bar on mobile. The title now sits on its own line and the action buttons spread evenly across a second row with larger tap targets. The board (...) menu has also been reorganized into clearly labeled sections — Navigate, Configure, Sharing, Settings — with larger text and tap targets on phones.",
+    "page": null,
+    "type": "improvement"
+  },
+  {
     "date": "2026-05-05",
     "description": "Fixed a bug where overdue card notifications were sent repeatedly (up to 18 times per day) instead of once. The overdue check now runs once daily at 9 AM ET instead of every 15 minutes.",
     "page": null,

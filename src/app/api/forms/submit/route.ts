@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     for (const field of fields) {
+      // Hidden assignee fields are satisfied by their configured default, not user input
+      if (field.maps_to === 'assignee' && field.assignee_visible === false) continue;
       if (field.required && !data[field.id]?.trim()) {
         return NextResponse.json({ error: `${field.label} is required` }, { status: 400, headers: corsHeaders });
       }
