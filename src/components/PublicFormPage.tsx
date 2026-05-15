@@ -53,6 +53,8 @@ export default function PublicFormPage() {
     if (!form) return false;
     const errors: Record<string, string> = {};
     for (const field of form.fields) {
+      // Skip fields hidden from the public form — they're filled server-side
+      if (field.maps_to === 'assignee' && field.assignee_visible === false) continue;
       const val = values[field.id]?.trim() || '';
       if (field.required && !val) {
         errors[field.id] = `${field.label} is required`;
