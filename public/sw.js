@@ -1,11 +1,16 @@
-const CACHE_NAME = 'lumio-v1';
+// Bump this on any change to caching behavior so `activate` purges stale caches.
+// v1 cached the app shell + navigations, which could strand a browser on an old
+// build whose JS chunks no longer exist on the server (infinite loading spinner).
+const CACHE_NAME = 'lumio-v2';
 
+// Only the offline fallback is precached. We deliberately do NOT precache app
+// routes like /boards — caching HTML lets a stale shell reference purged JS
+// chunks after a deploy, which hangs the app. HTML now always comes from network.
 const PRECACHE_URLS = [
-  '/boards',
   '/offline',
 ];
 
-// Install: precache shell (failures are non-fatal — don't block SW activation)
+// Install: precache offline page (failures are non-fatal — don't block activation)
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS).catch(() => {}))
@@ -93,23 +98,19 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== location.origin) return;
 
-  // Navigations: network-first, fallback to cache then offline page
+  // Navigations: always network. We never cache the HTML shell — serving a stale
+  // shell can point the app at JS chunks that no longer exist on the server, which
+  // leaves the user stuck on a loading spinner. Only fall back to the offline page
+  // when the network is genuinely unavailable.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          return response;
-        })
-        .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match('/offline'))
-        )
+      fetch(request).catch(() => caches.match('/offline'))
     );
     return;
   }
 
-  // Static assets: cache-first
+  // Static assets: cache-first. Safe because Next.js content-hashes these
+  // filenames — a new deploy produces new names, so the cache can't go stale.
   if (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/)) {
     event.respondWith(
       caches.match(request).then(

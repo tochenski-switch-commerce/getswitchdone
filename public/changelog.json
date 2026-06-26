@@ -6,6 +6,12 @@
     "type": "feature"
   },
   {
+    "date": "2026-06-26",
+    "description": "Fixed an issue where the app could get stuck on a loading spinner after an update — an older cached version was being served whose files no longer existed. The app now always loads the latest version on each visit.",
+    "page": null,
+    "type": "fix"
+  },
+  {
     "date": "2026-05-15",
     "description": "Cards created from a public form now notify the assignee — both via the in-app inbox and an assignment email — matching how assignments work elsewhere in the app.",
     "page": "/forms",
