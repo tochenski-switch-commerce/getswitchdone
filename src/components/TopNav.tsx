@@ -26,6 +26,7 @@ const tabs = [
   { label: 'Focus', href: '/focus' },
   { label: 'Calendar', href: '/calendar' },
   { label: 'Boards', href: '/boards' },
+  { label: 'Import', href: '/import' },
   { label: 'Teams', href: '/teams' },
   { label: 'Watching', href: '/watching' },
   { label: 'Forms', href: '/forms' },

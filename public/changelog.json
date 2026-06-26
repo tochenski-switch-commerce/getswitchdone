@@ -1,5 +1,11 @@
 [
   {
+    "date": "2026-06-26",
+    "description": "New Import from Notes page: paste meeting notes, a transcript, or a backlog dump and Lumio turns them into cards using AI. Review every card before importing — edit the title and description, set due dates and priority, pick the board and list for each card (with a remembered default), and assign owners that are auto-matched to your team by name. Set a default assignee for anyone we couldn't match, and reject any card you don't want.",
+    "page": "/import",
+    "type": "feature"
+  },
+  {
     "date": "2026-05-15",
     "description": "Cards created from a public form now notify the assignee — both via the in-app inbox and an assignment email — matching how assignments work elsewhere in the app.",
     "page": "/forms",

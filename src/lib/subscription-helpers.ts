@@ -34,6 +34,18 @@ export async function isProUser(userId: string): Promise<boolean> {
   return sub.entitlement === 'pro' || sub.is_staff_grant;
 }
 
+// Feature-scoped allowlist for the meeting-notes import page. Lets specific
+// accounts (e.g. Trip, Vic) use the AI import even without a Pro entitlement,
+// without touching the global isProUser gate that covers all AI features.
+const IMPORT_WHITELIST = (process.env.IMPORT_WHITELIST_EMAILS ?? '')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
+
+export function isImportWhitelisted(email?: string | null): boolean {
+  return !!email && IMPORT_WHITELIST.includes(email.toLowerCase());
+}
+
 export async function getEntitlement(userId: string): Promise<PlanTier> {
   const sub = await getSubscriptionForUser(userId);
   if (!sub) return 'free';

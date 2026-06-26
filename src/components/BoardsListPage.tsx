@@ -28,6 +28,7 @@ import {
   Star,
   Printer,
   Bell,
+  Sparkles,
   getBoardIcon,
   DEFAULT_ICON_COLOR,
 } from '@/components/BoardIcons';
@@ -618,6 +619,10 @@ function BoardsListPage() {
             <h1 className="kb-page-title">Project Boards</h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
+            <button className="kb-btn kb-btn-ghost" onClick={() => router.push('/import')}>
+              <Sparkles size={16} />
+              Import notes
+            </button>
             <button className="kb-btn kb-btn-ghost" onClick={() => router.push('/forms')}>
               <FileText size={16} />
               Forms

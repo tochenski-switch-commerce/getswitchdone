@@ -3,7 +3,7 @@ import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { gsdModel } from '@/lib/ai';
 import { createClient } from '@supabase/supabase-js';
-import { isProUser } from '@/lib/subscription-helpers';
+import { isProUser, isImportWhitelisted } from '@/lib/subscription-helpers';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!(await isProUser(user.id))) {
+  if (!isImportWhitelisted(user.email) && !(await isProUser(user.id))) {
     return NextResponse.json({ error: 'AI features require a Pro subscription.' }, { status: 403 });
   }
 
@@ -42,12 +42,14 @@ export async function POST(req: NextRequest) {
       model: gsdModel,
       output: Output.object({
         schema: z.object({
+          // OpenAI strict structured outputs require every key in `required`,
+          // so optional fields are modeled as nullable (required, may be null).
           cards: z.array(z.object({
             title: z.string(),
-            description: z.string().optional(),
+            description: z.string().nullable(),
             priority: z.enum(['low', 'medium', 'high', 'urgent']),
-            assigneeName: z.string().optional(),
-            dueDate: z.string().optional(),
+            assigneeName: z.string().nullable(),
+            dueDate: z.string().nullable(),
           })),
         }),
       }),
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result.output);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'AI extraction failed';
+    console.error('[extract-cards] ERROR:', err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
