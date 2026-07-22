@@ -30,7 +30,7 @@ const AiPanel = dynamic(() => import('@/components/AiPanel'), { ssr: false });
 // const AutopilotBanner = dynamic(() => import('@/components/AutopilotBanner'), { ssr: false });
 const DatePickerInput = dynamic(() => import('@/components/DatePickerInput'), { ssr: false });
 
-import { PRIORITY_CONFIG, PRIORITY_WEIGHT, sanitizeEmailHtml, emailTimeAgo, LABEL_COLORS } from './board-detail/helpers';
+import { PRIORITY_CONFIG, PRIORITY_WEIGHT, sanitizeEmailHtml, emailTimeAgo, LABEL_COLORS, handleRichTextPaste } from './board-detail/helpers';
 import InlineEdit from './board-detail/InlineEdit';
 import KanbanCard from './board-detail/KanbanCard';
 
@@ -2356,6 +2356,7 @@ function BoardPage() {
             contentEditable
             suppressContentEditableWarning
             onInput={handleNoteInput}
+            onPaste={handleRichTextPaste}
             onBlur={saveNoteNow}
             onClick={e => {
               const target = e.target as HTMLElement;

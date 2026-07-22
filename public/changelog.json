@@ -1,5 +1,11 @@
 [
   {
+    "date": "2026-07-22",
+    "description": "Fixed pasted text from Google Docs (and other apps) showing up black-on-dark in dark mode. Pasting into card descriptions, comments, and notes now drops the source document's colors and fonts so text always matches your theme — bold, italic, underline, lists, and links are kept. Previously saved content with hardcoded colors now displays correctly too.",
+    "page": null,
+    "type": "fix"
+  },
+  {
     "date": "2026-06-26",
     "description": "New Import from Notes page: paste meeting notes, a transcript, or a backlog dump and Lumio turns them into cards using AI. Review every card before importing — edit the title and description, set due dates and priority, pick the board and list for each card (with a remembered default), and assign owners that are auto-matched to your team by name. Set a default assignee for anyone we couldn't match, and reject any card you don't want.",
     "page": "/import",

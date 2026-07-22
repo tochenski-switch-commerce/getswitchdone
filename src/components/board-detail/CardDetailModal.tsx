@@ -14,7 +14,7 @@ import {
 } from '@/components/BoardIcons';
 import DatePickerInput from '@/components/DatePickerInput';
 import CustomFieldInput from './CustomFieldInput';
-import { PRIORITY_CONFIG, linkifyText, renderCommentText, sanitizeRichText, formatRepeatSummary, formatNextDate } from './helpers';
+import { PRIORITY_CONFIG, linkifyText, renderCommentText, sanitizeRichText, handleRichTextPaste, formatRepeatSummary, formatNextDate } from './helpers';
 
 export default function CardDetailModal({
   card,
@@ -1082,6 +1082,7 @@ export default function CardDetailModal({
                       setEditingDesc(false);
                     }}
                     onKeyDown={e => { if (e.key === 'Escape') { if (descRef.current && descEditorReadyRef.current) setEditDesc(descRef.current.innerHTML); setEditingDesc(false); } }}
+                    onPaste={handleRichTextPaste}
                     onClick={handleClickLink}
                     data-placeholder="Add a more detailed description..."
                   />
@@ -1759,6 +1760,7 @@ export default function CardDetailModal({
                               handleMentionInput(commentEditRef, 'edit');
                             }}
                             onKeyDown={handleMentionKeyDown}
+                            onPaste={handleRichTextPaste}
                             onClick={handleClickLink}
                             data-placeholder="Edit comment..."
                           />
@@ -1826,6 +1828,7 @@ export default function CardDetailModal({
                       handleMentionInput(commentAddRef, 'add');
                     }}
                     onKeyDown={handleMentionKeyDown}
+                    onPaste={handleRichTextPaste}
                     onClick={handleClickLink}
                     data-placeholder="Write a comment..."
                   />

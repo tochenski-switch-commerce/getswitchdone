@@ -12,6 +12,7 @@ import {
   Mail, Send,
 } from '@/components/BoardIcons';
 import type { Team, ProjectBoard } from '@/types/board-types';
+import { handleRichTextPaste } from '@/components/board-detail/helpers';
 
 export default function TeamDetailPage() {
   const params = useParams();
@@ -480,6 +481,7 @@ export default function TeamDetailPage() {
             contentEditable={canEditNotes}
             suppressContentEditableWarning
             onInput={canEditNotes ? handleNoteInput : undefined}
+            onPaste={canEditNotes ? handleRichTextPaste : undefined}
             onBlur={canEditNotes ? saveNoteNow : undefined}
             onClick={e => {
               const target = e.target as HTMLElement;

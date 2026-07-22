@@ -89,6 +89,44 @@ function linkifyBareUrls(html: string): string {
   );
 }
 
+// Inline style properties allowed to survive sanitization/paste. Color, background
+// and font declarations are dropped so text always inherits the app theme —
+// pasted content (e.g. Google Docs) hardcodes color:#000000, invisible in dark mode.
+const KEPT_STYLE_PROPS = new Set(['font-weight', 'font-style', 'text-decoration', 'text-decoration-line', 'text-align']);
+
+function filterInlineStyles(css: string): string {
+  return css
+    .split(';')
+    .map(decl => decl.trim())
+    .filter(decl => {
+      const colon = decl.indexOf(':');
+      return colon > 0 && KEPT_STYLE_PROPS.has(decl.slice(0, colon).trim().toLowerCase());
+    })
+    .join('; ');
+}
+
+export function cleanPastedHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.body.querySelectorAll('[style]').forEach(el => {
+    const kept = filterInlineStyles(el.getAttribute('style') || '');
+    if (kept) el.setAttribute('style', kept);
+    else el.removeAttribute('style');
+  });
+  doc.body.querySelectorAll('font').forEach(font => {
+    font.removeAttribute('color');
+    font.removeAttribute('face');
+    font.removeAttribute('size');
+  });
+  return doc.body.innerHTML;
+}
+
+export function handleRichTextPaste(e: React.ClipboardEvent<HTMLElement>): void {
+  const html = e.clipboardData.getData('text/html');
+  if (!html) return; // plain-text paste — default browser behavior is fine
+  e.preventDefault();
+  document.execCommand('insertHTML', false, cleanPastedHtml(html));
+}
+
 export function sanitizeRichText(html: string): string {
   if (!html) return '';
   // If plain text (no HTML tags), convert newlines to <br> then auto-link URLs
@@ -104,6 +142,11 @@ export function sanitizeRichText(html: string): string {
     .replace(/<form[\s\S]*?<\/form>/gi, '')
     .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
     .replace(/\son\w+\s*=\s*\S+/gi, '')
+    .replace(/\sstyle\s*=\s*("([^"]*)"|'([^']*)')/gi, (_match, _quoted, dq, sq) => {
+      const kept = filterInlineStyles(dq ?? sq ?? '');
+      return kept ? ` style="${kept}"` : '';
+    })
+    .replace(/<font\b[^>]*>/gi, '<font>')
     .replace(/javascript\s*:/gi, 'blocked:')
     .replace(/data\s*:/gi, 'blocked:')
     .replace(/<a\s+([^>]*href="https?:\/\/[^"]*"[^>]*)>/gi, (match, attrs) => {
