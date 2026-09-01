@@ -348,6 +348,7 @@ export const kanbanStyles = `
     align-items: center;
     gap: 8px;
     width: 100%;
+    box-sizing: border-box;
     padding: 8px 12px;
     border-radius: 8px;
     font-size: 13px;

@@ -32,6 +32,7 @@ const DatePickerInput = dynamic(() => import('@/components/DatePickerInput'), { 
 
 import { PRIORITY_CONFIG, PRIORITY_WEIGHT, sanitizeEmailHtml, emailTimeAgo, LABEL_COLORS, handleRichTextPaste } from './board-detail/helpers';
 import InlineEdit from './board-detail/InlineEdit';
+import BoardDescriptionEditor from './board-detail/BoardDescriptionEditor';
 import KanbanCard from './board-detail/KanbanCard';
 
 const CardDetailModal = dynamic(() => import('./board-detail/CardDetailModal'), { ssr: false });
@@ -1456,6 +1457,11 @@ function BoardPage() {
                   <button className="kb-dropdown-item" onClick={() => { setShowBoardMenu(false); router.push(`/forms?board=${boardId}`); }}>
                     <FileText size={14} /> Forms
                   </button>
+
+                  <BoardDescriptionEditor
+                    value={board.description || ''}
+                    onSave={description => { updateBoard(boardId, { description: description as any }); }}
+                  />
 
                   {/* Timezone picker */}
                   <div className="kb-dropdown-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6, cursor: 'default' }}>

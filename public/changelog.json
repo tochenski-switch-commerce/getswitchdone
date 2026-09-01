@@ -1,5 +1,11 @@
 [
   {
+    "date": "2026-09-01",
+    "description": "You can now edit a board's description after creating it. Open the board's ••• menu and update the description there — changes save when you click away, and Escape discards them. Previously the description could only be set when the board was first created, so repurposing a board left the old description stuck in place.",
+    "page": "/boards",
+    "type": "feature"
+  },
+  {
     "date": "2026-07-22",
     "description": "Fixed pasted text from Google Docs (and other apps) showing up black-on-dark in dark mode. Pasting into card descriptions, comments, and notes now drops the source document's colors and fonts so text always matches your theme — bold, italic, underline, lists, and links are kept. Previously saved content with hardcoded colors now displays correctly too.",
     "page": null,
